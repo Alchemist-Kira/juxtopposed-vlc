@@ -27,6 +27,8 @@ public:
     bool dirty() const { return !m_edits.isEmpty() || !m_invalid.isEmpty(); }
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
+    Q_INVOKABLE QVariantList equalizerBands() const;
+    Q_INVOKABLE bool setEqualizerBand(int index, double gain);
     Q_INVOKABLE QVariantList shortcutCatalog() const;
     Q_INVOKABLE QString shortcutForKey(int key, int modifiers) const;
     Q_INVOKABLE QVariantList shortcutConflicts(const QString& name, const QString& shortcut) const;

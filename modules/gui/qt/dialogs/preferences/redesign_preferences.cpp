@@ -3,6 +3,9 @@
 #include <vlc_configuration.h>
 #include <vlc_modules.h>
 #include <vlc_plugin.h>
+#include <vlc_aout.h>
+#include <vlc_player.h>
+#include "../../../../audio_filter/equalizer_presets.h"
 #include <cmath>
 #include <algorithm>
 #include <QFileDialog>
@@ -10,6 +13,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QKeyEvent>
+#include <QRegularExpression>
 #include "util/vlchotkeyconverter.hpp"
 
 namespace {
@@ -195,6 +199,17 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
         for (int i = 0; i < screens.size(); ++i)
             choices.append(QVariantMap{{QStringLiteral("label"), screens[i]->name()}, {QStringLiteral("value"), i}});
     }
+    if (name == QLatin1String("equalizer-preset")) {
+        choices.clear();
+        choices.append(QVariantMap{{QStringLiteral("label"), qtr("None")}, {QStringLiteral("value"), QString()}});
+        for (int i = 0; i < NB_PRESETS; ++i) {
+            QVariantList curve;
+            for (int band = 0; band < eqz_preset_10b[i].i_band; ++band)
+                curve.append(eqz_preset_10b[i].f_amp[band]);
+            choices.append(QVariantMap{{QStringLiteral("label"), qtr(preset_list_text[i])},
+                {QStringLiteral("value"), qfu(preset_list[i])}, {QStringLiteral("curve"), curve}});
+        }
+    }
     result.insert(QStringLiteral("editor"), editor);
     result.insert(QStringLiteral("kind"), kind);
     result.insert(QStringLiteral("choices"), choices);
@@ -219,6 +234,16 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         return stage(parts[1], filters.join(QLatin1Char(':')));
     }
 
+    if (name == QLatin1String("equalizer-preset") && !proposed.toString().isEmpty()) {
+        const QByteArray preset = proposed.toString().toUtf8();
+        const auto it = std::find_if(std::begin(eqz_preset_10b), std::end(eqz_preset_10b), [&](const auto& row) { return preset == row.psz_name; });
+        if (it == std::end(eqz_preset_10b)) return false;
+        QStringList bands;
+        for (int i = 0; i < it->i_band; ++i) bands.append(QString::number(std::abs(it->f_amp[i]) < 0.05f ? 0.f : it->f_amp[i], 'f', 1));
+        stage(QStringLiteral("equalizer-bands"), bands.join(QLatin1Char(' ')));
+        stage(QStringLiteral("equalizer-preamp"), it->f_preamp);
+    }
+
     const auto* cfg = config_FindConfig(name.toUtf8().constData());
     if (!cfg || !CONFIG_ITEM(cfg->i_type)) return false;
     QVariant normalized;
@@ -233,6 +258,7 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     case CONFIG_ITEM_FLOAT: {
         const double v = proposed.toDouble(&valid);
         valid = valid && std::isfinite(v) && (cfg->min.f == cfg->max.f || (v >= cfg->min.f && v <= cfg->max.f));
+        if (name == QLatin1String("equalizer-preamp")) valid = valid && v >= -20 && v <= 20;
         normalized = float(v); break;
     }
     case CONFIG_ITEM_STRING: normalized = proposed.toString(); break;
@@ -283,6 +309,31 @@ bool RedesignPreferences::save()
         m_error = qtr("The preferences file could not be saved. Your edits are still open.");
         ++m_revision; emit changed(); return false;
     }
+    // Apply audio effects to the current output after persistence succeeds.
+    // Defaults remain available for the next output if nothing is playing.
+    auto* player = m_ctx->getIntf()->p_player;
+    if (previous.contains(QStringLiteral("audio-filter"))) {
+        const auto before = previous.value(QStringLiteral("audio-filter")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        const auto after = value(QStringLiteral("audio-filter")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        for (const auto& filter : before)
+            if (!after.contains(filter)) vlc_player_aout_EnableFilter(player, filter.toUtf8().constData(), false);
+        for (const auto& filter : after)
+            if (!before.contains(filter)) vlc_player_aout_EnableFilter(player, filter.toUtf8().constData(), true);
+    }
+    const QStringList equalizerOptions{QStringLiteral("equalizer-preset"), QStringLiteral("equalizer-bands"), QStringLiteral("equalizer-preamp"), QStringLiteral("equalizer-2pass")};
+    if (std::any_of(equalizerOptions.cbegin(), equalizerOptions.cend(), [&](const auto& name) { return previous.contains(name); })) {
+        audio_output_t* output = vlc_player_aout_Hold(player);
+        if (output) {
+            for (const auto& name : equalizerOptions) {
+                const auto current = value(name);
+                const QByteArray bytes = name.toUtf8();
+                if (name == QLatin1String("equalizer-preamp")) var_SetFloat(output, bytes.constData(), current.toFloat());
+                else if (name == QLatin1String("equalizer-2pass")) var_SetBool(output, bytes.constData(), current.toBool());
+                else if (name != QLatin1String("equalizer-preset") || !current.toString().isEmpty()) var_SetString(output, bytes.constData(), current.toString().toUtf8().constData());
+            }
+            aout_Release(output);
+        }
+    }
     m_ctx->reloadPrefs();
     discard();
     return true;
@@ -317,6 +368,31 @@ QString RedesignPreferences::chooseColor(const QString& initial)
 {
     const QColor color = QColorDialog::getColor(QColor(initial), nullptr, qtr("Choose color"));
     return color.isValid() ? color.name() : QString();
+}
+
+QVariantList RedesignPreferences::equalizerBands() const
+{
+    const auto custom = value(QStringLiteral("equalizer-bands")).toString().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+    const QByteArray name = value(QStringLiteral("equalizer-preset")).toString().toUtf8();
+    const auto preset = std::find_if(std::begin(eqz_preset_10b), std::end(eqz_preset_10b), [&](const auto& row) { return name == row.psz_name; });
+    QVariantList result;
+    for (int i = 0; i < 10; ++i) {
+        bool valid = false;
+        double gain = i < custom.size() ? custom[i].toDouble(&valid) : 0;
+        if (!valid || !std::isfinite(gain)) gain = preset != std::end(eqz_preset_10b) ? preset->f_amp[i] : 0;
+        result.append(std::abs(gain) < 0.05 ? 0.0 : std::clamp(gain, -20.0, 20.0));
+    }
+    return result;
+}
+
+bool RedesignPreferences::setEqualizerBand(int index, double gain)
+{
+    if (index < 0 || index >= 10 || !std::isfinite(gain) || gain < -20 || gain > 20) return false;
+    const auto values = equalizerBands();
+    QStringList bands;
+    for (int i = 0; i < values.size(); ++i) bands.append(QString::number(i == index ? gain : values[i].toDouble(), 'f', 1));
+    if (!stage(QStringLiteral("equalizer-bands"), bands.join(QLatin1Char(' ')))) return false;
+    return stage(QStringLiteral("equalizer-preset"), QString());
 }
 
 QVariantList RedesignPreferences::shortcutCatalog() const

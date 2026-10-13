@@ -54,8 +54,8 @@ C.Dialog {
                 Layout.preferredWidth: root.theme.dp(100); Layout.preferredHeight: root.theme.dp(36)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 caption: root.confirmText; text: caption
-                foreground: root.destructive ? "#e15032" : root.theme.accent
-                background: Rectangle { color: parent.hovered ? root.theme.hover : root.destructive ? root.lightTheme ? "#f8e2d9" : "#251713" : root.theme.progress; radius: root.theme.dp(4); border.color: parent.visualFocus ? parent.foreground : "transparent" }
+                foreground: root.destructive ? root.theme.danger : root.theme.accent
+                background: Rectangle { color: parent.hovered ? root.theme.hover : root.destructive ? root.theme.dangerBackground : root.theme.progress; radius: root.theme.dp(4); border.color: parent.visualFocus ? parent.foreground : "transparent" }
                 onClicked: root.accept()
                 Keys.onReturnPressed: root.accept()
                 Keys.onEnterPressed: root.accept()

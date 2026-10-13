@@ -15,6 +15,8 @@ QtObject {
     readonly property color selected: lightTheme ? "#b8b8b8" : "#333333"
     readonly property color accent: accentColor
     readonly property color progress: lightTheme ? "#d8ba9a" : "#371f06"
+    readonly property color danger: "#d33718"
+    readonly property color dangerBackground: lightTheme ? "#f8e2d9" : "#1a1111"
 
     function dp(value: real): real { return value * scaleFactor }
 }

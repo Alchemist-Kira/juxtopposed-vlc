@@ -26,30 +26,20 @@ Window {
     property bool expert: false
     property bool editingShortcuts: false
     property string search: ""
-    property int pendingTheme: 2
-    property bool appearanceDirty: false
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
-    RedesignPreferences { id: preferenceStore; ctx: MainCtx }
+    RedesignPreferences { id: preferenceStore; ctx: MainCtx; autoSave: true }
     RedesignPreferencesCatalog { id: specification }
     function begin() {
         preferenceStore.discard()
         searchField.clear()
-        pendingTheme = MainCtx.colorScheme.scheme
-        appearanceDirty = false
         visible = true
         raise(); requestActivate()
     }
-    function cancel() { content.forceActiveFocus(); preferenceStore.discard(); visible = false }
-    function save(closeAfter) {
-        // Moving focus commits the text field currently being edited.
+    function closeSettings() {
         content.forceActiveFocus()
-        if (preferenceStore.save()) {
-            if (appearanceDirty) MainCtx.colorScheme.setData(MainCtx.colorScheme.index(pendingTheme, 0), true, Qt.CheckStateRole)
-            appearanceDirty = false
-            if (closeAfter) visible = false
-        }
+        if (!preferenceStore.dirty || preferenceStore.save()) visible = false
     }
-    onClosing: event => { event.accepted = false; cancel() }
+    onClosing: event => { event.accepted = false; closeSettings() }
     Connections {
         target: DialogsProvider
         function onShowRedesignPreferences() { if (!root.visible) root.begin(); else { root.raise(); root.requestActivate() } }
@@ -58,7 +48,7 @@ Window {
         id: content
         anchors.fill: parent
         focus: true
-        Keys.onEscapePressed: root.cancel()
+        Keys.onEscapePressed: root.closeSettings()
         Rectangle {
             id: navigation
             width: theme.dp(250); anchors.top: parent.top; anchors.bottom: parent.bottom
@@ -138,7 +128,7 @@ Window {
             anchors.right: parent.right; anchors.top: parent.top; anchors.margins: theme.dp(12)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             iconName: "close"; text: qsTr("Close settings")
-            onClicked: root.cancel()
+            onClicked: root.closeSettings()
         }
         C.ScrollView {
             id: scroll
@@ -158,15 +148,19 @@ Window {
                     RowLayout {
                         Layout.fillWidth: true
                         Text { Layout.fillWidth: true; text: qsTr("Theme"); color: theme.foreground; font.pixelSize: theme.dp(14) }
-                        C.ComboBox {
-                            Layout.preferredWidth: theme.dp(320)
-                            Layout.preferredHeight: theme.dp(34)
-                            model: [qsTr("System"), qsTr("Light"), qsTr("Dark")]
-                            currentIndex: root.pendingTheme
-                            palette.button: theme.background; palette.buttonText: theme.foreground
-                            palette.text: theme.foreground; palette.base: theme.field; palette.window: theme.panel
-                            background: Rectangle { color: theme.background; radius: theme.dp(4); border.color: theme.border }
-                            onActivated: { root.pendingTheme = currentIndex; root.appearanceDirty = true }
+                        Row {
+                            spacing: theme.dp(8)
+                            Repeater {
+                                model: [{label: qsTr("Dark"), value: 2}, {label: qsTr("Light"), value: 1}, {label: qsTr("System"), value: 0}]
+                                RedesignButton {
+                                    required property var modelData
+                                    width: theme.dp(96); height: theme.dp(34)
+                                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                    caption: modelData.label; text: caption
+                                    selected: MainCtx.colorScheme.scheme === modelData.value
+                                    onClicked: MainCtx.colorScheme.setData(MainCtx.colorScheme.index(modelData.value, 0), true, Qt.CheckStateRole)
+                                }
+                            }
                         }
                         Item { width: theme.dp(26) }
                     }
@@ -305,21 +299,20 @@ Window {
         Rectangle {
             id: footer
             anchors.left: navigation.right; anchors.right: parent.right; anchors.bottom: parent.bottom
-            height: theme.dp(76); color: theme.background
-            Text {
-                anchors.left: parent.left; anchors.right: actions.left; anchors.verticalCenter: parent.verticalCenter
-                anchors.margins: theme.dp(24)
-                text: preferenceStore.errorMessage || qsTr("Some changes take effect the next time VLC starts.")
-                color: preferenceStore.errorMessage.length ? "#e56b6b" : theme.foreground
-                font.pixelSize: theme.dp(12); wrapMode: Text.WordWrap
-            }
-            Row {
-                id: actions
-                anchors.right: parent.right; anchors.rightMargin: theme.dp(24); anchors.verticalCenter: parent.verticalCenter
-                spacing: theme.dp(10)
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: root.cancel() }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Apply"); text: caption; enabled: preferenceStore.dirty || root.appearanceDirty; onClicked: root.save(false) }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Save"); text: caption; accent: true; onClicked: root.save(true) }
+            height: preferenceStore.errorMessage.length ? theme.dp(64) : 0
+            visible: height > 0
+            color: theme.background
+            RowLayout {
+                anchors.fill: parent; anchors.margins: theme.dp(16)
+                Text {
+                    Layout.fillWidth: true
+                    text: preferenceStore.errorMessage
+                    color: "#e56b6b"; font.pixelSize: theme.dp(13); wrapMode: Text.WordWrap
+                }
+                RedesignButton {
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    caption: qsTr("Retry"); text: caption; onClicked: preferenceStore.save()
+                }
             }
         }
     }

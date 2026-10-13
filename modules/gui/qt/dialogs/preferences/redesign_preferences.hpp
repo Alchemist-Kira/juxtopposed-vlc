@@ -6,6 +6,7 @@
 #include <QVariantMap>
 #include <QVariantList>
 #include <QSet>
+#include <QTimer>
 #include "maininterface/mainctx.hpp"
 
 /** A preferences transaction. Edits stay local until save() succeeds. */
@@ -13,6 +14,7 @@ class RedesignPreferences : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(MainCtx* ctx READ ctx WRITE setCtx NOTIFY ctxChanged FINAL)
+    Q_PROPERTY(bool autoSave READ autoSave WRITE setAutoSave NOTIFY autoSaveChanged FINAL)
     Q_PROPERTY(bool dirty READ dirty NOTIFY changed FINAL)
     Q_PROPERTY(int revision READ revision NOTIFY changed FINAL)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY changed FINAL)
@@ -20,6 +22,8 @@ public:
     explicit RedesignPreferences(QObject* parent = nullptr);
     MainCtx* ctx() const { return m_ctx; }
     void setCtx(MainCtx* ctx);
+    bool autoSave() const { return m_autoSave; }
+    void setAutoSave(bool enabled);
     bool dirty() const { return !m_edits.isEmpty() || !m_invalid.isEmpty(); }
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
@@ -34,6 +38,7 @@ public:
     Q_INVOKABLE QVariantList catalog(const QString& category, const QString& search = QString()) const;
 signals:
     void ctxChanged();
+    void autoSaveChanged();
     void changed();
 private:
     struct Entry { QString name, category, title; };
@@ -45,5 +50,7 @@ private:
     QList<Entry> m_catalog;
     QString m_error;
     int m_revision = 0;
+    bool m_autoSave = false;
+    QTimer m_saveTimer;
 };
 #endif

@@ -160,6 +160,10 @@ MainCtx::MainCtx(qt_intf_t *_p_intf)
 
     settings = getSettings();
     m_colorScheme = new ColorSchemeModel(this);
+    connect(m_colorScheme, &ColorSchemeModel::currentChanged, this, [this]() {
+        settings->setValue(QStringLiteral("MainWindow/color-scheme-index"), m_colorScheme->currentIndex());
+        settings->sync();
+    });
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     connect(m_colorScheme, &ColorSchemeModel::currentChanged, qGuiApp, [colorScheme = m_colorScheme]() {

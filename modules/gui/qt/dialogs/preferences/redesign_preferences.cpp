@@ -37,6 +37,9 @@ QString categoryFor(const QString& name, int subcat)
 
 RedesignPreferences::RedesignPreferences(QObject* parent) : QObject(parent)
 {
+    m_saveTimer.setSingleShot(true);
+    m_saveTimer.setInterval(300);
+    connect(&m_saveTimer, &QTimer::timeout, this, [this]() { if (m_autoSave && dirty()) save(); });
     size_t count = 0;
     module_t** modules = module_list_get(&count);
     for (size_t i = 0; i < count; ++i) {
@@ -57,6 +60,15 @@ RedesignPreferences::RedesignPreferences(QObject* parent) : QObject(parent)
     std::sort(m_catalog.begin(), m_catalog.end(), [](const Entry& a, const Entry& b) {
         return QString::localeAwareCompare(a.title, b.title) < 0;
     });
+}
+
+void RedesignPreferences::setAutoSave(bool enabled)
+{
+    if (m_autoSave == enabled) return;
+    m_autoSave = enabled;
+    if (!enabled) m_saveTimer.stop();
+    else if (dirty()) m_saveTimer.start();
+    emit autoSaveChanged();
 }
 
 void RedesignPreferences::setCtx(MainCtx* ctx)
@@ -239,6 +251,7 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         m_error.clear();
     ++m_revision;
     emit changed();
+    if (m_autoSave) m_saveTimer.start();
     return true;
 }
 
@@ -250,11 +263,13 @@ void RedesignPreferences::reset(const QString& name)
 
 void RedesignPreferences::discard()
 {
+    m_saveTimer.stop();
     m_edits.clear(); m_invalid.clear(); m_error.clear(); ++m_revision; emit changed();
 }
 
 bool RedesignPreferences::save()
 {
+    m_saveTimer.stop();
     if (!m_ctx || !m_invalid.isEmpty()) return false;
     QVariantMap previous;
     for (auto it = m_edits.cbegin(); it != m_edits.cend(); ++it) {

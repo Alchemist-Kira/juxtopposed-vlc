@@ -90,7 +90,7 @@ typedef struct
 
     pa_volume_t volume_force; /**< Forced volume (stream must be NULL) */
     pa_stream_flags_t flags_force; /**< Forced flags (stream must be NULL) */
-    char *sink_force; /**< Forced sink name (stream must be NULL) */
+    char *sink_force; /**< Preferred sink retained between streams. */
 
     struct sink *sinks; /**< Locally-cached list of sinks */
 
@@ -874,6 +874,12 @@ static int StreamMove(audio_output_t *aout, const char *name)
         : pa_context_get_server_info(sys->context, stream_move_default_cb, aout);
     if (likely(op != NULL)) {
         pa_operation_unref(op);
+        char *sink = name != NULL ? strdup(name) : NULL;
+        if (name == NULL || sink != NULL)
+        {
+            free(sys->sink_force);
+            sys->sink_force = sink;
+        }
         msg_Dbg(aout, "moving to sink %s", name != NULL ? name : "system default");
     } else
         vlc_pa_error(aout, "cannot move sink input", sys->context);
@@ -1001,7 +1007,12 @@ static int Start(audio_output_t *aout, audio_sample_format_t *restrict fmt)
     if (PA_VOLUME_IS_VALID(sys->volume_force))
     {
         cvolume = &cvolumebuf;
-        pa_cvolume_set(cvolume, ss.channels, sys->volume_force);
+        if (pa_cvolume_valid(&sys->cvolume) && sys->cvolume.channels == ss.channels)
+        {
+            cvolumebuf = sys->cvolume;
+            pa_cvolume_scale(cvolume, sys->volume_force);
+        }
+        else pa_cvolume_set(cvolume, ss.channels, sys->volume_force);
     }
 
     sys->drain_trigger = NULL;
@@ -1157,8 +1168,6 @@ static int Start(audio_output_t *aout, audio_sample_format_t *restrict fmt)
     }
     sys->volume_force = PA_VOLUME_INVALID;
     sys->flags_force = PA_STREAM_NOFLAGS;
-    free(sys->sink_force);
-    sys->sink_force = NULL;
 
     if (encoding == PA_ENCODING_PCM)
     {
@@ -1204,6 +1213,10 @@ static void Stop(audio_output_t *aout)
     pa_stream *s = sys->stream;
 
     pa_threaded_mainloop_lock(sys->mainloop);
+    // VLC keeps this output between tracks. Do not let a newly created stream
+    // restore an older server-side volume over the current playback volume.
+    if (pa_cvolume_valid(&sys->cvolume))
+        sys->volume_force = pa_cvolume_max(&sys->cvolume);
     if (sys->drain_trigger != NULL)
         vlc_pa_rttime_free(sys->mainloop, sys->drain_trigger);
     pa_stream_disconnect(s);
@@ -1244,6 +1257,7 @@ static int Open(vlc_object_t *obj)
     sys->stream = NULL;
     sys->context = ctx;
     sys->volume_force = PA_VOLUME_INVALID;
+    pa_cvolume_init(&sys->cvolume);
     sys->flags_force = PA_STREAM_NOFLAGS;
     sys->sink_force = NULL;
     sys->sinks = NULL;

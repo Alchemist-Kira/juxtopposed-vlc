@@ -437,7 +437,10 @@ audio_output_t *aout_New (vlc_object_t *parent)
         ? var_InheritFloat(aout, "audio-last-volume")
         : var_InheritInteger(aout, "audio-startup-volume") / 100.f;
     if (isfinite(volume) && volume >= 0.f && volume <= 3.f)
+    {
+        msg_Dbg(aout, "applying startup volume %.1f%%", volume * 100.f);
         aout_VolumeSet(aout, volume);
+    }
     atomic_store_explicit(&owner->volume_initialized, true, memory_order_relaxed);
 
     return aout;

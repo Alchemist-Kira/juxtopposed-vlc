@@ -33,6 +33,7 @@
 #include <QQuickWindow>
 #include <QQuickItem>
 #include <QQmlProperty>
+#include <QVariantMap>
 #include "player/input_models.hpp"
 #include "util/audio_device_model.hpp"
 #include "util/varchoicemodel.hpp"
@@ -138,6 +139,7 @@ public:
     Q_PROPERTY(QString name READ getName NOTIFY nameChanged FINAL)
     Q_PROPERTY(float buffering READ getBuffering  NOTIFY bufferingChanged FINAL)
     Q_PROPERTY(float rate READ getRate WRITE setRate NOTIFY rateChanged FINAL)
+    Q_PROPERTY(QVariantMap playbackStatistics READ getPlaybackStatistics NOTIFY playbackStatisticsChanged FINAL)
     Q_PROPERTY(QUrl url READ getUrl NOTIFY inputChanged FINAL)
 
     Q_PROPERTY(VLCTime time READ getTime WRITE setTime NOTIFY timeChanged FINAL)
@@ -358,6 +360,7 @@ public slots:
     void setSecondarySubtitleDelayMS( int );
     float getSubtitleFPS( ) const;
     void setSubtitleFPS( float );
+    QVariantMap getPlaybackStatistics() const;
 
     //title/chapters/menu
     TitleListModel* getTitles();
@@ -511,6 +514,7 @@ signals:
     void resumePlayback( VLCTime );
     // Statistics are updated
     void statisticsUpdated( const input_stats_t& stats );
+    void playbackStatisticsChanged();
     void infoChanged( input_item_t* );
     void currentMetaChanged( input_item_t* );
     void currentLyricChanged();

@@ -20,6 +20,8 @@ FocusScope {
     property int autoHideMode: 1
     property int controlsHideTimeout: 1800
     property bool showFullscreenControls: true
+    property bool showStatistics: false
+    property var statistics: ({})
     readonly property bool autoHideActive: started && (autoHideMode === 2 || (fullscreen && autoHideMode === 1))
     property bool maximized: false
     property bool showWindowButtons: true
@@ -195,6 +197,16 @@ FocusScope {
             color: "white"
             style: Text.Outline; styleColor: "black"
             font.pixelSize: theme.dp(16)
+        }
+        RedesignStatistics {
+            objectName: "playbackStatisticsOverlay"
+            anchors.top: parent.top; anchors.left: parent.left
+            anchors.margins: theme.dp(12)
+            width: Math.max(0, Math.min(implicitWidth, parent.width - theme.dp(24)))
+            height: Math.max(0, Math.min(implicitHeight, parent.height - theme.dp(24)))
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            statistics: root.statistics
+            visible: root.showStatistics && root.started
         }
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter

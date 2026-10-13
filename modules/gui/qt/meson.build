@@ -747,6 +747,8 @@ qml_modules += {
        'player/qml/redesign/RedesignPreferencesCatalog.qml',
        'player/qml/redesign/RedesignPreferencesWindow.qml',
        'player/qml/redesign/RedesignSettingSlider.qml',
+       'player/qml/redesign/RedesignSwitchRow.qml',
+       'player/qml/redesign/RedesignStatistics.qml',
        'player/qml/redesign/RedesignSettings.qml',
        'player/qml/redesign/RedesignTrackPopup.qml',
        'player/qml/redesign/RedesignShortcutEditor.qml',

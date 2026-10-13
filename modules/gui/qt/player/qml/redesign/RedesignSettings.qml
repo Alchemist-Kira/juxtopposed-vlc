@@ -21,10 +21,12 @@ C.Pane {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property string page: "playback"
+    property bool showStatistics: false
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal pageRequested(string page)
     signal closeRequested()
     signal sleepTimerRequested(int minutes)
+    signal statisticsRequested(bool enabled)
 
     function select(model, index, selected) { model.setData(model.index(index, 0), selected, Qt.CheckStateRole) }
     function disable(model) { for (let i = 0; i < model.rowCount(); ++i) select(model, i, false) }
@@ -66,6 +68,13 @@ C.Pane {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
                     spacing: theme.dp(22)
                     visible: root.page === "playback"
+                    RedesignSwitchRow {
+                        Layout.fillWidth: true
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                        objectName: "showStatisticsSetting"
+                        label: qsTr("Show Statistics"); checked: root.showStatistics
+                        onToggled: checked => root.statisticsRequested(checked)
+                    }
                     RedesignSettingSlider {
                         objectName: "playbackRateControl"
                         Layout.fillWidth: true

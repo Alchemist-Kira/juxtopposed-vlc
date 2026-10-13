@@ -149,7 +149,9 @@ void PlayerControllerPrivate::UpdateArt(input_item_t *p_item)
 void PlayerControllerPrivate::UpdateStats( const input_stats_t& stats )
 {
     Q_Q(PlayerController);
+    m_stats = stats;
     emit q->statisticsUpdated( stats );
+    emit q->playbackStatisticsChanged();
 }
 
 void PlayerControllerPrivate::UpdateProgram(enum vlc_player_list_action action, const struct vlc_player_program* prgm)
@@ -353,6 +355,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
             emit that->q_func()->syltLyricsChanged();
             emit that->q_func()->currentLyricIndexChanged(-1);
             emit that->q_func()->currentLyricChanged();
+            that->UpdateStats({});
             emit that->q_func()->inputChanged(false);
         });
         return;
@@ -369,6 +372,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
         emit q->syltLyricsChanged();
         emit q->currentLyricIndexChanged(-1);
         emit q->currentLyricChanged();
+        that->UpdateStats({});
 
         that->UpdateArt( newMediaPtr.get() );
         that->UpdateMeta( newMediaPtr.get() );
@@ -813,8 +817,7 @@ static void on_player_stats_changed(vlc_player_t *, const struct input_stats_t *
     PlayerControllerPrivate* that = static_cast<PlayerControllerPrivate*>(data);
     struct input_stats_t stats_tmp = *stats;
     that->callAsync([that,stats_tmp] () {
-        that->m_stats = stats_tmp;
-        emit that->q_func()->statisticsUpdated( that->m_stats );
+        that->UpdateStats(stats_tmp);
     });
 }
 
@@ -1546,6 +1549,24 @@ void PlayerController::setSubtitleFPS(float fps)
     if( !d->isCurrentItemSynced() )
         return;
     vlc_player_SetAssociatedSubsFPS( d->m_player, fps );
+}
+
+QVariantMap PlayerController::getPlaybackStatistics() const
+{
+    Q_D(const PlayerController);
+    const auto& stats = d->m_stats;
+    const auto counter = [](uint64_t value) { return QVariant::fromValue<qulonglong>(value); };
+    return {{QStringLiteral("readBytes"), counter(stats.i_read_bytes)},
+        {QStringLiteral("inputBitrate"), stats.f_input_bitrate * 8000.},
+        {QStringLiteral("streamBitrate"), stats.f_demux_bitrate * 8000.},
+        {QStringLiteral("decodedVideo"), counter(stats.i_decoded_video)},
+        {QStringLiteral("displayedPictures"), counter(stats.i_displayed_pictures)},
+        {QStringLiteral("latePictures"), counter(stats.i_late_pictures)},
+        {QStringLiteral("lostPictures"), counter(stats.i_lost_pictures)},
+        {QStringLiteral("decodedAudio"), counter(stats.i_decoded_audio)},
+        {QStringLiteral("playedAudioBuffers"), counter(stats.i_played_abuffers)},
+        {QStringLiteral("lostAudioBuffers"), counter(stats.i_lost_abuffers)},
+        {QStringLiteral("corruptedPackets"), counter(stats.i_demux_corrupted)}};
 }
 
 //TITLE/CHAPTER/MENU

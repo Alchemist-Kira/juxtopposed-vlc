@@ -77,12 +77,23 @@ TestCase {
         onMoved: value => currentValue = value
     }
     SignalSpy { id: settingSpy; target: settingControl; signalName: "moved" }
+    RedesignSwitchRow {
+        id: statisticsSwitch
+        x: 20; y: 20; width: 360; z: 10
+        visible: false
+        label: "Show Statistics"; checked: player.showStatistics
+        onToggled: checked => player.showStatistics = checked
+    }
 
     function init() {
         settingControl.visible = false
         settingControl.currentValue = 0
         settingControl.resetValue = 0
         settingSpy.clear()
+        statisticsSwitch.visible = false
+        player.showStatistics = false
+        player.statistics = ({})
+        player.started = true
         trackPicker.close()
         trackPicker.page = "subtitles"
         tracks.setProperty(0, "checked", true)
@@ -104,6 +115,36 @@ TestCase {
         audioSpy.clear()
         subtitleSpy.clear()
         wait(20)
+    }
+    function test_statisticsSwitchUsesMouseAndKeyboard() {
+        statisticsSwitch.visible = true
+        const toggle = findChild(statisticsSwitch, "settingSwitch")
+        mouseClick(toggle)
+        verify(player.showStatistics)
+        toggle.forceActiveFocus()
+        keyClick(Qt.Key_Space)
+        verify(!player.showStatistics)
+        player.showStatistics = true
+        verify(toggle.checked)
+    }
+    function test_statisticsOverlayUpdatesAndFitsVideo() {
+        const overlay = findChild(player, "playbackStatisticsOverlay")
+        verify(!overlay.visible)
+        player.statistics = ({decodedVideo: 123, inputBitrate: 456})
+        player.showStatistics = true
+        verify(overlay.visible)
+        compare(findChild(overlay, "statistic_decodedVideo").text, "123")
+        compare(findChild(overlay, "statistic_inputBitrate").text, "456 kb/s")
+        player.statistics = ({decodedVideo: 321, inputBitrate: 654})
+        compare(findChild(overlay, "statistic_decodedVideo").text, "321")
+        testCase.width = 640; testCase.height = 360
+        player.libraryOpen = true; player.settingsPage = "playback"
+        wait(20)
+        const viewport = findChild(player, "redesignViewport")
+        verify(overlay.width <= Math.max(0, viewport.width - 24))
+        verify(overlay.height <= Math.max(0, viewport.height - 24))
+        player.started = false
+        verify(!overlay.visible)
     }
     function test_subtitleFrameRateAcceptsDecimalsAndAutomatic_data() {
         return [{tag: "decimal-point", locale: "en_US", decimal: Qt.Key_Period, expected: "23.976 fps"},

@@ -55,6 +55,7 @@ FocusScope {
         volume: Player.volume
         maxVolume: MainCtx.maxVolume / 100
         buffering: Player.buffering
+        statistics: Player.playbackStatistics
         mediaTitle: Player.title || Player.name || qsTr("VLC Media Player")
         locationTitle: view.libraryItem ? view.libraryItem.heading : qsTr("Videos")
         timeText: rootPlayer.clockText(Player.time)
@@ -169,6 +170,8 @@ FocusScope {
             RedesignSettings {
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 page: view.settingsPage
+                showStatistics: view.showStatistics
+                onStatisticsRequested: enabled => view.showStatistics = enabled
                 onPageRequested: page => view.settingsPage = page
                 onCloseRequested: view.settingsPage = ""
                 onSleepTimerRequested: minutes => { sleepTimer.stop(); if (minutes > 0) { sleepTimer.interval = minutes * 60000; sleepTimer.start() } }

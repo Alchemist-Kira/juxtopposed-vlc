@@ -43,11 +43,37 @@ TestCase {
             }
         }
     }
+    ListModel {
+        id: tracks
+        ListElement { display: "English"; checked: true }
+        ListElement { display: "Japanese"; checked: false }
+    }
+    RedesignTrackPopup {
+        id: trackPicker
+        parent: testCase
+        x: 20; y: 20
+        videoTracks: tracks; audioTracks: tracks; subtitleTracks: tracks
+        audioDevices: tracks
+        onSelectionRequested: (model, index, selected) => {
+            for (let i = 0; i < model.count; ++i) model.setProperty(i, "checked", i === index && selected)
+        }
+        onDisableRequested: model => {
+            for (let i = 0; i < model.count; ++i) model.setProperty(i, "checked", false)
+        }
+    }
+    SignalSpy { id: trackSelectionSpy; target: trackPicker; signalName: "selectionRequested" }
+    SignalSpy { id: trackPreferencesSpy; target: trackPicker; signalName: "preferencesRequested" }
     SignalSpy { id: seekSpy; target: player; signalName: "seekRequested" }
     SignalSpy { id: audioSpy; target: player; signalName: "audioTracksRequested" }
     SignalSpy { id: subtitleSpy; target: player; signalName: "subtitleTracksRequested" }
 
     function init() {
+        trackPicker.close()
+        trackPicker.page = "subtitles"
+        tracks.setProperty(0, "checked", true)
+        tracks.setProperty(1, "checked", false)
+        trackSelectionSpy.clear()
+        trackPreferencesSpy.clear()
         player.libraryOpen = false
         player.libraryExpanded = false
         player.queueOpen = false
@@ -63,6 +89,43 @@ TestCase {
         audioSpy.clear()
         subtitleSpy.clear()
         wait(20)
+    }
+    function test_trackPickerSelectsAndDisablesTracks() {
+        trackPicker.open()
+        wait(30)
+        const choices = findChild(trackPicker, "embeddedTrackChoices")
+        verify(choices.hasSelection)
+        const japanese = findChild(choices, "trackChoice_1")
+        mouseClick(japanese)
+        compare(trackSelectionSpy.count, 1)
+        verify(tracks.get(1).checked)
+        verify(!tracks.get(0).checked)
+        // Selecting the current radio choice keeps it selected.
+        mouseClick(japanese)
+        verify(tracks.get(1).checked)
+        const none = findChild(choices, "disableTracks")
+        none.forceActiveFocus()
+        keyClick(Qt.Key_Space)
+        verify(!choices.hasSelection)
+        verify(none.chosen)
+        // The same None action is available on video and audio pages.
+        mouseClick(findChild(trackPicker.contentItem, "trackTab_audio"))
+        compare(trackPicker.page, "audio")
+        verify(none.visible)
+        mouseClick(findChild(trackPicker.contentItem, "trackTab_video"))
+        compare(trackPicker.page, "video")
+        verify(none.visible)
+        mouseClick(findChild(trackPicker.contentItem, "trackPreferencesButton"))
+        compare(trackPreferencesSpy.count, 1)
+        compare(trackPreferencesSpy.signalArguments[0][0], "video")
+        verify(!trackPicker.opened)
+    }
+    function test_trackPickerFitsSmallWindow() {
+        testCase.width = 640; testCase.height = 360
+        trackPicker.open()
+        wait(30)
+        verify(trackPicker.height <= testCase.height - 114)
+        verify(findChild(trackPicker.contentItem, "trackTab_subtitles").visible)
     }
     function test_transportAndTrackActions() {
         mouseClick(findChild(player, "playButton"))

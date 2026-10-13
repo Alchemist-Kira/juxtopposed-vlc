@@ -180,6 +180,16 @@ FocusScope {
         id: tracksPopup
         parent: view
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
+        videoTracks: Player.videoTracks
+        audioTracks: Player.audioTracks
+        subtitleTracks: Player.subtitleTracks
+        audioDevices: Player.audioDevices
+        onSelectionRequested: (model, index, selected) => model.setData(model.index(index, 0), selected, Qt.CheckStateRole)
+        onDisableRequested: model => {
+            for (let i = 0; i < model.count; ++i)
+                model.setData(model.index(i, 0), false, Qt.CheckStateRole)
+        }
+        onAddSubtitleFileRequested: DialogsProvider.loadSubtitlesFile()
         onPreferencesRequested: page => view.settingsPage = page
     }
 

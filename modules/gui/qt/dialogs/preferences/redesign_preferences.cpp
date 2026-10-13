@@ -127,8 +127,68 @@ void RedesignPreferences::write(const QByteArray& name, const QVariant& value)
     }
 }
 
+QString RedesignPreferences::audioOutputModule() const
+{
+    if (!m_ctx) return {};
+    audio_output_t* output = vlc_player_aout_Hold(m_ctx->getIntf()->p_player);
+    if (!output) return {};
+    char* name = vlc_object_get_name(VLC_OBJECT(output));
+    const QString result = qfu(name ? name : "");
+    free(name); aout_Release(output);
+    return result;
+}
+
+QVariantList RedesignPreferences::audioDeviceChoices() const
+{
+    QVariantList choices{QVariantMap{{QStringLiteral("label"), qtr("System default")}, {QStringLiteral("value"), QString()}}};
+    if (!m_ctx) return choices;
+    audio_output_t* output = vlc_player_aout_Hold(m_ctx->getIntf()->p_player);
+    if (!output) return choices;
+    char **ids = nullptr, **names = nullptr;
+    const int count = aout_DevicesList(output, &ids, &names);
+    for (int i = 0; i < count; ++i) {
+        if (ids[i] && *ids[i]) choices.append(QVariantMap{{QStringLiteral("label"), qfu(names[i])}, {QStringLiteral("value"), qfu(ids[i])}});
+        free(ids[i]); free(names[i]);
+    }
+    free(ids); free(names); aout_Release(output);
+    return choices;
+}
+
+void RedesignPreferences::refresh()
+{
+    ++m_revision; emit changed();
+}
+
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-audio-device")) {
+        const QString module = audioOutputModule();
+        const QString configured = value(QStringLiteral("audio-device-default")).toString();
+        const QString driver = value(QStringLiteral("audio-device-default-module")).toString();
+        if (!configured.isEmpty() && (driver.isEmpty() || driver == module)) return configured;
+        const QString legacyName = module + QStringLiteral("-audio-device");
+        const auto* legacy = config_FindConfig(legacyName.toUtf8().constData());
+        if (legacy && CONFIG_CLASS(legacy->i_type) == CONFIG_ITEM_STRING) {
+            const QString selected = value(legacyName).toString();
+            if (selected != qfu(legacy->orig.psz ? legacy->orig.psz : "")) return selected;
+        }
+        return QString();
+    }
+    if (name == QLatin1String("redesign-startup-volume")) {
+        const int configured = value(QStringLiteral("audio-startup-volume")).toInt();
+        if (configured >= 0) return configured;
+        const QString module = audioOutputModule();
+        const bool gain = module == QLatin1String("alsa") || module == QLatin1String("jack") || module == QLatin1String("kai");
+        const QString legacyName = module + (gain ? QStringLiteral("-gain") : QStringLiteral("-volume"));
+        if (config_FindConfig(legacyName.toUtf8().constData())) {
+            double volume = value(legacyName).toDouble();
+            if (gain) volume = std::cbrt(volume);
+            if (module == QLatin1String("auhal")) volume /= AOUT_VOLUME_DEFAULT;
+            if (std::isfinite(volume)) return std::clamp(int(std::lround(volume * 100)), 0, 300);
+        }
+        return 100;
+    }
+
     if (name == QLatin1String("redesign-web-remote")) {
         const auto interfaces = value(QStringLiteral("extraintf")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
         return std::any_of(interfaces.cbegin(), interfaces.cend(), [](const auto& entry) {
@@ -151,6 +211,21 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-audio-device")) {
+        auto choices = audioDeviceChoices();
+        const QString configured = value(name).toString();
+        if (!configured.isEmpty() && std::none_of(choices.cbegin(), choices.cend(), [&](const auto& choice) {
+            return choice.toMap().value(QStringLiteral("value")).toString() == configured;
+        })) choices.append(QVariantMap{{QStringLiteral("label"), qtr("Unavailable device (%1)").arg(configured)}, {QStringLiteral("value"), configured}});
+        return {{QStringLiteral("kind"), QStringLiteral("string")}, {QStringLiteral("title"), qtr("Output device")},
+            {QStringLiteral("choices"), choices}, {QStringLiteral("defaultValue"), QString()}, {QStringLiteral("value"), configured},
+            {QStringLiteral("help"), qtr("Choose the device to use for audio. A disconnected device falls back to the audio driver's default.")}};
+    }
+    if (name == QLatin1String("redesign-startup-volume"))
+        return {{QStringLiteral("kind"), QStringLiteral("integer")}, {QStringLiteral("title"), qtr("Startup volume")},
+            {QStringLiteral("minimum"), 0}, {QStringLiteral("maximum"), 300}, {QStringLiteral("defaultValue"), 100},
+            {QStringLiteral("value"), value(name)}};
+
     if (name == QLatin1String("redesign-web-remote"))
         return {{QStringLiteral("kind"), QStringLiteral("bool")}, {QStringLiteral("title"), qtr("Web remote control")},
             {QStringLiteral("defaultValue"), false}, {QStringLiteral("value"), value(name)},
@@ -245,6 +320,32 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-startup-volume")) {
+        bool valid = false;
+        const auto volume = proposed.toLongLong(&valid);
+        return stage(QStringLiteral("audio-startup-volume"), valid && volume >= 0 && volume <= 300 ? QVariant(volume) : QVariant(QStringLiteral("invalid")));
+    }
+    if (name == QLatin1String("redesign-audio-device")) {
+        const QString id = proposed.toString();
+        const auto choices = audioDeviceChoices();
+        if (std::none_of(choices.cbegin(), choices.cend(), [&](const auto& choice) { return choice.toMap().value(QStringLiteral("value")).toString() == id; })) return false;
+        const QString module = audioOutputModule();
+        stage(QStringLiteral("audio-device-default-module"), id.isEmpty() ? QString() : module);
+        const QString legacyName = module + QStringLiteral("-audio-device");
+        const auto* legacy = config_FindConfig(legacyName.toUtf8().constData());
+        if (legacy && CONFIG_CLASS(legacy->i_type) == CONFIG_ITEM_STRING)
+            stage(legacyName, id.isEmpty() ? qfu(legacy->orig.psz ? legacy->orig.psz : "") : id);
+        return stage(QStringLiteral("audio-device-default"), id);
+    }
+    if (name == QLatin1String("volume-save")) {
+        if (!proposed.toBool() && value(QStringLiteral("audio-startup-volume")).toInt() < 0)
+            stage(QStringLiteral("audio-startup-volume"), value(QStringLiteral("redesign-startup-volume")));
+        if (proposed.toBool() && m_ctx) {
+            const float current = vlc_player_aout_GetVolume(m_ctx->getIntf()->p_player);
+            if (std::isfinite(current) && current >= 0) stage(QStringLiteral("audio-last-volume"), std::min(current, 3.f));
+        }
+    }
+
     if (name == QLatin1String("redesign-web-remote")) {
         if (proposed.toBool() && !supportsWebRemote()) return false;
         auto interfaces = value(QStringLiteral("extraintf")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
@@ -364,6 +465,26 @@ bool RedesignPreferences::save()
     // Apply audio effects to the current output after persistence succeeds.
     // Defaults remain available for the next output if nothing is playing.
     auto* player = m_ctx->getIntf()->p_player;
+    const bool deviceChanged = previous.contains(QStringLiteral("audio-device-default"))
+        || previous.contains(QStringLiteral("audio-device-default-module"))
+        || previous.contains(audioOutputModule() + QStringLiteral("-audio-device"));
+    if (previous.contains(QStringLiteral("volume-save")) || deviceChanged || previous.contains(QStringLiteral("mix-mode"))
+        || previous.contains(QStringLiteral("stereo-mode"))) {
+        audio_output_t* output = vlc_player_aout_Hold(player);
+        if (output) {
+            for (const auto& option : {QStringLiteral("mix-mode"), QStringLiteral("stereo-mode")})
+                if (previous.contains(option)) var_SetInteger(output, option.toUtf8().constData(), value(option).toLongLong());
+            if (previous.contains(QStringLiteral("volume-save"))) {
+                if (var_Type(output, "volume-save") == 0) var_Create(output, "volume-save", VLC_VAR_BOOL);
+                var_SetBool(output, "volume-save", value(QStringLiteral("volume-save")).toBool());
+            }
+            if (deviceChanged) {
+                const QByteArray id = value(QStringLiteral("redesign-audio-device")).toString().toUtf8();
+                aout_DeviceSet(output, id.isEmpty() ? nullptr : id.constData());
+            }
+            aout_Release(output);
+        }
+    }
     if (previous.contains(QStringLiteral("audio-filter"))) {
         const auto before = previous.value(QStringLiteral("audio-filter")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
         const auto after = value(QStringLiteral("audio-filter")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);

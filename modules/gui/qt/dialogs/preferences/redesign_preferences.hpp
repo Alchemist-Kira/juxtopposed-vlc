@@ -27,6 +27,7 @@ public:
     bool dirty() const { return !m_edits.isEmpty() || !m_invalid.isEmpty(); }
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
+    Q_INVOKABLE void refresh();
     Q_INVOKABLE QVariantList equalizerBands() const;
     Q_INVOKABLE bool setEqualizerBand(int index, double gain);
     Q_INVOKABLE QVariantList shortcutCatalog() const;
@@ -48,6 +49,8 @@ signals:
     void changed();
 private:
     struct Entry { QString name, category, title; };
+    QString audioOutputModule() const;
+    QVariantList audioDeviceChoices() const;
     static QVariant read(const QByteArray& name);
     static void write(const QByteArray& name, const QVariant& value);
     MainCtx* m_ctx = nullptr;

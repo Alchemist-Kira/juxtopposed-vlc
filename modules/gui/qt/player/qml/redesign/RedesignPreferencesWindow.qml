@@ -18,14 +18,17 @@ Window {
     transientParent: MainCtx.intfMainWindow
     color: theme.background
     property real scaleFactor: VLCStyle.scale
+    property color accentColor: MainCtx.redesignAccent
     property bool lightTheme: !VLCStyle.palette.isDark
     property string category: "general"
     property string categoryTitle: qsTr("General")
     property bool advanced: false
+    property bool expert: false
+    property bool editingShortcuts: false
     property string search: ""
     property int pendingTheme: 2
     property bool appearanceDirty: false
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     RedesignPreferences { id: preferenceStore; ctx: MainCtx }
     RedesignPreferencesCatalog { id: specification }
     function begin() {
@@ -36,7 +39,7 @@ Window {
         visible = true
         raise(); requestActivate()
     }
-    function cancel() { preferenceStore.discard(); visible = false }
+    function cancel() { content.forceActiveFocus(); preferenceStore.discard(); visible = false }
     function save(closeAfter) {
         // Moving focus commits the text field currently being edited.
         content.forceActiveFocus()
@@ -103,12 +106,13 @@ Window {
                             }
                             RedesignButton {
                                 width: parent.width - theme.dp(20); x: theme.dp(10); height: theme.dp(40)
-                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                                 caption: modelData.title; text: caption; iconName: modelData.icon
+                                leftAligned: true
                                 selected: root.category === modelData.key && !root.search.length
                                 onClicked: {
                                     root.category = modelData.key; root.categoryTitle = modelData.title
-                                    root.search = ""; searchField.clear(); root.advanced = false
+                                    root.search = ""; searchField.clear(); root.advanced = false; root.expert = false; root.editingShortcuts = false
                                     scroll.contentItem.contentY = 0
                                 }
                             }
@@ -132,7 +136,7 @@ Window {
         RedesignButton {
             id: closeButton
             anchors.right: parent.right; anchors.top: parent.top; anchors.margins: theme.dp(12)
-            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             iconName: "close"; text: qsTr("Close settings")
             onClicked: root.cancel()
         }
@@ -156,6 +160,7 @@ Window {
                         Text { Layout.fillWidth: true; text: qsTr("Theme"); color: theme.foreground; font.pixelSize: theme.dp(14) }
                         C.ComboBox {
                             Layout.preferredWidth: theme.dp(320)
+                            Layout.preferredHeight: theme.dp(34)
                             model: [qsTr("System"), qsTr("Light"), qsTr("Dark")]
                             currentIndex: root.pendingTheme
                             palette.button: theme.background; palette.buttonText: theme.foreground
@@ -165,17 +170,69 @@ Window {
                         }
                         Item { width: theme.dp(26) }
                     }
-                    RedesignPreferenceRow { Layout.fillWidth: true; backend: preferenceStore; optionName: "qt-accent-color"; label: qsTr("Accent color"); scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
-                    RedesignPreferenceRow { Layout.fillWidth: true; backend: preferenceStore; optionName: "language"; label: qsTr("Language"); scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+                    RowLayout {
+                        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(34)
+                        Text { Layout.fillWidth: true; text: qsTr("Accent color"); color: theme.foreground; font.pixelSize: theme.dp(14) }
+                        Repeater {
+                            model: ["default", "#d37918", "#b99327", "#809f3c", "#438b71", "#3c85b7", "#7360ba", "#a35ca0", "#bd5960"]
+                            RedesignButton {
+                                required property string modelData
+                                width: theme.dp(26); height: theme.dp(30)
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                text: modelData === "default" ? qsTr("Default orange") : modelData
+                                background: Rectangle {
+                                    anchors.centerIn: parent; width: theme.dp(20); height: theme.dp(24); radius: theme.dp(2)
+                                    color: parent.modelData === "default" ? "#d37918" : parent.modelData
+                                    border.width: { preferenceStore.revision; return preferenceStore.value("qt-accent-color") === parent.modelData ? theme.dp(2) : 0 }
+                                    border.color: theme.bright
+                                }
+                                onClicked: preferenceStore.stage("qt-accent-color", modelData)
+                            }
+                        }
+                        RedesignButton {
+                            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                            iconName: "add"; text: qsTr("Custom accent color")
+                            onClicked: { const color = preferenceStore.chooseColor(root.accentColor.toString()); if (color.length) preferenceStore.stage("qt-accent-color", color) }
+                        }
+                        Item { width: theme.dp(26) }
+                    }
+                    RedesignPreferenceRow { Layout.fillWidth: true; backend: preferenceStore; optionName: "language"; label: qsTr("Language"); scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
                 }
                 Repeater {
                     model: root.search.length ? [] : specification.sections[root.category] || []
                     delegate: Column {
                         required property var modelData
                         width: parent.width
+                        visible: modelData.rows.some(row => preferenceStore.describe(row[0]).kind !== undefined) || root.category === "controls" && modelData.title === qsTr("Keyboard Shortcuts")
                         Text {
                             topPadding: theme.dp(24); bottomPadding: theme.dp(10)
                             text: modelData.title; color: theme.bright; font.pixelSize: theme.dp(16)
+                        }
+                        Row {
+                            visible: root.category === "controls" && modelData.title === qsTr("Keyboard Shortcuts")
+                            spacing: theme.dp(12)
+                            RedesignButton {
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                caption: qsTr("Edit Keyboard Shortcuts"); text: caption
+                                onClicked: root.editingShortcuts = !root.editingShortcuts
+                            }
+                            RedesignButton {
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                caption: qsTr("Reset all shortcuts"); text: caption
+                                onClicked: {
+                                    for (const entry of preferenceStore.catalog("controls", ""))
+                                        if (entry.name.startsWith("key-") || entry.name.startsWith("global-key-")) preferenceStore.reset(entry.name)
+                                }
+                            }
+                        }
+                        Repeater {
+                            model: root.category === "controls" && root.editingShortcuts && modelData.title === qsTr("Keyboard Shortcuts")
+                                ? preferenceStore.catalog("controls", "").filter(entry => entry.name.startsWith("key-") || entry.name.startsWith("global-key-")) : []
+                            delegate: RedesignPreferenceRow {
+                                required property var modelData
+                                width: parent.width; backend: preferenceStore; optionName: modelData.name
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                            }
                         }
                         Repeater {
                             model: modelData.rows
@@ -183,7 +240,8 @@ Window {
                                 required property var modelData
                                 width: parent.width
                                 backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
-                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                                presentation: modelData[2] || {}
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                             }
                         }
                     }
@@ -191,18 +249,54 @@ Window {
                 RedesignButton {
                     visible: !root.search.length
                     width: parent.width; height: theme.dp(40)
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     caption: root.advanced ? qsTr("Hide Advanced Options") : qsTr("Advanced Options")
                     text: caption; selected: root.advanced
                     onClicked: root.advanced = !root.advanced
                 }
                 Repeater {
-                    model: root.advanced || root.search.length ? preferenceStore.catalog(root.category, root.search) : []
+                    model: root.advanced && !root.search.length ? specification.advancedSections[root.category] || [] : []
+                    delegate: Column {
+                        required property var modelData
+                        width: parent.width
+                        Text {
+                            visible: text.length > 0; topPadding: theme.dp(20); bottomPadding: theme.dp(10)
+                            text: modelData.title; color: theme.bright; font.pixelSize: theme.dp(16)
+                        }
+                        Repeater {
+                            model: modelData.rows
+                            delegate: RedesignPreferenceRow {
+                                required property var modelData
+                                width: parent.width; backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
+                                presentation: modelData[2] || {}
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                            }
+                        }
+                    }
+                }
+                RedesignButton {
+                    visible: root.advanced && !root.search.length
+                    width: parent.width
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    caption: root.expert ? qsTr("Hide all VLC options") : qsTr("All VLC options")
+                    text: caption; selected: root.expert
+                    onClicked: root.expert = !root.expert
+                }
+                Repeater {
+                    model: {
+                        if (root.search.length) {
+                            const matches = specification.find(root.search)
+                            for (const entry of preferenceStore.catalog("", root.search))
+                                if (!matches.some(row => row.name === entry.name)) matches.push(entry)
+                            return matches
+                        }
+                        return root.expert ? preferenceStore.catalog(root.category, "") : []
+                    }
                     delegate: RedesignPreferenceRow {
                         required property var modelData
                         width: parent.width
-                        backend: preferenceStore; optionName: modelData.name
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        backend: preferenceStore; optionName: modelData.name; label: modelData.title || ""; presentation: modelData.presentation || {}
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     }
                 }
                 Item { width: 1; height: theme.dp(24) }
@@ -223,9 +317,9 @@ Window {
                 id: actions
                 anchors.right: parent.right; anchors.rightMargin: theme.dp(24); anchors.verticalCenter: parent.verticalCenter
                 spacing: theme.dp(10)
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Cancel"); text: caption; onClicked: root.cancel() }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Apply"); text: caption; enabled: preferenceStore.dirty || root.appearanceDirty; onClicked: root.save(false) }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Save"); text: caption; accent: true; onClicked: root.save(true) }
+                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: root.cancel() }
+                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Apply"); text: caption; enabled: preferenceStore.dirty || root.appearanceDirty; onClicked: root.save(false) }
+                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Save"); text: caption; accent: true; onClicked: root.save(true) }
             }
         }
     }

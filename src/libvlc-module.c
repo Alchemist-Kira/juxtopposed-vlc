@@ -2279,6 +2279,8 @@ vlc_module_begin ()
     add_integer( "hotkeys-x-wheel-mode", 2, MOUSE_X_WHEEL_MODE_TEXT,
                  MOUSE_X_WHEEL_MODE_LONGTEXT )
         change_integer_list( mouse_wheel_values, mouse_wheel_texts )
+    add_bool("hotkeys-wheel-direction", false, N_("Reverse scroll direction"),
+             N_("Reverse the volume and seek actions of both mouse wheel axes."))
     add_obsolete_integer( "hotkeys-mousewheel-mode" ) /* since 3.0.0 */
 
 #if defined(__APPLE__)

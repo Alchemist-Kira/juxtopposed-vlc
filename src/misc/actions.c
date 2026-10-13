@@ -420,6 +420,28 @@ struct vlc_actions_t
     const char *ppsz_keys[];
 };
 
+static vlc_action_id_t wheel_action(vlc_object_t *obj, uint32_t keycode)
+{
+    const char *axis;
+    bool more;
+    switch (keycode)
+    {
+        case KEY_MOUSEWHEELUP: axis = "hotkeys-y-wheel-mode"; more = true; break;
+        case KEY_MOUSEWHEELDOWN: axis = "hotkeys-y-wheel-mode"; more = false; break;
+        case KEY_MOUSEWHEELRIGHT: axis = "hotkeys-x-wheel-mode"; more = true; break;
+        case KEY_MOUSEWHEELLEFT: axis = "hotkeys-x-wheel-mode"; more = false; break;
+        default: return ACTIONID_NONE;
+    }
+    if (var_InheritBool(obj, "hotkeys-wheel-direction")) more = !more;
+    switch (var_InheritInteger(obj, axis))
+    {
+        case 0: return more ? ACTIONID_COMBO_VOL_FOV_UP : ACTIONID_COMBO_VOL_FOV_DOWN;
+        case 2: return more ? ACTIONID_JUMP_FORWARD_EXTRASHORT : ACTIONID_JUMP_BACKWARD_EXTRASHORT;
+        case 3: return more ? ACTIONID_JUMP_BACKWARD_EXTRASHORT : ACTIONID_JUMP_FORWARD_EXTRASHORT;
+        default: return ACTIONID_NONE;
+    }
+}
+
 static int vlc_key_to_action (vlc_object_t *obj, const char *varname,
                               vlc_value_t prevkey, vlc_value_t curkey, void *d)
 {
@@ -428,14 +450,12 @@ static int vlc_key_to_action (vlc_object_t *obj, const char *varname,
     uint32_t keycode = curkey.i_int;
 
     pent = tfind (&keycode, map, keycmp);
-    if (pent == NULL)
-        return VLC_SUCCESS;
-
-    const struct mapping *ent = *pent;
-
+    /* Explicit user bindings take precedence over the live wheel defaults. */
+    const struct mapping *entry = pent != NULL ? *pent : NULL;
+    vlc_action_id_t action = entry != NULL ? entry->action : wheel_action(obj, keycode);
     (void) varname;
     (void) prevkey;
-    return var_SetInteger (obj, "key-action", ent->action);
+    return action == ACTIONID_NONE ? VLC_SUCCESS : var_SetInteger(obj, "key-action", action);
 }
 
 /**
@@ -460,32 +480,6 @@ static int add_mapping (void **map, uint32_t keycode, vlc_action_id_t action)
     return 0;
 }
 
-static void add_wheel_mapping (void **map, uint32_t kmore, uint32_t kless,
-                                 int mode)
-{
-    vlc_action_id_t amore = ACTIONID_NONE, aless = ACTIONID_NONE;
-
-    switch (mode)
-    {
-        case 0: /* volume up/down */
-            amore = ACTIONID_COMBO_VOL_FOV_UP;
-            aless = ACTIONID_COMBO_VOL_FOV_DOWN;
-            break;
-        case 2: /* position latter/earlier */
-            amore = ACTIONID_JUMP_FORWARD_EXTRASHORT;
-            aless = ACTIONID_JUMP_BACKWARD_EXTRASHORT;
-            break;
-        case 3: /* position earlier/latter */
-            amore = ACTIONID_JUMP_BACKWARD_EXTRASHORT;
-            aless = ACTIONID_JUMP_FORWARD_EXTRASHORT;
-            break;
-    }
-
-    if (amore != ACTIONID_NONE)
-        add_mapping (map, kmore, amore);
-    if (aless != ACTIONID_NONE)
-        add_mapping (map, kless, aless);
-}
 
 
 /**
@@ -563,12 +557,6 @@ int libvlc_InternalActionsInit (libvlc_int_t *libvlc)
         init_action (obj, &as->global_map, name, s_names2actions[i].id);
     }
     as->ppsz_keys[ARRAY_SIZE(s_names2actions)] = NULL;
-
-    /* Initialize mouse wheel events */
-    add_wheel_mapping (&as->map, KEY_MOUSEWHEELRIGHT, KEY_MOUSEWHEELLEFT,
-                         var_InheritInteger (obj, "hotkeys-x-wheel-mode"));
-    add_wheel_mapping (&as->map, KEY_MOUSEWHEELUP, KEY_MOUSEWHEELDOWN,
-                         var_InheritInteger (obj, "hotkeys-y-wheel-mode"));
 
     libvlc_priv(libvlc)->actions = as;
     var_AddCallback (obj, "key-pressed", vlc_key_to_action, &as->map);

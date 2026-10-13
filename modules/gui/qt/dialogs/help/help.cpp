@@ -31,7 +31,7 @@
 #include "util/qt_dirs.hpp"
 #include "maininterface/mainctx.hpp"
 
-#include <vlc_about.h>
+
 #include <vlc_intf_strings.h>
 
 #ifdef UPDATE_CHECK

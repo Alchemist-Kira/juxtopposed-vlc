@@ -61,6 +61,10 @@ static void test_wheel(bool explicit_binding)
         check_key(core, &observed, KEY_MOUSEWHEELRIGHT, ACTIONID_JUMP_FORWARD_EXTRASHORT);
         check_key(core, &observed, KEY_MOUSEWHEELLEFT, ACTIONID_JUMP_BACKWARD_EXTRASHORT);
 
+        observed.count = 0;
+        var_SetInteger(core, "global-key-pressed", KEY_MOUSEWHEELUP);
+        assert(observed.count == 0);
+
         /* A preferences change must work without restarting the instance. */
         var_SetBool(core, "hotkeys-wheel-direction", true);
         check_key(core, &observed, KEY_MOUSEWHEELUP, ACTIONID_COMBO_VOL_FOV_DOWN);

@@ -452,8 +452,8 @@ static int vlc_key_to_action (vlc_object_t *obj, const char *varname,
     pent = tfind (&keycode, map, keycmp);
     /* Explicit user bindings take precedence over the live wheel defaults. */
     const struct mapping *entry = pent != NULL ? *pent : NULL;
-    vlc_action_id_t action = entry != NULL ? entry->action : wheel_action(obj, keycode);
-    (void) varname;
+    vlc_action_id_t action = entry != NULL ? entry->action
+        : strcmp(varname, "key-pressed") == 0 ? wheel_action(obj, keycode) : ACTIONID_NONE;
     (void) prevkey;
     return action == ACTIONID_NONE ? VLC_SUCCESS : var_SetInteger(obj, "key-action", action);
 }
@@ -479,8 +479,6 @@ static int add_mapping (void **map, uint32_t keycode, vlc_action_id_t action)
     }
     return 0;
 }
-
-
 
 /**
  * Sets up all key mappings for a given action.

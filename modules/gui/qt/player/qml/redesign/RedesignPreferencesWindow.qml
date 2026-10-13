@@ -26,9 +26,24 @@ Window {
     property bool expert: false
     property string search: ""
     property string actionMessage: ""
+    property bool actionMessageIsError: true
+    property bool resetFailed: false
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     RedesignPreferences { id: preferenceStore; ctx: MainCtx; autoSave: true }
     RedesignPreferencesCatalog { id: specification }
+    RedesignConfirmationDialog {
+        id: resetDialog
+        parent: content
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        title: qsTr("Reset all settings")
+        message: qsTr("This action replaces all VLC settings with the default settings. Restart VLC after this action.")
+        confirmText: qsTr("Reset"); destructive: true
+        onAccepted: root.resetSettings()
+    }
+    Connections {
+        target: preferenceStore
+        function onChanged() { if (!preferenceStore.errorMessage.length) root.resetFailed = false }
+    }
     RedesignShortcuts {
         id: shortcuts
         parent: content
@@ -38,6 +53,7 @@ Window {
     function begin() {
         preferenceStore.discard()
         actionMessage = ""
+        resetFailed = false
         searchField.clear()
         visible = true
         raise(); requestActivate()
@@ -47,9 +63,18 @@ Window {
         if (!preferenceStore.dirty || preferenceStore.save()) visible = false
     }
     function runAction(action) {
+        if (action === "redesign-reset-all") { resetDialog.open(); return }
         if (action !== "redesign-config-folder") return
+        actionMessageIsError = true
         const folder = preferenceStore.configurationFolder()
         actionMessage = folder.toString().length && Qt.openUrlExternally(folder) ? "" : qsTr("VLC cannot open the settings folder.")
+    }
+    function resetSettings() {
+        resetFailed = !preferenceStore.resetAll()
+        if (!resetFailed) {
+            actionMessageIsError = false
+            actionMessage = qsTr("VLC saved the default settings. Restart VLC to use all settings.")
+        }
     }
     onClosing: event => { event.accepted = false; closeSettings() }
     Connections {
@@ -191,7 +216,7 @@ Window {
                                     caption: modelData.label; text: caption
                                     selected: MainCtx.colorScheme.scheme === modelData.value
                                     background: Rectangle { color: parent.selected ? theme.progress : theme.background; radius: theme.dp(4); border.color: theme.field }
-                                    onClicked: MainCtx.colorScheme.setData(MainCtx.colorScheme.index(modelData.value, 0), true, Qt.CheckStateRole)
+                                    onClicked: { MainCtx.colorScheme.setData(MainCtx.colorScheme.index(modelData.value, 0), true, Qt.CheckStateRole); preferenceStore.save() }
                                 }
                             }
                         }
@@ -357,11 +382,11 @@ Window {
                 Text {
                     Layout.fillWidth: true
                     text: preferenceStore.errorMessage || root.actionMessage
-                    color: "#e56b6b"; font.pixelSize: theme.dp(13); wrapMode: Text.WordWrap
+                    color: preferenceStore.errorMessage.length || root.actionMessageIsError ? "#e56b6b" : theme.foreground; font.pixelSize: theme.dp(13); wrapMode: Text.WordWrap
                 }
                 RedesignButton {
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    caption: qsTr("Retry"); text: caption; onClicked: preferenceStore.save()
+                    caption: qsTr("Retry"); text: caption; onClicked: root.resetFailed ? root.resetSettings() : preferenceStore.save()
                     visible: preferenceStore.errorMessage.length > 0
                 }
             }

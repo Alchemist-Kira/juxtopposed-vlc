@@ -138,7 +138,17 @@ TestCase {
     SignalSpy { id: captureSpy; target: shortcutEditor; signalName: "captureRequested" }
     SignalSpy { id: cancelSpy; target: shortcutEditor; signalName: "cancelRequested" }
     SignalSpy { id: saveSpy; target: shortcutEditor; signalName: "saveRequested" }
+    RedesignConfirmationDialog {
+        id: confirmation
+        parent: testCase
+        title: "Reset all settings"
+        message: "This action replaces all VLC settings with the default settings."
+        confirmText: "Reset"; destructive: true
+    }
+    SignalSpy { id: confirmationAccepted; target: confirmation; signalName: "accepted" }
+    SignalSpy { id: confirmationRejected; target: confirmation; signalName: "rejected" }
     function init() {
+        confirmation.close(); confirmationAccepted.clear(); confirmationRejected.clear()
         actionRow.visible = false; actionSpy.clear()
         shortcutEditor.close()
         startupVolume.visible = false; deviceRow.visible = false; volumeStepRow.visible = false; spatialModeRow.visible = false; store.refreshCount = 0
@@ -155,6 +165,29 @@ TestCase {
         compare(field.text, "5.0")
         field.text = "2"; field.editingFinished()
         fuzzyCompare(store.value("volumeStep"), 5.12, 0.000001)
+    }
+    function test_confirmationDefaultsToCancel() {
+        confirmation.open()
+        tryCompare(confirmation, "opened", true)
+        const cancel = findChild(confirmation.contentItem, "confirmationCancel")
+        tryCompare(cancel, "activeFocus", true)
+        keyClick(Qt.Key_Return)
+        compare(confirmationAccepted.count, 0)
+        compare(confirmationRejected.count, 1)
+        tryCompare(confirmation, "opened", false)
+    }
+    function test_confirmationRequiresResetAction() {
+        confirmation.open()
+        tryCompare(confirmation, "opened", true)
+        mouseClick(findChild(confirmation.contentItem, "confirmationAccept"))
+        compare(confirmationAccepted.count, 1)
+        compare(confirmationRejected.count, 0)
+        tryCompare(confirmation, "opened", false)
+        confirmation.open()
+        tryCompare(confirmation, "opened", true)
+        keyClick(Qt.Key_Escape)
+        tryCompare(confirmation, "opened", false)
+        compare(confirmationAccepted.count, 1)
     }
     function test_actionButtonUsesActionWithoutChangingSettings() {
         actionRow.visible = true

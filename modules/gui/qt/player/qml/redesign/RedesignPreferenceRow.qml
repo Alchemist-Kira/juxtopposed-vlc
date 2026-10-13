@@ -112,7 +112,8 @@ ColumnLayout {
                 width: theme.dp(100); height: parent.height
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 caption: root.description.buttonLabel || ""; text: caption
-                background: Rectangle { radius: theme.dp(4); color: parent.hovered ? theme.hover : theme.background; border.color: parent.visualFocus ? theme.accent : "transparent" }
+                foreground: root.description.destructive ? "#e15032" : theme.foreground
+                background: Rectangle { radius: theme.dp(4); color: parent.hovered ? theme.hover : root.description.destructive ? root.lightTheme ? "#f8e2d9" : "#251713" : theme.background; border.color: parent.visualFocus ? parent.foreground : "transparent" }
                 onClicked: root.actionRequested(root.optionName)
             }
         }

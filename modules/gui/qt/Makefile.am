@@ -1178,6 +1178,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignPreferenceRow.qml \
 	player/qml/redesign/RedesignComboBox.qml \
 	player/qml/redesign/RedesignEqualizer.qml \
+	player/qml/redesign/RedesignStartupVolume.qml \
 	player/qml/redesign/RedesignPreferencesWindow.qml \
 	player/qml/redesign/RedesignSettingSlider.qml \
 	player/qml/redesign/RedesignSettings.qml \

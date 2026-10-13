@@ -12,9 +12,13 @@ ColumnLayout {
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
-    readonly property var description: backend.describe(optionName)
+    readonly property var description: { if (presentation.dynamicChoices) backend.revision; return backend.describe(optionName) }
     readonly property var currentValue: { backend.revision; return backend.value(optionName) }
-    readonly property var choices: presentation.choices || description.choices || []
+    readonly property var choices: {
+        const options = presentation.choices || description.choices || []
+        if (!presentation.choiceLabels) return options
+        return options.map(row => Object.assign({}, row, {label: presentation.choiceLabels[row.value] || row.label}))
+    }
     readonly property string editor: presentation.editor || description.editor || ""
     readonly property real factor: presentation.factor || 1
     readonly property bool fullWidth: !!presentation.fullWidth
@@ -29,13 +33,13 @@ ColumnLayout {
         return backend.stage(optionName, value)
     }
     readonly property var displayedValue: presentation.inverted ? !currentValue : currentValue
-    readonly property Component editorComponent: editor === "slider" ? sliderEditor
+    readonly property Component editorComponent: editor === "startup-volume" ? startupVolumeEditor : editor === "slider" ? sliderEditor
         : description.kind === "bool" && !choices.length ? toggleEditor
         : editor === "color" ? colorEditor
         : choices.length ? choiceEditor : textEditor
     RowLayout {
         Layout.fillWidth: true
-        Layout.minimumHeight: !available ? 0 : theme.dp(root.editor === "slider" ? 68 : root.choices.length ? 46 : root.description.kind === "bool" ? 42 : 48)
+        Layout.minimumHeight: !available ? 0 : theme.dp(root.editor === "startup-volume" ? 92 : root.editor === "slider" ? 68 : root.choices.length ? 46 : root.description.kind === "bool" ? 42 : 48)
         spacing: theme.dp(10)
         implicitHeight: available ? Math.max(theme.dp(44), labelText.implicitHeight + theme.dp(10)) : 0
         Item {
@@ -98,6 +102,13 @@ ColumnLayout {
         }
     }
     Component {
+        id: startupVolumeEditor
+        RedesignStartupVolume {
+            backend: root.backend
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        }
+    }
+    Component {
         id: toggleEditor
         Item {
             implicitHeight: theme.dp(34)
@@ -141,6 +152,7 @@ ColumnLayout {
                 for (let i = 0; i < count; ++i) if (model[i].value == root.displayedValue) return i
                 return -1
             }
+            onAboutToOpen: if (root.presentation.dynamicChoices) root.backend.refresh()
             onActivated: root.commit(currentValue)
         }
     }
@@ -171,12 +183,31 @@ ColumnLayout {
                     border.width: slider.visualFocus ? 1 : 0; border.color: theme.bright
                 }
                 onMoved: root.commit(root.description.kind === "integer" ? Math.round(value / root.factor) : value / root.factor)
+                hoverEnabled: true
+                C.ToolTip.text: Number(value).toFixed(root.presentation.decimals || 0) + (root.presentation.suffix || "")
+                C.ToolTip.visible: hovered || pressed
             }
             RowLayout {
+                visible: !root.presentation.ticks
                 Layout.fillWidth: true
                 Text { text: slider.from + (root.presentation.suffix || ""); color: theme.foreground; font.pixelSize: theme.dp(11) }
                 Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: Number(slider.value).toFixed(root.presentation.decimals || 0) + (root.presentation.suffix || ""); color: theme.foreground; font.pixelSize: theme.dp(11) }
                 Text { text: slider.to + (root.presentation.suffix || ""); color: theme.foreground; font.pixelSize: theme.dp(11) }
+            }
+            Item {
+                Layout.fillWidth: true; Layout.preferredHeight: theme.dp(14)
+                visible: !!root.presentation.ticks
+                Repeater {
+                    model: root.presentation.ticks || []
+                    Text {
+                        required property int index
+                        required property var modelData
+                        x: index * parent.width / Math.max(1, (root.presentation.ticks || []).length - 1)
+                            - (index === 0 ? 0 : index === (root.presentation.ticks || []).length - 1 ? width : width / 2)
+                        text: modelData + (root.presentation.suffix || "")
+                        color: theme.foreground; font.pixelSize: theme.dp(11)
+                    }
+                }
             }
         }
     }
@@ -206,7 +237,9 @@ ColumnLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 property bool invalid: false
                 readonly property bool numeric: root.description.kind === "integer" || root.description.kind === "float"
-                text: root.currentValue === undefined ? "" : numeric ? String(Number(root.currentValue) * root.factor) : String(root.currentValue)
+                text: root.currentValue === undefined ? "" : numeric
+                    ? root.presentation.decimals === undefined ? String(Number(root.currentValue) * root.factor) : (Number(root.currentValue) * root.factor).toFixed(root.presentation.decimals)
+                    : String(root.currentValue)
                 leftPadding: theme.dp(14); rightPadding: theme.dp(10)
                 Layout.minimumHeight: theme.dp(34)
                 color: invalid ? "#e56b6b" : theme.foreground; font.pixelSize: theme.dp(14)

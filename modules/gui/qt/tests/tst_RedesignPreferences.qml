@@ -12,12 +12,21 @@ TestCase {
     QtObject {
         id: store
         property int revision: 0
+        property int refreshCount: 0
         property var values: ({resize: true, fastSeek: false, timeout: 1800})
         function value(name) { return values[name] }
+        function refresh() { refreshCount++; revision++ }
         function describe(name) {
+            if (name === "volumeStep") return {kind: "float", title: "Volume step", choices: []}
+            if (name === "device") return {kind: "string", title: "Output device", choices: [{label: "System default", value: ""}, {label: "Headphones", value: "native-headphones"}]}
             return {kind: name === "timeout" ? "integer" : name === "clickPolicy" ? "string" : "bool", title: name, help: "", choices: []}
         }
         function stage(name, value) {
+            if (name === "redesign-startup-volume") {
+                const number = Number(value)
+                if (!String(value).trim().length || !Number.isInteger(number) || number < 0 || number > 300) return false
+                value = number
+            }
             const next = Object.assign({}, values)
             next[name] = value
             values = next
@@ -80,6 +89,26 @@ TestCase {
         y: 290; width: parent.width; backend: store; optionName: "timeout"
         label: "Port"; presentation: ({enabledWhen: "resize"})
     }
+    RedesignStartupVolume {
+        id: startupVolume
+        y: 350; width: 320
+        backend: store
+        visible: false
+    }
+    RedesignPreferenceRow {
+        id: deviceRow
+        y: 350; width: parent.width
+        backend: store; optionName: "device"; label: "Output device"
+        presentation: ({dynamicChoices: true})
+        visible: false
+    }
+    RedesignPreferenceRow {
+        id: volumeStepRow
+        y: 430; width: parent.width
+        backend: store; optionName: "volumeStep"; label: "Volume step"
+        presentation: ({factor: 100 / 256, decimals: 1, suffix: "%"})
+        visible: false
+    }
     RedesignShortcutEditor {
         id: shortcutEditor
         parent: testCase
@@ -95,12 +124,57 @@ TestCase {
     SignalSpy { id: saveSpy; target: shortcutEditor; signalName: "saveRequested" }
     function init() {
         shortcutEditor.close()
+        startupVolume.visible = false; deviceRow.visible = false; volumeStepRow.visible = false; store.refreshCount = 0
         equalizer.visible = false; equalizer.expanded = false
         equalizerStore.gains = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; equalizerStore.preamp = 12; equalizerStore.revision++
         captureSpy.clear(); cancelSpy.clear(); saveSpy.clear()
-        store.values = {resize: true, fastSeek: false, timeout: 1800, clickPolicy: "auto"}
+        store.values = {resize: true, fastSeek: false, timeout: 1800, clickPolicy: "auto", "volume-save": true, "redesign-startup-volume": 200, device: "", volumeStep: 12.800000190734863}
         store.revision++
         wait(20)
+    }
+    function test_volumeStepUsesPercentagePoints() {
+        volumeStepRow.visible = true
+        const field = findChild(volumeStepRow, "preferenceTextEditor")
+        compare(field.text, "5.0")
+        field.text = "2"; field.editingFinished()
+        fuzzyCompare(store.value("volumeStep"), 5.12, 0.000001)
+    }
+    function test_startupVolumeOffersRememberAndFixedChoices() {
+        startupVolume.visible = true
+        const field = findChild(startupVolume, "startupVolumeField")
+        verify(startupVolume.remember)
+        verify(!field.enabled)
+        mouseClick(findChild(startupVolume, "fixedStartupVolume"))
+        compare(store.value("volume-save"), false)
+        verify(field.enabled)
+        field.text = "150"; field.editingFinished()
+        compare(store.value("redesign-startup-volume"), 150)
+        const remember = findChild(startupVolume, "rememberStartupVolume")
+        remember.forceActiveFocus(); keyClick(Qt.Key_Space)
+        compare(store.value("volume-save"), true)
+        verify(!field.enabled)
+        compare(store.value("redesign-startup-volume"), 150)
+    }
+    function test_startupVolumeShowsRejectedValue() {
+        startupVolume.visible = true
+        mouseClick(findChild(startupVolume, "fixedStartupVolume"))
+        const field = findChild(startupVolume, "startupVolumeField")
+        field.text = "301"; field.editingFinished()
+        verify(field.invalid)
+        compare(store.value("redesign-startup-volume"), 200)
+        field.text = "125"; field.editingFinished()
+        verify(!field.invalid)
+        compare(store.value("redesign-startup-volume"), 125)
+    }
+    function test_deviceChoicesRefreshAndUseNativeIdentifiers() {
+        deviceRow.visible = true
+        const choice = findChild(deviceRow, "preferenceChoiceEditor")
+        compare(choice.displayText, "System default")
+        choice.forceActiveFocus(); choice.popup.open()
+        compare(store.refreshCount, 1)
+        keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
+        compare(store.value("device"), "native-headphones")
+        compare(choice.displayText, "Headphones")
     }
     function test_friendlyClickChoiceKeepsNativePolicyValue() {
         const choice = findChild(clickPolicyRow, "preferenceChoiceEditor")
@@ -186,6 +260,10 @@ TestCase {
         verify(!playback.includes("repeat"))
         verify(!playback.includes("loop"))
         verify(!playback.includes("input-timeshift-path"))
+        const audio = catalog.sections.audio.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])
+        verify(audio.includes("redesign-audio-device"))
+        verify(!audio.includes("aout"))
+        verify(catalog.advancedSections.audio.some(section => section.rows.some(row => row[0] === "aout")))
         verify(catalog.advancedSections.playback[0].rows.some(row => row[0] === "input-timeshift-path"))
     }
     function test_shortcutEditorRecordsKeys() {

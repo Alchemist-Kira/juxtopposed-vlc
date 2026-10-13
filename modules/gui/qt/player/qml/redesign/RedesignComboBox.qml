@@ -8,6 +8,7 @@ C.ComboBox {
     property real scaleFactor: 1
     property bool lightTheme: false
     property bool showCurvePreviews: false
+    signal aboutToOpen()
     property color accentColor: "#d37918"
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     implicitHeight: theme.dp(34)
@@ -65,6 +66,7 @@ C.ComboBox {
         background: Rectangle { radius: root.theme.dp(3); color: parent.highlighted ? root.theme.hover : "transparent" }
     }
     popup: C.Popup {
+        onAboutToShow: root.aboutToOpen()
         y: root.height + root.theme.dp(4)
         width: root.width
         implicitHeight: Math.min(contentItem.implicitHeight + topPadding + bottomPadding, root.theme.dp(300))

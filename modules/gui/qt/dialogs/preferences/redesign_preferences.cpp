@@ -16,6 +16,7 @@
 #include <QRegularExpression>
 #include <QDir>
 #include <QFileInfo>
+#include <QSettings>
 #include "util/vlchotkeyconverter.hpp"
 
 namespace {
@@ -213,6 +214,10 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-reset-all"))
+        return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
+            {QStringLiteral("buttonLabel"), qtr("Reset")}, {QStringLiteral("destructive"), true},
+            {QStringLiteral("help"), qtr("Replace all VLC settings with the default settings.")}};
     if (name == QLatin1String("redesign-config-folder"))
         return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
             {QStringLiteral("buttonLabel"), qtr("Open")},
@@ -529,6 +534,85 @@ bool RedesignPreferences::save()
         }
     }
     m_ctx->reloadPrefs();
+    m_ctx->getIntf()->preferencesResetPending = false;
+    discard();
+    return true;
+}
+
+bool RedesignPreferences::resetAll()
+{
+    if (!m_ctx) return false;
+    m_saveTimer.stop();
+    auto* intf = m_ctx->getIntf();
+    QSettings uiSettings(intf->mainSettings->fileName(), intf->mainSettings->format());
+    uiSettings.setFallbacksEnabled(false);
+    QVariantMap previousUi;
+    for (const auto& key : uiSettings.allKeys()) previousUi.insert(key, uiSettings.value(key));
+
+    QVariantMap previous;
+    size_t count = 0;
+    module_t** modules = module_list_get(&count);
+    for (size_t i = 0; i < count; ++i) {
+        unsigned size = 0;
+        module_config_t* configs = module_config_get(modules[i], &size);
+        for (unsigned j = 0; j < size; ++j) {
+            if (!CONFIG_ITEM(configs[j].i_type) || !configs[j].psz_name) continue;
+            const auto current = read(configs[j].psz_name);
+            if (current.isValid()) previous.insert(qfu(configs[j].psz_name), current);
+        }
+        module_config_free(configs);
+    }
+    module_list_free(modules);
+    const auto restore = [&]() {
+        for (auto it = previous.cbegin(); it != previous.cend(); ++it) write(it.key().toUtf8(), it.value());
+    };
+    const auto failed = [&]() {
+        m_error = qtr("VLC cannot save the default settings. Your settings did not change.");
+        ++m_revision; emit changed(); return false;
+    };
+#ifdef _WIN32
+    QSettings language(QStringLiteral("HKEY_CURRENT_USER\\Software\\VideoLAN\\VLC"), QSettings::NativeFormat);
+    const bool hasLanguage = language.contains(QStringLiteral("Lang"));
+    const QVariant previousLanguage = language.value(QStringLiteral("Lang"));
+    if (hasLanguage && !language.isWritable()) return failed();
+#endif
+    const auto rollback = [&]() {
+        QSettings recovery(uiSettings.fileName(), uiSettings.format());
+        recovery.setFallbacksEnabled(false);
+        recovery.clear();
+        for (auto it = previousUi.cbegin(); it != previousUi.cend(); ++it) recovery.setValue(it.key(), it.value());
+        recovery.sync();
+        restore();
+        const int restored = config_SaveConfigFile(intf);
+        if (restored != 0 || recovery.status() != QSettings::NoError) {
+            m_error = qtr("VLC cannot restore the settings file. Restart VLC and check your settings.");
+            ++m_revision; emit changed(); return false;
+        }
+        return failed();
+    };
+    if (!uiSettings.isWritable()) return failed();
+    config_ResetAll();
+    if (config_SaveConfigFile(intf) != 0) {
+        restore();
+        return failed();
+    }
+    uiSettings.clear();
+    uiSettings.sync();
+    if (uiSettings.status() != QSettings::NoError) return rollback();
+#ifdef _WIN32
+    if (hasLanguage) {
+        language.remove(QStringLiteral("Lang"));
+        language.sync();
+        if (language.status() != QSettings::NoError) {
+            language.setValue(QStringLiteral("Lang"), previousLanguage);
+            language.sync();
+            return rollback();
+        }
+    }
+#endif
+    intf->preferencesResetPending = true;
+    m_ctx->reloadPrefs();
+    m_ctx->reloadFromSettings();
     discard();
     return true;
 }

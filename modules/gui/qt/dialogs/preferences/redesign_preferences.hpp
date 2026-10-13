@@ -44,6 +44,7 @@ public:
     Q_INVOKABLE void reset(const QString& name);
     Q_INVOKABLE void discard();
     Q_INVOKABLE bool save();
+    Q_INVOKABLE bool resetAll();
     Q_INVOKABLE QVariantList catalog(const QString& category, const QString& search = QString()) const;
 signals:
     void ctxChanged();

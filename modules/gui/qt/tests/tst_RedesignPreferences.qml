@@ -26,6 +26,22 @@ TestCase {
         }
         function reset(name) { stage(name, name === "timeout" ? 1800 : name === "resize") }
     }
+    QtObject {
+        id: equalizerStore
+        property int revision: 0
+        property var gains: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        property real preamp: 12
+        function equalizerBands() { return gains }
+        function value(name) { return name === "equalizer-preamp" ? preamp : true }
+        function stage(name, gain) { preamp = gain; revision++; return true }
+        function setEqualizerBand(index, gain) { const next = gains.slice(); next[index] = gain; gains = next; revision++; return true }
+    }
+    RedesignEqualizer {
+        id: equalizer
+        x: 0; y: 80; width: 784
+        backend: equalizerStore
+        visible: false
+    }
     RedesignPreferencesCatalog { id: catalog }
     Column {
         width: parent.width
@@ -68,10 +84,33 @@ TestCase {
     SignalSpy { id: saveSpy; target: shortcutEditor; signalName: "saveRequested" }
     function init() {
         shortcutEditor.close()
+        equalizer.visible = false; equalizer.expanded = false
+        equalizerStore.gains = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; equalizerStore.preamp = 12; equalizerStore.revision++
         captureSpy.clear(); cancelSpy.clear(); saveSpy.clear()
         store.values = {resize: true, fastSeek: false, timeout: 1800}
         store.revision++
         wait(20)
+    }
+    function test_equalizerExpandsAndEditsIndividualGains() {
+        equalizer.visible = true
+        mouseClick(findChild(equalizer, "equalizerExpander"))
+        verify(equalizer.expanded)
+        const preamp = findChild(equalizer, "equalizerValue_0")
+        compare(preamp.text, "12.0")
+        preamp.text = "3.5"; preamp.editingFinished()
+        compare(equalizerStore.preamp, 3.5)
+        const band = findChild(equalizer, "equalizerValue_1")
+        band.text = "6.2"; band.editingFinished()
+        compare(equalizerStore.gains[0], 6.2)
+        compare(equalizerStore.gains[1], 1)
+        band.text = "21"; band.editingFinished()
+        verify(band.invalid)
+        compare(equalizerStore.gains[0], 6.2)
+        const slider = findChild(equalizer, "equalizerSlider_2")
+        slider.forceActiveFocus(); keyClick(Qt.Key_Up)
+        verify(equalizerStore.gains[1] > 1)
+        mouseClick(findChild(equalizer, "equalizerExpander"))
+        verify(!equalizer.expanded)
     }
     function test_guidedChoiceWritesUnderlyingBoolean() {
         const choice = findChild(resizeRow, "preferenceChoiceEditor")

@@ -84,6 +84,16 @@ ColumnLayout {
         active: root.fullWidth; visible: active
         sourceComponent: root.editorComponent
     }
+    Loader {
+        Layout.fillWidth: true
+        Layout.topMargin: active ? theme.dp(8) : 0
+        active: !!root.presentation.equalizer
+        visible: active
+        sourceComponent: RedesignEqualizer {
+            backend: root.backend
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        }
+    }
     Component {
         id: toggleEditor
         Item {
@@ -123,6 +133,7 @@ ColumnLayout {
             objectName: "preferenceChoiceEditor"
             implicitHeight: theme.dp(34)
             model: root.choices; textRole: "label"; valueRole: "value"
+            showCurvePreviews: root.choices.some(row => row.curve !== undefined)
             currentIndex: {
                 for (let i = 0; i < count; ++i) if (model[i].value == root.displayedValue) return i
                 return -1

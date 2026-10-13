@@ -6,14 +6,16 @@ import QtQuick.Controls as C
 T.Button {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property string iconName
     property string caption
+    property bool leftAligned: false
     property bool accent: false
     property bool selected: false
     property color foreground: theme.foreground
     property real iconSize: theme.dp(24)
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     implicitWidth: caption.length > 0 ? Math.max(theme.dp(36), contentItem.implicitWidth + theme.dp(16)) : theme.dp(36)
     implicitHeight: theme.dp(36)
@@ -38,7 +40,10 @@ T.Button {
         Row {
         id: contentRow
         spacing: theme.dp(6)
-        anchors.centerIn: parent
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.horizontalCenter: root.leftAligned ? undefined : parent.horizontalCenter
+        anchors.left: root.leftAligned ? parent.left : undefined
+        anchors.leftMargin: theme.dp(12)
         RedesignIcon {
             width: root.iconName ? root.iconSize : 0
             height: root.iconSize

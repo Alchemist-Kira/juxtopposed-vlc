@@ -9,10 +9,11 @@ import VLC.Playlist
 Item {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property int tab: 0
     property Component queueContent
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -26,7 +27,7 @@ Item {
                         required property int index
                         required property string modelData
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         caption: modelData; text: modelData; selected: root.tab === index
                         enabled: index !== 1 || MainCtx.mediaLibraryAvailable
                         onClicked: root.tab = index
@@ -59,7 +60,7 @@ Item {
                 width: chapters.width; height: theme.dp(42)
                 RedesignButton {
                     anchors.fill: parent
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     text: chapter.display; selected: chapter.checked
                     contentItem: RowLayout {
                         Text { Layout.fillWidth: true; text: chapter.display; elide: Text.ElideRight; color: chapter.checked ? theme.accent : theme.foreground; font.pixelSize: theme.dp(14) }

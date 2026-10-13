@@ -6,12 +6,13 @@ import QtQuick.Controls as C
 Item {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property var queueModel
     property int itemCount: 0
     property bool random: false
     property bool repeating: false
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal closeRequested()
     signal addRequested()
     signal saveRequested()
@@ -29,15 +30,15 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Text { Layout.fillWidth: true; text: qsTr("Queue"); color: theme.bright; font.pixelSize: theme.dp(16) }
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "add"; text: qsTr("Add files to queue"); onClicked: root.addRequested() }
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "close"; text: qsTr("Close queue"); onClicked: root.closeRequested() }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "add"; text: qsTr("Add files to queue"); onClicked: root.addRequested() }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "close"; text: qsTr("Close queue"); onClicked: root.closeRequested() }
         }
         RowLayout {
             Layout.fillWidth: true
             Text { Layout.fillWidth: true; text: qsTr("%n item(s)", "", root.itemCount); color: theme.foreground; font.pixelSize: theme.dp(14) }
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "shuffle"; text: qsTr("Shuffle"); selected: root.random; onClicked: root.shuffleRequested() }
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "repeat"; text: qsTr("Repeat"); selected: root.repeating; onClicked: root.repeatRequested() }
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "more"; text: qsTr("Queue actions"); onClicked: queueMenu.popup() }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "shuffle"; text: qsTr("Shuffle"); selected: root.random; onClicked: root.shuffleRequested() }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "repeat"; text: qsTr("Repeat"); selected: root.repeating; onClicked: root.repeatRequested() }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "more"; text: qsTr("Queue actions"); onClicked: queueMenu.popup() }
             C.Menu {
                 id: queueMenu
                 C.MenuItem { text: qsTr("Save queue to file"); enabled: root.itemCount > 0; onTriggered: root.saveRequested() }
@@ -60,7 +61,7 @@ Item {
                 spacing: theme.dp(2)
                 RedesignButton {
                     Layout.fillWidth: true
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     text: row.title; selected: row.isCurrent
                     contentItem: Text {
                         text: row.title; elide: Text.ElideRight
@@ -71,13 +72,13 @@ Item {
                     onClicked: root.playRequested(row.index)
                 }
                 RedesignButton {
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     implicitWidth: theme.dp(26)
                     iconName: "back"; text: qsTr("Move earlier"); enabled: row.index > 0
                     onClicked: root.moveRequested(row.index, row.index - 1)
                 }
                 RedesignButton {
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     implicitWidth: theme.dp(26)
                     iconName: "close"; text: qsTr("Remove from queue")
                     onClicked: root.removeRequested(row.index)

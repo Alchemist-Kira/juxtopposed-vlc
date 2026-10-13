@@ -8,9 +8,10 @@ import VLC.Dialogs
 C.Popup {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property string page: "subtitles"
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal preferencesRequested(string page)
     width: Math.min(parent.width - theme.dp(24), theme.dp(400))
     height: Math.min(parent.height - theme.dp(100), theme.dp(460))
@@ -28,7 +29,7 @@ C.Popup {
                 RedesignButton {
                     required property var modelData
                     Layout.fillWidth: true
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     text: modelData.label; caption: root.width > theme.dp(360) ? text : ""; iconName: modelData.icon
                     selected: root.page === modelData.key
                     onClicked: root.page = modelData.key
@@ -44,7 +45,7 @@ C.Popup {
                 spacing: theme.dp(20)
                 RedesignTracks {
                     Layout.fillWidth: true
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     heading: qsTr("Embedded tracks")
                     trackModel: root.page === "video" ? Player.videoTracks : root.page === "audio" ? Player.audioTracks : Player.subtitleTracks
                     allowDisable: root.page === "subtitles"
@@ -54,13 +55,13 @@ C.Popup {
                 RedesignTracks {
                     Layout.fillWidth: true
                     visible: root.page === "audio"
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     heading: qsTr("Output device"); trackModel: Player.audioDevices
                     onSelectionRequested: (index, selected) => root.select(trackModel, index, selected)
                 }
                 RedesignButton {
                     visible: root.page === "subtitles"
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     iconName: "add"; caption: qsTr("Add subtitle file"); text: caption
                     onClicked: DialogsProvider.loadSubtitlesFile()
                 }
@@ -68,7 +69,7 @@ C.Popup {
         }
         RedesignButton {
             Layout.fillWidth: true
-            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: qsTr("Show preferences"); text: caption
             onClicked: { root.close(); root.preferencesRequested(root.page) }
         }

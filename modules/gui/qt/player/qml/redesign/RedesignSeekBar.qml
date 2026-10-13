@@ -6,9 +6,10 @@ import QtQuick.Controls as C
 T.Slider {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property var timeForPosition: function(position) { return "" }
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     implicitHeight: theme.dp(28)
     implicitWidth: theme.dp(200)
     padding: theme.dp(2)

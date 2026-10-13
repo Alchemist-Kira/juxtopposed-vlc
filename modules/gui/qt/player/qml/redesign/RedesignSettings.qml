@@ -18,9 +18,10 @@ C.Pane {
     palette.highlightedText: "#161616"
     background: Rectangle { color: theme.panel }
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property string page: "playback"
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal pageRequested(string page)
     signal closeRequested()
     signal sleepTimerRequested(int minutes)
@@ -41,7 +42,7 @@ C.Pane {
                     RedesignButton {
                         required property var modelData
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         iconSize: theme.dp(18)
                         iconName: modelData.icon; text: modelData.label
                         caption: root.width > theme.dp(360) ? modelData.label : ""
@@ -68,7 +69,7 @@ C.Pane {
                     RedesignSettingSlider {
                         objectName: "playbackRateControl"
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Speed"); suffix: "×"; decimals: 2
                         from: 0.25; to: 2; stepSize: 0.05
                         currentValue: Player.rate; enabled: Player.ratechangable
@@ -76,8 +77,8 @@ C.Pane {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Reverse"); text: caption; enabled: Player.rewindable; onClicked: Player.reverse() }
-                        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Next frame"); text: caption; enabled: Player.hasVideoOutput; onClicked: Player.frameNext() }
+                        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reverse"); text: caption; enabled: Player.rewindable; onClicked: Player.reverse() }
+                        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Next frame"); text: caption; enabled: Player.hasVideoOutput; onClicked: Player.frameNext() }
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -89,44 +90,44 @@ C.Pane {
                     }
                     RedesignTracks {
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         heading: qsTr("Audio visualizer"); trackModel: Player.audioVisualization
                         onSelectionRequested: (index, selected) => root.select(trackModel, index, selected)
                     }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Media information and statistics"); text: caption; onClicked: DialogsProvider.mediaInfoDialog() }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Stop playback"); text: caption; iconName: "stop"; onClicked: MainPlaylistController.stop() }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Media information and statistics"); text: caption; onClicked: DialogsProvider.mediaInfoDialog() }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Stop playback"); text: caption; iconName: "stop"; onClicked: MainPlaylistController.stop() }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
                     spacing: theme.dp(22)
                     visible: root.page === "audio"
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; heading: qsTr("Audio tracks"); trackModel: Player.audioTracks; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; heading: qsTr("Output device"); trackModel: Player.audioDevices; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
+                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Audio tracks"); trackModel: Player.audioTracks; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
+                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Output device"); trackModel: Player.audioDevices; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
                     Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
                     Text { text: qsTr("Synchronization"); color: theme.bright; font.pixelSize: theme.dp(16) }
                     RedesignSettingSlider {
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Audio track delay"); suffix: " s"; decimals: 3
                         from: -10; to: 10; stepSize: 0.05
                         currentValue: Player.audioDelayMS / 1000
                         onMoved: value => Player.audioDelayMS = Math.round(value * 1000)
                     }
                     Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; heading: qsTr("Stereo mode"); trackModel: Player.audioStereoMode; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Equalizer and audio filters"); text: caption; onClicked: DialogsProvider.extendedDialog() }
+                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Stereo mode"); trackModel: Player.audioStereoMode; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Equalizer and audio filters"); text: caption; onClicked: DialogsProvider.extendedDialog() }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
                     spacing: theme.dp(22)
                     visible: root.page === "subtitles"
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; heading: qsTr("Subtitle tracks"); trackModel: Player.subtitleTracks; allowDisable: true; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected); onDisableRequested: root.disable(trackModel) }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "add"; caption: qsTr("Add subtitle file"); text: caption; onClicked: DialogsProvider.loadSubtitlesFile() }
+                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Subtitle tracks"); trackModel: Player.subtitleTracks; allowDisable: true; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected); onDisableRequested: root.disable(trackModel) }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "add"; caption: qsTr("Add subtitle file"); text: caption; onClicked: DialogsProvider.loadSubtitlesFile() }
                     Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
                     Text { text: qsTr("Synchronization"); color: theme.bright; font.pixelSize: theme.dp(16) }
                     RedesignSettingSlider {
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Subtitle track delay"); suffix: " s"; decimals: 3
                         from: -10; to: 10; stepSize: 0.05
                         currentValue: Player.subtitleDelayMS / 1000
@@ -134,13 +135,13 @@ C.Pane {
                     }
                     RedesignSettingSlider {
                         Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Subtitle frame rate"); suffix: " fps"; decimals: 3
                         from: 1; to: 60; stepSize: 0.001
                         currentValue: Player.subtitleFPS
                         onMoved: value => Player.subtitleFPS = value
                     }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Subtitle font, size and appearance"); text: caption; onClicked: DialogsProvider.prefsDialog() }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Subtitle font, size and appearance"); text: caption; onClicked: DialogsProvider.prefsDialog() }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
@@ -151,13 +152,13 @@ C.Pane {
                         RedesignTracks {
                             required property var modelData
                             Layout.fillWidth: true
-                            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                             heading: modelData.label; trackModel: modelData.choices
                             onSelectionRequested: (index, selected) => root.select(trackModel, index, selected)
                         }
                     }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Snapshot"); text: caption; enabled: Player.hasVideoOutput; onClicked: Player.snapshot() }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Video effects and filters"); text: caption; onClicked: DialogsProvider.extendedDialog() }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Snapshot"); text: caption; enabled: Player.hasVideoOutput; onClicked: Player.snapshot() }
+                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Video effects and filters"); text: caption; onClicked: DialogsProvider.extendedDialog() }
                 }
                 Item { height: theme.dp(20) }
             }
@@ -167,8 +168,8 @@ C.Pane {
             border.color: theme.border
             RowLayout {
                 anchors.fill: parent; anchors.margins: theme.dp(12)
-                RedesignButton { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "settings"; caption: qsTr("Advanced settings"); text: caption; onClicked: DialogsProvider.prefsDialog() }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; iconName: "close"; text: qsTr("Close settings"); onClicked: root.closeRequested() }
+                RedesignButton { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "settings"; caption: qsTr("Advanced settings"); text: caption; onClicked: DialogsProvider.prefsDialog() }
+                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "close"; text: qsTr("Close settings"); onClicked: root.closeRequested() }
             }
         }
     }

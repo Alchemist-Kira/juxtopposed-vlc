@@ -6,6 +6,7 @@ import QtQuick.Controls as C
 ColumnLayout {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property string label
     property string suffix
@@ -14,7 +15,7 @@ ColumnLayout {
     property real from: 0
     property real to: 1
     property real stepSize: 0.1
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal moved(real value)
     spacing: theme.dp(8)
     RowLayout {
@@ -57,7 +58,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Text { text: root.from + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
         Item { Layout.fillWidth: true }
-        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.from < 0 ? 0 : 1) }
+        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.from < 0 ? 0 : 1) }
         Item { Layout.fillWidth: true }
         Text { text: root.to + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
     }

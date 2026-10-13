@@ -36,6 +36,7 @@ FocusScope {
         focus: true
         scaleFactor: VLCStyle.scale
         lightTheme: !VLCStyle.palette.isDark
+        accentColor: MainCtx.redesignAccent
         playing: Player.playingState === Player.PLAYING_STATE_PLAYING
         started: Player.isStarted
         hasVideo: MainCtx.hasEmbededVideo
@@ -45,6 +46,9 @@ FocusScope {
         hasNext: MainPlaylistController.hasNext
         muted: Player.muted
         fullscreen: MainCtx.intfMainWindow.visibility === Window.FullScreen
+        autoHideMode: MainCtx.redesignPlayerPreferences.autoHide
+        controlsHideTimeout: MainCtx.redesignPlayerPreferences.hideTimeout
+        showFullscreenControls: MainCtx.redesignPlayerPreferences.fullscreenControls
         maximized: MainCtx.intfMainWindow.visibility === Window.Maximized
         showWindowButtons: MainCtx.clientSideDecoration && !fullscreen
         position: Player.position
@@ -75,6 +79,8 @@ FocusScope {
         onAudioTracksRequested: anchor => openTracks(anchor, "audio")
         onSubtitleTracksRequested: anchor => openTracks(anchor, "subtitles")
         function openTracks(anchor, page) {
+            settingsPage = ""
+            queueOpen = false
             tracksPopup.page = page
             tracksPopup.x = Math.max(0, Math.min(anchor.mapToItem(view, 0, 0).x, view.width - tracksPopup.width - view.theme.dp(20)))
             tracksPopup.y = Math.max(view.theme.dp(40), view.positionSliderY - tracksPopup.height - view.theme.dp(20))
@@ -123,12 +129,13 @@ FocusScope {
                 onLoaded: {
                     item.scaleFactor = Qt.binding(() => view.scaleFactor)
                     item.lightTheme = Qt.binding(() => view.lightTheme)
+                    item.accentColor = Qt.binding(() => view.accentColor)
                     item.fullLibraryRequested.connect(() => { view.libraryExpanded = !view.libraryExpanded })
                 }
                 RedesignLibraryView {
                     anchors.fill: parent
                     visible: !MainCtx.mediaLibraryAvailable
-                    scaleFactor: view.scaleFactor; lightTheme: view.lightTheme
+                    scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                     emptyText: qsTr("This VLC build has no media library. Open files or a folder to add them to the queue.")
                     onAddRequested: DialogsProvider.simpleOpenDialog()
                     onCategoryRequested: category => category === 3 ? DialogsProvider.openNetDialog() : DialogsProvider.simpleOpenDialog()
@@ -138,9 +145,9 @@ FocusScope {
         }
         queueContent: Component {
             RedesignQueuePanel {
-                scaleFactor: view.scaleFactor; lightTheme: view.lightTheme
+                scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 queueContent: Component { RedesignQueue {
-                scaleFactor: view.scaleFactor; lightTheme: view.lightTheme
+                scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 queueModel: PlaylistListModel { id: queueModel; playlist: MainPlaylistController.playlist }
                 itemCount: MainPlaylistController.count
                 random: MainPlaylistController.random
@@ -160,7 +167,7 @@ FocusScope {
         }
         settingsContent: Component {
             RedesignSettings {
-                scaleFactor: view.scaleFactor; lightTheme: view.lightTheme
+                scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 page: view.settingsPage
                 onPageRequested: page => view.settingsPage = page
                 onCloseRequested: view.settingsPage = ""
@@ -172,14 +179,14 @@ FocusScope {
     RedesignTrackPopup {
         id: tracksPopup
         parent: view
-        scaleFactor: view.scaleFactor; lightTheme: view.lightTheme
+        scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
         onPreferencesRequested: page => view.settingsPage = page
     }
 
     RedesignMenu {
         id: mediaMenu
         parent: view
-        scaleFactor: view.scaleFactor; lightTheme: view.lightTheme
+        scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
         onActionRequested: action => {
             switch (action) {
             case "file": DialogsProvider.simpleOpenDialog(); break

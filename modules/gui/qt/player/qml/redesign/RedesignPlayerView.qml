@@ -6,6 +6,7 @@ import QtQuick.Layouts
 FocusScope {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
     property bool playing: false
     property bool started: false
@@ -16,6 +17,10 @@ FocusScope {
     property bool hasNext: false
     property bool muted: false
     property bool fullscreen: false
+    property int autoHideMode: 1
+    property int controlsHideTimeout: 1800
+    property bool showFullscreenControls: true
+    readonly property bool autoHideActive: started && (autoHideMode === 2 || (fullscreen && autoHideMode === 1))
     property bool maximized: false
     property bool showWindowButtons: true
     property bool libraryOpen: false
@@ -46,8 +51,8 @@ FocusScope {
     readonly property real positionSliderY: toolbar.y + seek.y
     readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable
     readonly property bool topVisible: !fullscreen || headerEdge.hovered || header.activeFocus || revealTimer.running || controlsLocked
-    readonly property bool bottomVisible: !fullscreen || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property bool bottomVisible: (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     signal togglePlayback()
     signal previous()
@@ -92,7 +97,7 @@ FocusScope {
             revealControls()
         keyPressed(event)
     }
-    Timer { id: revealTimer; interval: 1800; running: root.fullscreen }
+    Timer { id: revealTimer; interval: root.controlsHideTimeout; running: root.fullscreen }
     onFullscreenChanged: revealControls()
     Rectangle { anchors.fill: parent; color: theme.background }
 
@@ -145,7 +150,7 @@ FocusScope {
             RedesignButton {
                 objectName: "openFileButton"
                 anchors.horizontalCenter: parent.horizontalCenter
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; text: qsTr("Open file"); caption: text
                 accent: true
                 onClicked: root.openRequested()
@@ -209,12 +214,12 @@ FocusScope {
                     wrapMode: Text.WordWrap
                 }
                 RedesignButton {
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     caption: qsTr("Continue"); text: caption; accent: true
                     onClicked: root.resumeRequested(true)
                 }
                 RedesignButton {
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     iconName: "close"; text: qsTr("Start from the beginning")
                     onClicked: root.resumeRequested(false)
                 }
@@ -276,7 +281,7 @@ FocusScope {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 0
             RedesignButton {
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(50)
                 iconName: "cone"; text: qsTr("Open file"); foreground: theme.accent
                 onClicked: root.openRequested()
@@ -284,21 +289,21 @@ FocusScope {
             RedesignButton {
                 implicitWidth: theme.dp(30)
                 objectName: "mainMenuButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "more"; text: qsTr("Menu")
                 onClicked: root.menuRequested(this)
             }
             RedesignButton {
                 implicitWidth: theme.dp(46)
                 objectName: "libraryToggleButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "sidebar"; text: qsTr("Show library"); selected: root.libraryOpen
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
             Rectangle { Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
             RedesignButton {
                 visible: root.width > theme.dp(700)
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; caption: root.locationTitle; text: qsTr("Browse library")
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
@@ -317,25 +322,25 @@ FocusScope {
             anchors.verticalCenter: parent.verticalCenter
             RedesignButton {
                 visible: root.showWindowButtons
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "minimize"; text: qsTr("Minimize")
                 onClicked: root.minimizeRequested()
             }
             RedesignButton {
                 visible: root.showWindowButtons
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "maximize"; text: root.maximized ? qsTr("Restore window") : qsTr("Maximize")
                 onClicked: root.maximizeRequested()
             }
             RedesignButton {
                 objectName: "fullscreenButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "fullscreen"; text: root.fullscreen ? qsTr("Exit fullscreen") : qsTr("Fullscreen")
                 onClicked: root.fullscreenRequested()
             }
             RedesignButton {
                 visible: root.showWindowButtons
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "close"; text: qsTr("Close")
                 onClicked: root.closeRequested()
             }
@@ -354,14 +359,14 @@ FocusScope {
             spacing: theme.dp(10)
             RedesignButton {
                 objectName: "previousButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
                 iconName: "previous"; text: qsTr("Previous"); enabled: root.hasPrevious
                 onClicked: root.previous()
             }
             RedesignButton {
                 objectName: "playButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(54); implicitHeight: theme.dp(28)
                 iconName: root.playing ? "pause" : "play"
                 text: root.playing ? qsTr("Pause") : qsTr("Play")
@@ -370,7 +375,7 @@ FocusScope {
             }
             RedesignButton {
                 objectName: "nextButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
                 iconName: "next"; text: qsTr("Next"); enabled: root.hasNext
                 onClicked: root.next()
@@ -387,7 +392,7 @@ FocusScope {
                 objectName: "seekBar"
                 Layout.fillWidth: true
                 Layout.minimumWidth: theme.dp(40)
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 enabled: root.seekable
                 timeForPosition: root.timeForPosition
                 Binding on value { when: !seek.pressed; value: root.position; restoreMode: Binding.RestoreBindingOrValue }
@@ -402,7 +407,7 @@ FocusScope {
             }
             RedesignButton {
                 objectName: "muteButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(28)
                 iconName: root.muted ? "muted" : "volume"
                 text: root.muted ? qsTr("Unmute") : qsTr("Mute")
@@ -412,7 +417,7 @@ FocusScope {
                 id: volumeSlider
                 objectName: "volumeSlider"
                 visible: root.width > theme.dp(750)
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 muted: root.muted; to: root.maxVolume
                 Binding on value { when: !volumeSlider.pressed; value: root.volume; restoreMode: Binding.RestoreBindingOrValue }
                 onMoved: root.volumeRequested(value)
@@ -420,28 +425,28 @@ FocusScope {
             RedesignButton {
                 objectName: "audioButton"
                 visible: root.width > theme.dp(900)
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "audio"; text: qsTr("Audio tracks and output")
                 selected: root.settingsPage === "audio"
                 onClicked: root.audioTracksRequested(this)
             }
             RedesignButton {
                 objectName: "subtitleButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "subtitles"; text: qsTr("Subtitle tracks")
                 selected: root.settingsPage === "subtitles"
                 onClicked: root.subtitleTracksRequested(this)
             }
             RedesignButton {
                 objectName: "playbackSettingsButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "settings"; text: qsTr("Playback settings")
                 selected: root.settingsPage === "playback"
                 onClicked: root.toggleSettings("playback")
             }
             RedesignButton {
                 objectName: "queueButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "queue"; text: qsTr("Play queue"); selected: root.queueOpen
                 onClicked: { root.settingsPage = ""; root.queueOpen = !root.queueOpen }
             }

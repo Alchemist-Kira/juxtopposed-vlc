@@ -6,8 +6,9 @@ import QtQuick.Controls as C
 C.Popup {
     id: root
     property real scaleFactor: 1
+    property color accentColor: "#d37918"
     property bool lightTheme: false
-    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal actionRequested(string action)
     width: theme.dp(290)
     padding: theme.dp(6)
@@ -33,7 +34,7 @@ C.Popup {
             RedesignButton {
                 required property var modelData
                 width: root.availableWidth
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 text: modelData.label
                 contentItem: RowLayout {
                     spacing: root.theme.dp(10)

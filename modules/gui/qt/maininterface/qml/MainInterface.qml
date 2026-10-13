@@ -45,6 +45,8 @@ Item {
     Accessible.name: qsTr("Main interface")
     AccessibleCompat.id: "mainInterface"
 
+    RedesignPreferencesWindow { }
+
     property bool _extendedFrameVisible: MainCtx.windowSuportExtendedFrame
                                       && MainCtx.clientSideDecoration
                                       && (MainCtx.intfMainWindow.visibility === Window.Windowed)
@@ -321,11 +323,12 @@ Item {
                 case MainCtx.MAININTERFACE_MODE_MINIMAL:
                     return "qrc:///qt/qml/VLC/Player/MinimalView.qml"
                 case  MainCtx.MAININTERFACE_MODE_PLAYER:
-                    return "qrc:///qt/qml/VLC/Player/Player.qml"
+                    return Player.isInteractive ? "qrc:///qt/qml/VLC/Player/Player.qml"
+                                                : "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"
                 default:
                     console.error("unexpected interface mode", MainCtx.effectiveMainInterfaceMode)
                 case MainCtx.MAININTERFACE_MODE_MAINDISPLAY:
-                    return "qrc:///qt/qml/VLC/MainInterface/MainDisplay.qml"
+                    return "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"
                 }
             }
         }

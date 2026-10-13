@@ -32,7 +32,11 @@ T.Button {
         border.color: theme.accent
         opacity: root.enabled ? 1 : 0.35
     }
-    contentItem: Row {
+    contentItem: Item {
+        implicitWidth: contentRow.implicitWidth
+        implicitHeight: contentRow.implicitHeight
+        Row {
+        id: contentRow
         spacing: theme.dp(6)
         anchors.centerIn: parent
         RedesignIcon {
@@ -47,9 +51,10 @@ T.Button {
             visible: root.caption.length > 0
             anchors.verticalCenter: parent.verticalCenter
             text: root.caption
-            color: root.iconName === "cone" ? theme.accent : root.accent ? "#161616" : root.selected ? theme.accent : theme.bright
+            color: root.iconName === "cone" ? theme.accent : root.accent ? "#161616" : root.selected ? theme.accent : root.foreground
             font.pixelSize: theme.dp(14)
             opacity: root.enabled ? 1 : 0.35
         }
+    }
     }
 }

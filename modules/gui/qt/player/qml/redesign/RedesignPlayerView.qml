@@ -113,6 +113,17 @@ FocusScope {
         }
         Rectangle { anchors.fill: parent; color: "black"; radius: theme.dp(10) }
         Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
+        Rectangle {
+            // The outer border leaves a rounded opening over the native video layer.
+            anchors.fill: parent
+            anchors.margins: -theme.dp(10)
+            color: "transparent"
+            radius: theme.dp(20)
+            border.width: theme.dp(10)
+            border.color: theme.background
+            visible: !root.fullscreen
+        }
+
 
         // An honest empty state; the supplied cat is reference footage only.
         Column {
@@ -184,8 +195,8 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: theme.dp(24)
-            width: Math.min(parent.width - theme.dp(24), resumeRow.implicitWidth + theme.dp(32))
-            height: resumeRow.implicitHeight + theme.dp(24)
+            width: Math.max(0, Math.min(parent.width - theme.dp(24), theme.dp(540)))
+            height: theme.dp(width < theme.dp(420) ? 80 : 64)
             visible: root.resumeAvailable
             color: theme.panel; radius: theme.dp(8); border.color: theme.border
             RowLayout {
@@ -261,27 +272,30 @@ FocusScope {
         Loader { anchors.fill: parent; sourceComponent: root.titleBarDragContent }
         RowLayout {
             id: headerLeft
-            anchors.left: parent.left; anchors.leftMargin: theme.dp(8)
+            anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            spacing: theme.dp(4)
+            spacing: 0
             RedesignButton {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                implicitWidth: theme.dp(50)
                 iconName: "cone"; text: qsTr("Open file"); foreground: theme.accent
                 onClicked: root.openRequested()
             }
             RedesignButton {
+                implicitWidth: theme.dp(30)
                 objectName: "mainMenuButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
                 iconName: "more"; text: qsTr("Menu")
                 onClicked: root.menuRequested(this)
             }
             RedesignButton {
+                implicitWidth: theme.dp(46)
                 objectName: "libraryToggleButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
                 iconName: "sidebar"; text: qsTr("Show library"); selected: root.libraryOpen
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
-            Rectangle { width: theme.dp(1); height: theme.dp(18); color: theme.border }
+            Rectangle { Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
             RedesignButton {
                 visible: root.width > theme.dp(700)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme

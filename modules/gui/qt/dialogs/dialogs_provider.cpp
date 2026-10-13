@@ -289,6 +289,10 @@ const QEvent::Type DialogEvent::DialogEvent_Type =
 
 void DialogsProvider::prefsDialog()
 {
+    if (p_intf->p_mi) {
+        emit showRedesignPreferences();
+        return;
+    }
     if (Q_LIKELY(!m_prefsDialog))
     {
         m_prefsDialog = new PrefsDialog( nullptr, p_intf );
@@ -761,6 +765,22 @@ static void openDirectory( qt_intf_t *p_intf, bool go )
         QVector<vlc::playlist::Media> medias = { {uri, QString {}} };
         THEMPL->append(medias, go);
     }
+}
+
+QStringList DialogsProvider::mediaNameFilters(bool audio) const
+{
+    return (audio ? QStringLiteral(EXTENSIONS_AUDIO)
+                  : QStringLiteral(EXTENSIONS_VIDEO)).split(QLatin1Char(';'));
+}
+
+QUrl DialogsProvider::selectLibraryFolder()
+{
+    const QUrl folder = QFileDialog::getExistingDirectoryUrl(nullptr,
+        qtr("Add folder to media library"), p_intf->p_mi->getDialogFilePath(),
+        QFileDialog::ShowDirsOnly, {QStringLiteral("file")});
+    if (!folder.isEmpty())
+        p_intf->p_mi->setDialogFilePath(folder);
+    return folder;
 }
 
 QString DialogsProvider::getDirectoryDialog( qt_intf_t *p_intf )

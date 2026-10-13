@@ -247,6 +247,9 @@ public slots:
     void openNetDialog();
     void openCaptureDialog();
 
+    // Returns a file URL without adding the directory to the play queue.
+    QUrl selectLibraryFolder();
+    QStringList mediaNameFilters(bool audio) const;
     void PLOpenDir();
     void PLAppendDir();
 
@@ -304,6 +307,7 @@ signals:
     void pluginDialogVisibleChanged();
     void egpDialogVisibleChanged();
     void prefsDialogVisibleChanged();
+    void showRedesignPreferences();
 #ifdef UPDATE_CHECK
     void updateDialogVisibleChanged();
 #endif

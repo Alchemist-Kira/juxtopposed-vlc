@@ -8,13 +8,16 @@ Item {
     property real scaleFactor: 1
     property bool lightTheme: false
     property var mediaModel
-    property int itemCount: 0
+    property int itemCount: mediaView.count
     property int category: 1
     property string heading: qsTr("Videos")
     property string searchText: ""
     property bool grid: false
     property bool descending: false
     property bool canGoBack: false
+    property bool canGoForward: false
+    property bool canEnqueue: true
+    property bool showingFolders: false
     property string emptyText: qsTr("Add a folder to your library to see your media here.")
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme }
     signal categoryRequested(int category)
@@ -23,6 +26,7 @@ Item {
     signal addRequested()
     signal fullLibraryRequested()
     signal backRequested()
+    signal forwardRequested()
     signal newPlaylistRequested()
 
     Rectangle {
@@ -57,6 +61,11 @@ Item {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
                 iconName: "back"; text: qsTr("Back"); enabled: root.canGoBack
                 onClicked: root.backRequested()
+            }
+            RedesignButton {
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
+                iconName: "forward"; text: qsTr("Forward"); enabled: root.canGoForward
+                onClicked: root.forwardRequested()
             }
             Text {
                 Layout.fillWidth: true
@@ -127,6 +136,7 @@ Item {
             Layout.fillWidth: true; Layout.fillHeight: true
             clip: true
             model: root.mediaModel
+            visible: root.itemCount > 0
             cellWidth: root.grid ? width / Math.max(1, Math.floor(width / theme.dp(130))) : width
             cellHeight: root.grid ? theme.dp(142) : theme.dp(42)
             keyNavigationEnabled: true
@@ -138,7 +148,7 @@ Item {
                 required property var model
                 width: mediaView.cellWidth
                 height: mediaView.cellHeight
-                readonly property string itemTitle: model.title || model.name || model.url || ""
+                readonly property string itemTitle: model.title || model.name || model.fileName || (model.url ? decodeURIComponent(model.url.toString().replace(/\/$/, "").split("/").pop()) : "")
                 readonly property string itemArtwork: model.thumbnail || model.small_cover || model.cover || ""
                 RedesignButton {
                     id: mediaButton
@@ -157,7 +167,7 @@ Item {
                             width: root.grid ? parent.width - theme.dp(8) : theme.dp(32)
                             height: root.grid ? theme.dp(90) : theme.dp(32)
                             radius: theme.dp(2); color: theme.field
-                            RedesignIcon { anchors.centerIn: parent; width: theme.dp(24); height: width; name: root.category === 4 ? "queue" : root.category === 2 ? "music" : "video"; color: theme.foreground }
+                            RedesignIcon { anchors.centerIn: parent; width: theme.dp(24); height: width; name: model.fileIsDir || root.showingFolders ? "folder" : model.iconName || (root.category === 4 ? "queue" : root.category === 2 ? "music" : "video"); color: theme.foreground }
                             Image { anchors.fill: parent; source: delegate.itemArtwork; fillMode: Image.PreserveAspectCrop; visible: status === Image.Ready }
                         }
                         Text {
@@ -172,8 +182,9 @@ Item {
                     DragHandler {
                         id: dragHandler
                         target: null
+                        enabled: root.canEnqueue
                     }
-                    Drag.active: dragHandler.active
+                    Drag.active: false
                     Drag.supportedActions: Qt.CopyAction
                     Drag.keys: ["vlc-redesign-library"]
                     Drag.hotSpot: Qt.point(width / 2, height / 2)
@@ -182,11 +193,14 @@ Item {
                     // The queue accepts the model index and resolves it through MediaLib.
                     Connections {
                         target: dragHandler
-                        function onActiveChanged() { if (!dragHandler.active) mediaButton.Drag.drop() }
+                        function onActiveChanged() {
+                            if (dragHandler.active) mediaButton.Drag.active = true
+                            else { mediaButton.Drag.drop(); mediaButton.Drag.active = false }
+                        }
                     }
                 }
                 RedesignButton {
-                    visible: !root.grid && (mediaButton.hovered || hovered || mediaButton.visualFocus)
+                    visible: root.canEnqueue && !root.grid && (mediaButton.hovered || hovered || mediaButton.visualFocus)
                     anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme
                     implicitWidth: theme.dp(28)

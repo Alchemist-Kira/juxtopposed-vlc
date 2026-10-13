@@ -17,6 +17,7 @@ TestCase {
         function value(name) { return values[name] }
         function refresh() { refreshCount++; revision++ }
         function describe(name) {
+            if (name === "audio-spatial-mode") return {kind: "integer", title: "Spatial audio mode", choices: [{label: "Headphone virtualization", value: 2}, {label: "Surround speakers", value: 0}]}
             if (name === "volumeStep") return {kind: "float", title: "Volume step", choices: []}
             if (name === "device") return {kind: "string", title: "Output device", choices: [{label: "System default", value: ""}, {label: "Headphones", value: "native-headphones"}]}
             return {kind: name === "timeout" ? "integer" : name === "clickPolicy" ? "string" : "bool", title: name, help: "", choices: []}
@@ -103,6 +104,13 @@ TestCase {
         visible: false
     }
     RedesignPreferenceRow {
+        id: spatialModeRow
+        y: 350; width: parent.width
+        backend: store; optionName: "audio-spatial-mode"; label: "Spatial audio mode"
+        presentation: ({enabledWhen: "audio-spatial"})
+        visible: false
+    }
+    RedesignPreferenceRow {
         id: volumeStepRow
         y: 430; width: parent.width
         backend: store; optionName: "volumeStep"; label: "Volume step"
@@ -124,11 +132,11 @@ TestCase {
     SignalSpy { id: saveSpy; target: shortcutEditor; signalName: "saveRequested" }
     function init() {
         shortcutEditor.close()
-        startupVolume.visible = false; deviceRow.visible = false; volumeStepRow.visible = false; store.refreshCount = 0
+        startupVolume.visible = false; deviceRow.visible = false; volumeStepRow.visible = false; spatialModeRow.visible = false; store.refreshCount = 0
         equalizer.visible = false; equalizer.expanded = false
         equalizerStore.gains = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; equalizerStore.preamp = 12; equalizerStore.revision++
         captureSpy.clear(); cancelSpy.clear(); saveSpy.clear()
-        store.values = {resize: true, fastSeek: false, timeout: 1800, clickPolicy: "auto", "volume-save": true, "redesign-startup-volume": 200, device: "", volumeStep: 12.800000190734863}
+        store.values = {resize: true, fastSeek: false, timeout: 1800, clickPolicy: "auto", "volume-save": true, "redesign-startup-volume": 200, device: "", volumeStep: 12.800000190734863, "audio-spatial": false, "audio-spatial-mode": 2}
         store.revision++
         wait(20)
     }
@@ -138,6 +146,22 @@ TestCase {
         compare(field.text, "5.0")
         field.text = "2"; field.editingFinished()
         fuzzyCompare(store.value("volumeStep"), 5.12, 0.000001)
+    }
+    function test_spatialModeRetainsChoiceWhileDisabled() {
+        spatialModeRow.visible = true
+        const choice = findChild(spatialModeRow, "preferenceChoiceEditor")
+        verify(!choice.enabled)
+        compare(choice.displayText, "Headphone virtualization")
+        store.stage("audio-spatial", true)
+        verify(choice.enabled)
+        choice.forceActiveFocus(); keyClick(Qt.Key_Down)
+        compare(store.value("audio-spatial-mode"), 0)
+        compare(choice.displayText, "Surround speakers")
+        store.stage("audio-spatial", false)
+        verify(!choice.enabled)
+        compare(store.value("audio-spatial-mode"), 0)
+        store.stage("audio-spatial", true)
+        compare(choice.displayText, "Surround speakers")
     }
     function test_startupVolumeOffersRememberAndFixedChoices() {
         startupVolume.visible = true

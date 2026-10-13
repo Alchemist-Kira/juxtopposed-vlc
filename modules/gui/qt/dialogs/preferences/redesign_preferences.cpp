@@ -254,6 +254,11 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
     if (!cfg || !CONFIG_ITEM(cfg->i_type)) return {};
     QVariantMap result{{QStringLiteral("name"), name}, {QStringLiteral("title"), qtr(cfg->psz_text ? cfg->psz_text : cfg->psz_name)},
         {QStringLiteral("help"), qtr(cfg->psz_longtext ? cfg->psz_longtext : "")}, {QStringLiteral("value"), value(name)}};
+    if (name == QLatin1String("audio-spatial") || name == QLatin1String("audio-spatial-mode")) {
+        const bool supported = module_exists("spatialaudio");
+        result.insert(QStringLiteral("supported"), supported);
+        if (!supported) result.insert(QStringLiteral("help"), qtr("Spatial audio rendering is unavailable in this VLC build."));
+    }
     QVariantList choices;
     QString kind;
     switch (CONFIG_CLASS(cfg->i_type)) {
@@ -320,6 +325,11 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("audio-spatial") || name == QLatin1String("audio-spatial-mode")) {
+        if (!module_exists("spatialaudio")) return false;
+        if (name == QLatin1String("audio-spatial-mode") && proposed.toInt() != AOUT_MIX_MODE_BINAURAL
+            && proposed.toInt() != AOUT_MIX_MODE_UNSET) return false;
+    }
     if (name == QLatin1String("redesign-startup-volume")) {
         bool valid = false;
         const auto volume = proposed.toLongLong(&valid);
@@ -471,11 +481,14 @@ bool RedesignPreferences::save()
         || previous.contains(QStringLiteral("audio-device-default-module"))
         || previous.contains(audioOutputModule() + QStringLiteral("-audio-device"));
     if (previous.contains(QStringLiteral("volume-save")) || deviceChanged || previous.contains(QStringLiteral("mix-mode"))
-        || previous.contains(QStringLiteral("stereo-mode"))) {
+        || previous.contains(QStringLiteral("stereo-mode")) || previous.contains(QStringLiteral("audio-spatial"))
+        || previous.contains(QStringLiteral("audio-spatial-mode"))) {
         audio_output_t* output = vlc_player_aout_Hold(player);
         if (output) {
-            for (const auto& option : {QStringLiteral("mix-mode"), QStringLiteral("stereo-mode")})
+            for (const auto& option : {QStringLiteral("mix-mode"), QStringLiteral("stereo-mode"), QStringLiteral("audio-spatial-mode")})
                 if (previous.contains(option)) var_SetInteger(output, option.toUtf8().constData(), value(option).toLongLong());
+            if (previous.contains(QStringLiteral("audio-spatial")))
+                var_SetBool(output, "audio-spatial", value(QStringLiteral("audio-spatial")).toBool());
             if (previous.contains(QStringLiteral("volume-save"))) {
                 if (var_Type(output, "volume-save") == 0) var_Create(output, "volume-save", VLC_VAR_BOOL);
                 var_SetBool(output, "volume-save", value(QStringLiteral("volume-save")).toBool());

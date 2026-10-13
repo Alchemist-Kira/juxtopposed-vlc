@@ -62,6 +62,14 @@ public:
         return QString::fromUtf8(psz_thanks);
     }
 
+    static QString getDesignAttribution()
+    {
+        return tr("<p>Interface design adapted from <a href=\"https://www.figma.com/community/file/1691465999134370980/vlc-redesign\">VLC Redesign</a> "
+                  "by <a href=\"https://www.juxtopposed.com/\">Juxtopposed</a>, licensed under "
+                  "<a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>. "
+                  "Modified for VLC's native interface, responsive layouts, controls, and settings.</p>");
+    }
+
     static QString getVersion()
     {
         return QString::fromUtf8(VERSION_MESSAGE);

@@ -25,6 +25,21 @@ been downloaded **billions** of times.
 **libVLC**, the engine is released under the LGPLv2 *(or later)* license. \
 This allows embedding the engine in 3rd party applications, while letting them to be licensed under other licenses.
 
+## Redesign attribution
+
+The interface on the `juxtopposed-redesign` branch is adapted from **VLC Redesign**
+by [Juxtopposed](https://www.juxtopposed.com/), licensed under
+[Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+The original design is available on
+[Figma Community](https://www.figma.com/community/file/1691465999134370980/vlc-redesign),
+with a [video walkthrough](https://www.youtube.com/watch?v=ERFeOgqk324).
+
+This implementation modifies the design for VLC's native interface, including
+responsive layouts, interactive controls, settings organization, and integration
+with VLC's playback and media library features. The design credit and CC BY 4.0
+notice apply to the original design; VLC's software licenses remain as described
+above.
+
 # Platforms
 
 VLC is available for the following platforms:

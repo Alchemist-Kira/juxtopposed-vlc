@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Player toolbar glyphs adapted from the supplied Juxtopposed SVG.
+// Toolbar glyphs adapted, recentered and recolored from VLC Redesign by
+// Juxtopposed (https://www.juxtopposed.com/), design licensed CC BY 4.0:
+// https://creativecommons.org/licenses/by/4.0/
+// https://www.figma.com/community/file/1691465999134370980/vlc-redesign
+// This file's implementation code is GPL-2.0-or-later.
 import QtQuick
 
 Image {

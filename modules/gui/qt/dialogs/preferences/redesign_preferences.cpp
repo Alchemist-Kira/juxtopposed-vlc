@@ -257,7 +257,7 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
     if (name == QLatin1String("audio-spatial") || name == QLatin1String("audio-spatial-mode")) {
         const bool supported = module_exists("spatialaudio");
         result.insert(QStringLiteral("supported"), supported);
-        if (!supported) result.insert(QStringLiteral("help"), qtr("Spatial audio rendering is unavailable in this VLC build."));
+        if (!supported) result.insert(QStringLiteral("help"), qtr("VLC cannot use spatial audio in this version."));
     }
     QVariantList choices;
     QString kind;

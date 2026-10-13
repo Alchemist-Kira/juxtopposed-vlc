@@ -1654,10 +1654,11 @@ vlc_module_begin ()
     add_integer( "mix-mode", AOUT_MIX_MODE_UNSET, MIX_MODE_TEXT, NULL )
         change_integer_list( pi_mix_mode_values, ppsz_mix_mode_texts )
     add_bool("audio-spatial", false, N_("Spatial audio"),
-             N_("Render surround or Ambisonics audio for headphones or speakers. "
-                "Turning this off restores the selected speaker setup. Stereo sources remain unchanged."))
+             N_("Use surround audio with headphones or speakers. "
+                "If you set Spatial audio to OFF, VLC uses your speaker setup. Stereo audio does not change."))
     add_integer("audio-spatial-mode", AOUT_MIX_MODE_BINAURAL, N_("Spatial audio mode"),
-                N_("Headphone virtualization uses binaural rendering. Surround speakers use the selected speaker setup."))
+                N_("For headphones, select Headphone virtualization. For speakers, select Surround speakers. "
+                   "VLC uses your speaker setup for Surround speakers."))
         change_integer_list(spatial_mode_values, spatial_mode_texts)
     add_integer( "audio-desync", 0, DESYNC_TEXT,
                  DESYNC_LONGTEXT )

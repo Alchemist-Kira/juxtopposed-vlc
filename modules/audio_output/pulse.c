@@ -837,15 +837,30 @@ static int MuteSet(audio_output_t *aout, bool mute)
     return 0;
 }
 
+static void stream_move_default_cb(pa_context *context, const pa_server_info *info,
+                                   void *userdata)
+{
+    audio_output_t *aout = userdata;
+    aout_sys_t *sys = aout->sys;
+    if (info == NULL || info->default_sink_name == NULL || sys->stream == NULL)
+        return;
+    pa_operation *op = pa_context_move_sink_input_by_name(context,
+        pa_stream_get_index(sys->stream), info->default_sink_name, NULL, NULL);
+    if (op != NULL) pa_operation_unref(op);
+}
+
 static int StreamMove(audio_output_t *aout, const char *name)
 {
     aout_sys_t *sys = aout->sys;
 
+    if (name != NULL && *name == '\0') name = NULL;
     if (sys->stream == NULL)
     {
-        msg_Dbg(aout, "will connect to sink %s", name);
+        char *sink = name != NULL ? strdup(name) : NULL;
+        if (name != NULL && sink == NULL) return -1;
+        msg_Dbg(aout, "will connect to sink %s", name != NULL ? name : "system default");
         free(sys->sink_force);
-        sys->sink_force = strdup(name);
+        sys->sink_force = sink;
         aout_DeviceReport(aout, name);
         return 0;
     }
@@ -854,11 +869,12 @@ static int StreamMove(audio_output_t *aout, const char *name)
     uint32_t idx = pa_stream_get_index(sys->stream);
 
     pa_threaded_mainloop_lock(sys->mainloop);
-    op = pa_context_move_sink_input_by_name(sys->context, idx, name,
-                                            NULL, NULL);
+    op = name != NULL
+        ? pa_context_move_sink_input_by_name(sys->context, idx, name, NULL, NULL)
+        : pa_context_get_server_info(sys->context, stream_move_default_cb, aout);
     if (likely(op != NULL)) {
         pa_operation_unref(op);
-        msg_Dbg(aout, "moving to sink %s", name);
+        msg_Dbg(aout, "moving to sink %s", name != NULL ? name : "system default");
     } else
         vlc_pa_error(aout, "cannot move sink input", sys->context);
     pa_threaded_mainloop_unlock(sys->mainloop);

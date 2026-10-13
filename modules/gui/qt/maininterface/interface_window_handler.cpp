@@ -69,7 +69,10 @@ InterfaceWindowHandler::InterfaceWindowHandler(qt_intf_t *_p_intf, MainCtx* main
     m_window->setIcon( QApplication::windowIcon() );
     m_window->setOpacity( var_InheritFloat( p_intf, "qt-opacity" ) );
 
-    QVLCTools::restoreWindowPosition( getSettings(), m_window, QSize(600, 420) );
+    if (var_InheritBool(p_intf, "qt-remember-window-geometry"))
+        QVLCTools::restoreWindowPosition(getSettings(), m_window, QSize(960, 540));
+    else
+        m_window->resize(960, 540);
 
     // this needs to be called asynchronously
     // otherwise QQuickWidget won't initialize properly
@@ -100,7 +103,7 @@ InterfaceWindowHandler::InterfaceWindowHandler(qt_intf_t *_p_intf, MainCtx* main
         }
 
         int margin = m_mainCtx->windowExtendedMargin() * 2;
-        int width = 320 + margin;
+        int width = 640 + margin;
         int height = 360 + margin;
 
         double intfScaleFactor = m_mainCtx->getIntfScaleFactor();
@@ -176,7 +179,8 @@ InterfaceWindowHandler::~InterfaceWindowHandler()
 {
     m_window->removeEventFilter(this);
     /* Save this size */
-    QVLCTools::saveWindowPosition(getSettings(), m_window);
+    if (var_InheritBool(p_intf, "qt-remember-window-geometry"))
+        QVLCTools::saveWindowPosition(getSettings(), m_window);
     assert(qApp);
     if (!qApp->property("isDying").toBool())
     {

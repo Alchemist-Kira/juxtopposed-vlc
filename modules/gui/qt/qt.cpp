@@ -346,6 +346,11 @@ static const char *const compositor_user[] = {
 };
 
 /**********************************************************************/
+static const int redesign_autohide_values[] = {0, 1, 2};
+static const char* const redesign_autohide_labels[] = {
+    N_("Never"), N_("In fullscreen only"), N_("Always")
+};
+
 vlc_module_begin ()
     set_shortname( "Qt" )
     set_description( N_("Qt interface") )
@@ -357,6 +362,14 @@ vlc_module_begin ()
 
     add_bool( "qt-minimal-view", false, QT_MINIMAL_MODE_TEXT,
               nullptr )
+
+    add_bool("qt-remember-window-geometry", true, N_("Remember window size and position"), nullptr)
+    add_integer("qt-controls-autohide", 1, N_("Auto-hide the controls"), nullptr)
+        change_integer_list(redesign_autohide_values, redesign_autohide_labels)
+    add_integer_with_range("qt-controls-hide-timeout", 1800, 0, 10000,
+        N_("Playback controls hide delay (ms)"), nullptr)
+    add_integer_with_range("qt-notification-timeout", 3000, 0, 10000,
+        N_("Track notification duration (ms)"), nullptr)
 
     add_bool( "qt-system-tray", true, SYSTRAY_TEXT, SYSTRAY_LONGTEXT)
 

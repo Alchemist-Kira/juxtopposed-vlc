@@ -5,6 +5,10 @@
 #include <vlc_plugin.h>
 #include <cmath>
 #include <algorithm>
+#include <QFileDialog>
+#include <QColorDialog>
+#include <QGuiApplication>
+#include <QScreen>
 
 namespace {
 QString categoryFor(const QString& name, int subcat)
@@ -94,12 +98,37 @@ void RedesignPreferences::write(const QByteArray& name, const QVariant& value)
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-repeat"))
+        return value(QStringLiteral("repeat")).toBool() ? 1 : value(QStringLiteral("loop")).toBool() ? 2 : 0;
+    if (name == QLatin1String("redesign-after-playback"))
+        return value(QStringLiteral("play-and-exit")).toBool() ? 1 : value(QStringLiteral("play-and-pause")).toBool() ? 2 : 0;
+    if (name.startsWith(QLatin1String("filter:"))) {
+        const auto parts = name.split(QLatin1Char(':'));
+        return parts.size() == 3 && value(parts[1]).toString().split(QLatin1Char(':')).contains(parts[2]);
+    }
+
     const auto it = m_edits.constFind(name);
     return it == m_edits.cend() ? read(name.toUtf8()) : *it;
 }
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-repeat") || name == QLatin1String("redesign-after-playback")) {
+        const bool repeat = name == QLatin1String("redesign-repeat");
+        const QStringList labels = repeat ? QStringList{qtr("Off"), qtr("Current item"), qtr("All items")}
+            : QStringList{qtr("Stop"), qtr("Quit VLC"), qtr("Pause on the last frame")};
+        QVariantList choices;
+        for (int i = 0; i < labels.size(); ++i) choices.append(QVariantMap{{QStringLiteral("label"), labels[i]}, {QStringLiteral("value"), i}});
+        return {{QStringLiteral("kind"), QStringLiteral("integer")}, {QStringLiteral("title"), repeat ? qtr("Repeat") : qtr("When playback finishes")},
+            {QStringLiteral("choices"), choices}, {QStringLiteral("defaultValue"), 0}, {QStringLiteral("value"), value(name)}};
+    }
+    if (name.startsWith(QLatin1String("filter:"))) {
+        const auto parts = name.split(QLatin1Char(':'));
+        if (parts.size() != 3 || !module_exists(parts[2].toUtf8().constData())) return {};
+        return {{QStringLiteral("kind"), QStringLiteral("bool")}, {QStringLiteral("title"), parts[2]},
+            {QStringLiteral("value"), value(name)}, {QStringLiteral("defaultValue"), false}};
+    }
+
     const QByteArray bytes = name.toUtf8();
     const auto* cfg = config_FindConfig(bytes.constData());
     if (!cfg || !CONFIG_ITEM(cfg->i_type)) return {};
@@ -140,6 +169,19 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
         break;
     }
     }
+    QString editor;
+    switch (cfg->i_type) {
+    case CONFIG_ITEM_LOADFILE: case CONFIG_ITEM_SAVEFILE: editor = QStringLiteral("file"); break;
+    case CONFIG_ITEM_DIRECTORY: editor = QStringLiteral("directory"); break;
+    case CONFIG_ITEM_RGB: editor = QStringLiteral("color"); break;
+    }
+    if (name == QLatin1String("qt-fullscreen-screennumber")) {
+        choices.append(QVariantMap{{QStringLiteral("label"), qtr("Current screen")}, {QStringLiteral("value"), -1}});
+        const auto screens = QGuiApplication::screens();
+        for (int i = 0; i < screens.size(); ++i)
+            choices.append(QVariantMap{{QStringLiteral("label"), screens[i]->name()}, {QStringLiteral("value"), i}});
+    }
+    result.insert(QStringLiteral("editor"), editor);
     result.insert(QStringLiteral("kind"), kind);
     result.insert(QStringLiteral("choices"), choices);
     return result;
@@ -147,6 +189,22 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-repeat") || name == QLatin1String("redesign-after-playback")) {
+        const int choice = proposed.toInt();
+        if (choice < 0 || choice > 2) return false;
+        const bool repeat = name == QLatin1String("redesign-repeat");
+        stage(repeat ? QStringLiteral("repeat") : QStringLiteral("play-and-exit"), choice == 1);
+        return stage(repeat ? QStringLiteral("loop") : QStringLiteral("play-and-pause"), choice == 2);
+    }
+    if (name.startsWith(QLatin1String("filter:"))) {
+        const auto parts = name.split(QLatin1Char(':'));
+        if (parts.size() != 3 || !module_exists(parts[2].toUtf8().constData())) return false;
+        auto filters = value(parts[1]).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        filters.removeAll(parts[2]);
+        if (proposed.toBool()) filters.append(parts[2]);
+        return stage(parts[1], filters.join(QLatin1Char(':')));
+    }
+
     const auto* cfg = config_FindConfig(name.toUtf8().constData());
     if (!cfg || !CONFIG_ITEM(cfg->i_type)) return false;
     QVariant normalized;
@@ -172,6 +230,9 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         ++m_revision; emit changed(); return false;
     }
     m_invalid.remove(name);
+    if (QStringList{QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"), QStringLiteral("saturation"), QStringLiteral("gamma")}.contains(name))
+        stage(QStringLiteral("filter:video-filter:adjust"), true);
+
     if (normalized == read(name.toUtf8())) m_edits.remove(name);
     else m_edits.insert(name, normalized);
     if (m_invalid.isEmpty())
@@ -220,4 +281,23 @@ QVariantList RedesignPreferences::catalog(const QString& category, const QString
         result.append(QVariantMap{{QStringLiteral("name"), entry.name}, {QStringLiteral("title"), entry.title}});
     }
     return result;
+}
+
+QString RedesignPreferences::choosePath(const QString& name)
+{
+    const auto* cfg = config_FindConfig(name.toUtf8().constData());
+    if (!cfg) return {};
+    const QString initial = value(name).toString();
+    switch (cfg->i_type) {
+    case CONFIG_ITEM_DIRECTORY: return QFileDialog::getExistingDirectory(nullptr, qtr("Select folder"), initial);
+    case CONFIG_ITEM_SAVEFILE: return QFileDialog::getSaveFileName(nullptr, qtr("Select file"), initial);
+    case CONFIG_ITEM_LOADFILE: return QFileDialog::getOpenFileName(nullptr, qtr("Select file"), initial);
+    default: return {};
+    }
+}
+
+QString RedesignPreferences::chooseColor(const QString& initial)
+{
+    const QColor color = QColorDialog::getColor(QColor(initial), nullptr, qtr("Choose color"));
+    return color.isValid() ? color.name() : QString();
 }

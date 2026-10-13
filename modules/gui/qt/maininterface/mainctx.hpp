@@ -112,6 +112,8 @@ class MainCtx : public QObject
     Q_PROPERTY(bool gridView READ hasGridView WRITE setGridView NOTIFY gridViewChanged FINAL)
     Q_PROPERTY(bool hasGridListMode MEMBER m_hasGridListMode NOTIFY hasGridListModeChanged FINAL)
     Q_PROPERTY(Grouping grouping READ grouping WRITE setGrouping NOTIFY groupingChanged FINAL)
+    Q_PROPERTY(QVariantMap redesignPlayerPreferences READ redesignPlayerPreferences NOTIFY redesignPlayerPreferencesChanged FINAL)
+    Q_PROPERTY(QColor redesignAccent READ redesignAccent NOTIFY redesignAccentChanged FINAL)
     Q_PROPERTY(ColorSchemeModel* colorScheme READ getColorScheme CONSTANT FINAL)
     Q_PROPERTY(bool hasVLM READ hasVLM CONSTANT FINAL)
     Q_PROPERTY(bool clientSideDecoration READ useClientSideDecoration NOTIFY useClientSideDecorationChanged FINAL)
@@ -239,6 +241,8 @@ public:
     inline Grouping grouping() const { return m_grouping; }
     inline bool albumSections() const { return m_albumSections; }
     inline bool lyricsMode() const { return m_lyricsMode; }
+    QVariantMap redesignPlayerPreferences() const;
+    QColor redesignAccent() const { return m_redesignAccent; }
     inline ColorSchemeModel* getColorScheme() const { return m_colorScheme; }
     bool hasVLM() const;
     bool useClientSideDecoration() const;
@@ -450,6 +454,7 @@ protected:
     bool                 m_gridView = false;
     bool                 m_hasGridListMode = false;
     Grouping             m_grouping = GROUPING_NONE;
+    QColor m_redesignAccent = QColor(QStringLiteral("#d37918"));
     ColorSchemeModel*    m_colorScheme = nullptr;
     bool                 m_windowTitlebar = true;
     // NOTE: Ideally this should be a QVLCBool.
@@ -574,6 +579,8 @@ signals:
     void albumSectionsChanged( bool );
     void lyricsModeChanged( bool );
     void colorSchemeChanged( QString );
+    void redesignAccentChanged();
+    void redesignPlayerPreferencesChanged();
     void useClientSideDecorationChanged();
     void hasToolbarMenuChanged();
 

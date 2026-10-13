@@ -23,6 +23,8 @@ public:
     bool dirty() const { return !m_edits.isEmpty() || !m_invalid.isEmpty(); }
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
+    Q_INVOKABLE QString choosePath(const QString& name);
+    Q_INVOKABLE QString chooseColor(const QString& initial);
     Q_INVOKABLE QVariantMap describe(const QString& name) const;
     Q_INVOKABLE QVariant value(const QString& name) const;
     Q_INVOKABLE bool stage(const QString& name, const QVariant& value);

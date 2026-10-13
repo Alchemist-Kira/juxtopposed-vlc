@@ -47,6 +47,12 @@ TestCase {
             presentation: ({editor: "slider", from: 0, to: 10, factor: 0.001, step: 0.1, suffix: " s"})
         }
     }
+    RedesignPreferenceRow {
+        id: timingTextRow
+        y: 160; width: parent.width; backend: store; optionName: "timeout"
+        label: "Popup duration"
+        presentation: ({factor: 0.001, suffix: " s"})
+    }
     RedesignShortcutEditor {
         id: shortcutEditor
         parent: testCase
@@ -86,6 +92,23 @@ TestCase {
         compare(slider.value, 1.8)
         mouseClick(slider, slider.width / 2, slider.height / 2)
         verify(store.value("timeout") >= 4900 && store.value("timeout") <= 5100)
+    }
+    function test_numericTextShowsUnitsAndPreservesNativeScale() {
+        const field = findChild(timingTextRow, "preferenceTextEditor")
+        compare(field.text, "1.8")
+        verify(field.height >= 34)
+        verify(timingTextRow.height >= 44)
+        field.text = "2.4"
+        field.editingFinished()
+        compare(store.value("timeout"), 2400)
+        field.text = "invalid"
+        field.editingFinished()
+        verify(field.invalid)
+        compare(store.value("timeout"), 2400)
+        field.text = ""
+        field.editingFinished()
+        verify(field.invalid)
+        compare(store.value("timeout"), 2400)
     }
     function test_simpleAndAdvancedHaveDifferentContents() {
         const basicGeneral = catalog.sections.general.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])

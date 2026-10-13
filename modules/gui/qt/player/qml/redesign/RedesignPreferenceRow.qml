@@ -35,19 +35,39 @@ ColumnLayout {
         : choices.length ? choiceEditor : textEditor
     RowLayout {
         Layout.fillWidth: true
+        Layout.minimumHeight: !available ? 0 : theme.dp(root.editor === "slider" ? 68 : root.choices.length ? 46 : root.description.kind === "bool" ? 42 : 48)
         spacing: theme.dp(10)
         implicitHeight: available ? Math.max(theme.dp(44), labelText.implicitHeight + theme.dp(10)) : 0
-        Text {
-            id: labelText
-            Layout.fillWidth: true
-            Layout.preferredWidth: 1
-            text: root.label || root.description.title || ""
-            color: theme.foreground; font.pixelSize: theme.dp(14)
-            wrapMode: Text.WordWrap
+        Item {
+            id: labelArea
+            Layout.fillWidth: true; Layout.preferredWidth: 1
+            implicitHeight: Math.max(labelText.implicitHeight, theme.dp(20))
+            HoverHandler { id: rowHover }
+            Text {
+                id: labelText
+                width: Math.min(implicitWidth, parent.width - theme.dp(26))
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.label || root.description.title || ""
+                color: theme.foreground; font.pixelSize: theme.dp(14)
+                wrapMode: Text.WordWrap
+            }
+            RedesignIcon {
+                name: "info"; color: theme.foreground; opacity: 0.4
+                width: theme.dp(16); height: width
+                x: labelText.width + theme.dp(8); anchors.verticalCenter: parent.verticalCenter
+                visible: !!root.description.help
+            }
             C.ToolTip.text: root.description.help || ""
-            C.ToolTip.visible: helpHover.hovered && C.ToolTip.text.length > 0
+            C.ToolTip.visible: rowHover.hovered && C.ToolTip.text.length > 0
             C.ToolTip.delay: 500
-            HoverHandler { id: helpHover }
+            RedesignButton {
+                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                width: theme.dp(26); height: theme.dp(28); iconSize: theme.dp(18)
+                iconName: "history"; text: qsTr("Reset to default")
+                visible: rowHover.hovered || hovered || visualFocus
+                onClicked: root.backend.reset(root.optionName)
+            }
         }
         Loader {
             visible: !root.fullWidth
@@ -56,12 +76,7 @@ ColumnLayout {
             Layout.preferredHeight: item ? item.implicitHeight || theme.dp(34) : theme.dp(34)
             sourceComponent: root.editorComponent
         }
-        RedesignButton {
-            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            implicitWidth: theme.dp(26); implicitHeight: theme.dp(28); iconSize: theme.dp(18)
-            iconName: "history"; text: qsTr("Reset to default")
-            onClicked: root.backend.reset(root.optionName)
-        }
+
     }
     Loader {
         Layout.fillWidth: true
@@ -102,8 +117,9 @@ ColumnLayout {
     }
     Component {
         id: choiceEditor
-        C.ComboBox {
+        RedesignComboBox {
             id: choice
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             objectName: "preferenceChoiceEditor"
             implicitHeight: theme.dp(34)
             model: root.choices; textRole: "label"; valueRole: "value"
@@ -111,11 +127,6 @@ ColumnLayout {
                 for (let i = 0; i < count; ++i) if (model[i].value == root.displayedValue) return i
                 return -1
             }
-            font.pixelSize: theme.dp(14)
-            palette.text: theme.foreground; palette.buttonText: theme.foreground
-            palette.base: theme.field; palette.button: theme.background
-            palette.window: theme.panel; palette.highlight: theme.selected; palette.highlightedText: theme.bright
-            background: Rectangle { radius: theme.dp(4); color: theme.background; border.color: choice.activeFocus ? theme.accent : theme.border }
             onActivated: root.commit(currentValue)
         }
     }
@@ -180,14 +191,27 @@ ColumnLayout {
                 objectName: "preferenceTextEditor"
                 Layout.fillWidth: true; Layout.fillHeight: true
                 property bool invalid: false
-                text: root.currentValue === undefined ? "" : String(root.currentValue)
+                readonly property bool numeric: root.description.kind === "integer" || root.description.kind === "float"
+                text: root.currentValue === undefined ? "" : numeric ? String(Number(root.currentValue) * root.factor) : String(root.currentValue)
+                leftPadding: theme.dp(14); rightPadding: theme.dp(10)
+                Layout.minimumHeight: theme.dp(34)
                 color: invalid ? "#e56b6b" : theme.foreground; font.pixelSize: theme.dp(14)
                 selectByMouse: true
                 echoMode: root.description.kind === "password" ? TextInput.Password : TextInput.Normal
                 inputMethodHints: root.description.kind === "integer" || root.description.kind === "float" ? Qt.ImhFormattedNumbersOnly : Qt.ImhNone
                 Accessible.name: root.label || root.description.title
                 background: Rectangle { radius: theme.dp(4); color: theme.field; border.color: field.invalid ? "#e56b6b" : field.activeFocus ? theme.accent : theme.border }
-                onEditingFinished: invalid = !root.commit(text)
+                onEditingFinished: {
+                    const number = Number(text)
+                    invalid = numeric ? !text.trim().length || !Number.isFinite(number) || !root.commit(root.description.kind === "integer" ? Math.round(number / root.factor) : number / root.factor) : !root.commit(text)
+                }
+                TextMetrics { id: valueMetrics; text: field.text; font: field.font }
+                Text {
+                    x: field.leftPadding + valueMetrics.advanceWidth
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.presentation.suffix || ""; color: theme.foreground; font.pixelSize: theme.dp(14)
+                    visible: !field.activeFocus
+                }
                 onActiveFocusChanged: if (activeFocus) selectAll()
             }
             RedesignButton {

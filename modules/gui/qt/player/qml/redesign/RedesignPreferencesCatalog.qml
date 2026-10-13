@@ -2,6 +2,14 @@
 import QtQml
 
 QtObject {
+    readonly property var pageTitles: ({
+        general: qsTr("Global Settings"), interface: qsTr("Interface Settings"), privacy: qsTr("Privacy Settings"),
+        controls: qsTr("Mouse, Keyboard & Remote Controls"), playback: qsTr("Playback Preferences"),
+        video: qsTr("Video Defaults"), audio: qsTr("Audio Defaults"), subtitles: qsTr("Subtitle Defaults"),
+        library: qsTr("Playlists, Folders & Files"), network: qsTr("Network Connections & Security"),
+        performance: qsTr("Performance Settings"), recording: qsTr("Recording, Casting & Streaming Out"),
+        extensions: qsTr("Add-ons & Scripts")
+    })
     // Order, grouping, default visibility and editor choice follow the Figma
     // screens. Unsupported options are omitted by the native metadata adapter.
     readonly property var sections: ({
@@ -48,8 +56,8 @@ QtObject {
         controls: [
             { title: qsTr("Keyboard Shortcuts"), rows: [] },
             { title: qsTr("Skip Amounts"), rows: [
-                ["extrashort-jump-size", qsTr("Very short skip")], ["short-jump-size", qsTr("Short skip")],
-                ["medium-jump-size", qsTr("Medium skip")], ["long-jump-size", qsTr("Long skip")] ] },
+                ["extrashort-jump-size", qsTr("Very short skip"), {suffix: " s"}], ["short-jump-size", qsTr("Short skip"), {suffix: " s"}],
+                ["medium-jump-size", qsTr("Medium skip"), {suffix: " s"}], ["long-jump-size", qsTr("Long skip"), {suffix: " s"}] ] },
             { title: qsTr("Mouse"), rows: [
                 ["mouse-pause-policy", qsTr("Single click on the video")],
                 ["hotkeys-y-wheel-mode", qsTr("Scroll wheel")], ["hotkeys-x-wheel-mode", qsTr("Horizontal scroll")],
@@ -59,7 +67,7 @@ QtObject {
             { title: qsTr("Startup"), rows: [
                 ["restore-playback-pos", qsTr("Continue where you left off")],
                 ["playlist-autostart", qsTr("Start playing as soon as a file opens")],
-                ["rate", qsTr("Default playback speed"), {editor: "slider", from: 0.25, to: 2, step: 0.05, decimals: 2, suffix: "×", fullWidth: true}],
+                ["rate", qsTr("Default playback speed"), {editor: "slider", from: 0.25, to: 2, step: 0.05, decimals: 2, suffix: "×"}],
                 ["playlist-cork", qsTr("Pause when another app uses audio")] ] },
             { title: qsTr("Tracks"), rows: [
                 ["preferred-resolution", qsTr("Preferred video quality")], ["menu-language", qsTr("Preferred menu language")],
@@ -83,7 +91,7 @@ QtObject {
             { title: qsTr("Snapshots"), rows: [ ["snapshot-path", qsTr("Save snapshots to")], ["snapshot-prefix", qsTr("File name prefix")], ["snapshot-format", qsTr("Image format")], ["snapshot-sequential", qsTr("Number files sequentially")], ["snapshot-preview", qsTr("Show a preview after capture")] ] } ],
         audio: [
             { title: qsTr("Output"), rows: [ ["audio", qsTr("Enable audio")], ["aout", qsTr("Output device")], ["stereo-mode", qsTr("Speaker setup")] ] },
-            { title: qsTr("Volume"), rows: [ ["qt-max-volume", qsTr("Maximum volume"), {editor: "slider", from: 100, to: 300, step: 1, suffix: "%", fullWidth: true}],
+            { title: qsTr("Volume"), rows: [ ["qt-max-volume", qsTr("Maximum volume"), {editor: "slider", from: 100, to: 300, step: 1, suffix: "%"}],
                 ["volume-save", qsTr("Remember the last volume")], ["volume-step", qsTr("Volume step")] ] },
             { title: qsTr("Loudness"), rows: [ ["filter:audio-filter:normvol", qsTr("Normalize loudness")],
                 ["norm-max-level", qsTr("Target level"), {enabledWhen: "filter:audio-filter:normvol"}],

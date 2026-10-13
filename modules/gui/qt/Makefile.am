@@ -1180,6 +1180,8 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignSettingSlider.qml \
 	player/qml/redesign/RedesignSettings.qml \
 	player/qml/redesign/RedesignTrackPopup.qml \
+	player/qml/redesign/RedesignShortcutEditor.qml \
+	player/qml/redesign/RedesignShortcuts.qml \
 	player/qml/redesign/RedesignTracks.qml \
 	player/qml/redesign/RedesignButton.qml \
 	player/qml/redesign/RedesignIcon.qml \

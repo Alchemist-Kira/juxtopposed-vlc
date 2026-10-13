@@ -24,11 +24,16 @@ Window {
     property string categoryTitle: qsTr("General")
     property bool advanced: false
     property bool expert: false
-    property bool editingShortcuts: false
     property string search: ""
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     RedesignPreferences { id: preferenceStore; ctx: MainCtx; autoSave: true }
     RedesignPreferencesCatalog { id: specification }
+    RedesignShortcuts {
+        id: shortcuts
+        parent: content
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        onSaved: preferenceStore.discard()
+    }
     function begin() {
         preferenceStore.discard()
         searchField.clear()
@@ -102,7 +107,7 @@ Window {
                                 selected: root.category === modelData.key && !root.search.length
                                 onClicked: {
                                     root.category = modelData.key; root.categoryTitle = modelData.title
-                                    root.search = ""; searchField.clear(); root.advanced = false; root.expert = false; root.editingShortcuts = false
+                                    root.search = ""; searchField.clear(); root.advanced = false; root.expert = false
                                     scroll.contentItem.contentY = 0
                                 }
                             }
@@ -208,7 +213,7 @@ Window {
                             RedesignButton {
                                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                                 caption: qsTr("Edit Keyboard Shortcuts"); text: caption
-                                onClicked: root.editingShortcuts = !root.editingShortcuts
+                                onClicked: { content.forceActiveFocus(); if (!preferenceStore.dirty || preferenceStore.save()) shortcuts.open() }
                             }
                             RedesignButton {
                                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -217,15 +222,6 @@ Window {
                                     for (const entry of preferenceStore.catalog("controls", ""))
                                         if (entry.name.startsWith("key-") || entry.name.startsWith("global-key-")) preferenceStore.reset(entry.name)
                                 }
-                            }
-                        }
-                        Repeater {
-                            model: root.category === "controls" && root.editingShortcuts && modelData.title === qsTr("Keyboard Shortcuts")
-                                ? preferenceStore.catalog("controls", "").filter(entry => entry.name.startsWith("key-") || entry.name.startsWith("global-key-")) : []
-                            delegate: RedesignPreferenceRow {
-                                required property var modelData
-                                width: parent.width; backend: preferenceStore; optionName: modelData.name
-                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                             }
                         }
                         Repeater {

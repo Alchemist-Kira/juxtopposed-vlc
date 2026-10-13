@@ -159,6 +159,7 @@ struct es_out_id_t
     void* mouse_event_userdata;
     vlc_mouse_t oldmouse;
     bool mouse_being_dragged;
+    bool mouse_release_consumed;
 };
 
 typedef struct
@@ -242,7 +243,6 @@ typedef struct
 
     unsigned    cc_decoder;
 
-    enum vlc_mouse_pause_policy mouse_pause_policy;
 
     struct vlc_input_es_out out;
 } es_out_sys_t;
@@ -393,17 +393,11 @@ static void MouseEventCb(const vlc_mouse_t *newmouse, void *userdata)
     if(!p_sys->p_input)
         return;
 
-    enum vlc_mouse_pause_policy policy = p_sys->mouse_pause_policy;
-
-    //TODO: More behaviors to be implemented.
-
-    if (policy == VLC_MOUSE_PAUSE_DISABLED)
-        return;
-
     if(!newmouse)
     {
         vlc_mouse_Init(&id->oldmouse);
         id->mouse_being_dragged = false;
+        id->mouse_release_consumed = false;
         return;
     }
 
@@ -415,14 +409,30 @@ static void MouseEventCb(const vlc_mouse_t *newmouse, void *userdata)
         }
     };
 
+    if (newmouse->b_double_click && vlc_mouse_IsLeftPressed(newmouse)) {
+        char *action = var_InheritString(p_sys->p_input, "mouse-double-click-action");
+        if (action != NULL && strcmp(action, "play-pause") == 0) {
+            // A single-click action already handled the first release. Avoid
+            // overlapping pause/resume requests on the double click.
+            id->mouse_release_consumed = true;
+            if (mouse_pause_policy_inherit(p_sys->p_input) == VLC_MOUSE_PAUSE_DISABLED)
+                input_SendEvent(p_sys->p_input, &(struct vlc_input_event) {
+                    .type = INPUT_EVENT_MOUSE_LEFT
+                });
+        }
+        free(action);
+    }
+
     if (vlc_mouse_HasReleased(&id->oldmouse, newmouse, MOUSE_BUTTON_LEFT)) {
-        if (!id->mouse_being_dragged) {
+        if (!id->mouse_being_dragged && !id->mouse_release_consumed &&
+            mouse_pause_policy_inherit(p_sys->p_input) != VLC_MOUSE_PAUSE_DISABLED) {
             input_SendEvent(p_sys->p_input, &(struct vlc_input_event) {
                 .type = INPUT_EVENT_MOUSE_LEFT
             });
         }
 
         id->mouse_being_dragged = false;
+        id->mouse_release_consumed = false;
     }
 
     id->oldmouse = *newmouse;
@@ -2527,6 +2537,7 @@ static es_out_id_t *EsOutAddLocked(es_out_sys_t *p_sys,
     es->mouse_event_cb = MouseEventCb;
     es->mouse_event_userdata = es;
     es->mouse_being_dragged = false;
+    es->mouse_release_consumed = false;
     es->i_pts_level = VLC_TICK_INVALID;
     es->delay = VLC_TICK_MAX;
 
@@ -4451,7 +4462,6 @@ input_EsOutNew(input_thread_t *p_input, input_source_t *main_source, float rate,
                     "sub-track-id", "sub-track", "sub-language", "sub" );
 
     p_sys->cc_decoder = var_InheritInteger( p_input, "captions" );
-    p_sys->mouse_pause_policy = mouse_pause_policy_inherit(p_sys->p_input);
 
     p_sys->i_group_id = var_GetInteger( p_input, "program" );
     p_sys->i_audio_delay = p_sys->i_spu_delay = p_sys->i_video_delay = 0;

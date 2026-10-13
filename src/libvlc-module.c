@@ -551,6 +551,13 @@ static const char *const ppsz_mouse_pause_policy_values[] = {
 static const char *const ppsz_mouse_pause_policy_descriptions[] =
    { N_("Auto"), N_("Disabled"), N_("Toggle pause immediately on mouse released") };
 
+static const char *const mouse_double_click_values[] = {
+    "fullscreen", "play-pause", "disabled"
+};
+static const char *const mouse_double_click_texts[] = {
+    N_("Toggle fullscreen"), N_("Play / Pause"), N_("Do nothing")
+};
+
 /*****************************************************************************
  * Input
  ****************************************************************************/
@@ -1695,6 +1702,9 @@ vlc_module_begin ()
     add_string( "mouse-pause-policy", ppsz_mouse_pause_policy_values[0], MOUSE_PAUSE_POLICY_TEXT,
               MOUSE_PAUSE_POLICY_LONGTEXT);
         change_string_list(ppsz_mouse_pause_policy_values, ppsz_mouse_pause_policy_descriptions)
+    add_string("mouse-double-click-action", "fullscreen", N_("Double click on the video"),
+               N_("Choose what a double click on the video does."))
+        change_string_list(mouse_double_click_values, mouse_double_click_texts)
     add_bool( "video-on-top", false, VIDEO_ON_TOP_TEXT,
               VIDEO_ON_TOP_LONGTEXT )
     add_bool( "video-wallpaper", false, WALLPAPER_TEXT,

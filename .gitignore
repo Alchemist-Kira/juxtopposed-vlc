@@ -63,3 +63,6 @@ static-lib/
 !buildsystem/
 !build.rs
 !extras/package/apple/build.sh
+
+# Local redesign source media and working artifacts
+/.design-reference/

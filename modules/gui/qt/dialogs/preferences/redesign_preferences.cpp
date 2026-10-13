@@ -323,7 +323,7 @@ QVariantList RedesignPreferences::shortcutCatalog() const
 {
     struct Shortcut { QString name, title, group; int groupOrder, order; };
     QList<Shortcut> shortcuts;
-    const QStringList basic{QStringLiteral("key-fullscreen"), QStringLiteral("key-leave-fullscreen"), QStringLiteral("key-position"), QStringLiteral("key-intf-show")};
+    const QStringList basic{QStringLiteral("key-toggle-fullscreen"), QStringLiteral("key-leave-fullscreen"), QStringLiteral("key-position"), QStringLiteral("key-intf-show")};
     const QStringList playback{QStringLiteral("key-play-pause"), QStringLiteral("key-stop"), QStringLiteral("key-next"), QStringLiteral("key-prev"), QStringLiteral("key-program-sid-next"), QStringLiteral("key-program-sid-prev")};
     for (const auto& entry : m_catalog) {
         if (!entry.name.startsWith(QLatin1String("key-"))) continue;
@@ -334,6 +334,14 @@ QVariantList RedesignPreferences::shortcutCatalog() const
         else if (entry.name.contains(QLatin1String("audio")) || entry.name.contains(QLatin1String("vol-"))) { row.group = qtr("Audio"); row.groupOrder = 2; }
         else if (entry.name.contains(QLatin1String("aspect")) || entry.name.contains(QLatin1String("crop")) || entry.name.contains(QLatin1String("zoom")) || entry.name.contains(QLatin1String("snapshot")) || entry.name.contains(QLatin1String("deinterlace"))) { row.group = qtr("Video"); row.groupOrder = 3; }
         else if (entry.name.contains(QLatin1String("jump")) || entry.name.contains(QLatin1String("rate")) || entry.name.contains(QLatin1String("frame"))) { row.group = qtr("Playback"); row.groupOrder = 1; }
+        if (entry.name == QLatin1String("key-toggle-fullscreen")) row.title = qtr("Toggle fullscreen");
+        else if (entry.name == QLatin1String("key-leave-fullscreen")) row.title = qtr("Exit fullscreen / close dialog");
+        else if (entry.name == QLatin1String("key-position")) row.title = qtr("Show playback position and time");
+        else if (entry.name == QLatin1String("key-intf-show")) row.title = qtr("Show interface controls in fullscreen");
+        else if (entry.name == QLatin1String("key-play-pause")) row.title = qtr("Play / pause");
+        else if (entry.name == QLatin1String("key-stop")) row.title = qtr("Stop playback");
+        else if (entry.name == QLatin1String("key-next")) row.title = qtr("Next track");
+        else if (entry.name == QLatin1String("key-prev")) row.title = qtr("Previous track");
         shortcuts.append(row);
     }
     std::sort(shortcuts.begin(), shortcuts.end(), [](const Shortcut& a, const Shortcut& b) {
@@ -384,5 +392,12 @@ bool RedesignPreferences::assignShortcut(const QString& name, const QString& sho
         }), bindings.end());
         stage(other, bindings.join(QLatin1Char('\t')));
     }
-    return stage(name, shortcut);
+    if (shortcut.isEmpty()) return stage(name, QString());
+    QStringList bindings = value(name).toString().split(QLatin1Char('\t'), Qt::SkipEmptyParts);
+    // Replace the displayed binding while retaining alternate and media keys.
+    if (!bindings.isEmpty() && !bindings.first().startsWith(QLatin1String("Media ")))
+        bindings.removeFirst();
+    bindings.removeAll(shortcut);
+    bindings.prepend(shortcut);
+    return stage(name, bindings.join(QLatin1Char('\t')));
 }

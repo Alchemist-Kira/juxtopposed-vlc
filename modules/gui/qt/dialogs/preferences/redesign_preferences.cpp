@@ -14,6 +14,8 @@
 #include <QScreen>
 #include <QKeyEvent>
 #include <QRegularExpression>
+#include <QDir>
+#include <QFileInfo>
 #include "util/vlchotkeyconverter.hpp"
 
 namespace {
@@ -211,6 +213,10 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-config-folder"))
+        return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
+            {QStringLiteral("buttonLabel"), qtr("Open")},
+            {QStringLiteral("help"), qtr("Open the folder that contains the VLC settings.")}};
     if (name == QLatin1String("redesign-audio-device")) {
         auto choices = audioDeviceChoices();
         const QString configured = value(name).toString();
@@ -550,6 +556,22 @@ QString RedesignPreferences::choosePath(const QString& name)
     case CONFIG_ITEM_LOADFILE: return QFileDialog::getOpenFileName(nullptr, qtr("Select file"), initial);
     default: return {};
     }
+}
+
+QUrl RedesignPreferences::configurationFolder() const
+{
+    if (!m_ctx) return {};
+    char* custom = var_InheritString(m_ctx->getIntf(), "config");
+    QString folder;
+    if (custom && *custom) folder = QFileInfo(qfu(custom)).absolutePath();
+    free(custom);
+    if (folder.isEmpty()) {
+        char* path = config_GetUserDir(VLC_CONFIG_DIR);
+        folder = qfu(path ? path : "");
+        free(path);
+    }
+    if (folder.isEmpty() || !QDir().mkpath(folder)) return {};
+    return QUrl::fromLocalFile(folder);
 }
 
 QString RedesignPreferences::chooseColor(const QString& initial)

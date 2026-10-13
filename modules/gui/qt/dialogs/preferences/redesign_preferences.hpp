@@ -7,6 +7,7 @@
 #include <QVariantList>
 #include <QSet>
 #include <QTimer>
+#include <QUrl>
 #include "maininterface/mainctx.hpp"
 
 /** A preferences transaction. Edits stay local until save() succeeds. */
@@ -28,6 +29,7 @@ public:
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
     Q_INVOKABLE void refresh();
+    Q_INVOKABLE QUrl configurationFolder() const;
     Q_INVOKABLE QVariantList equalizerBands() const;
     Q_INVOKABLE bool setEqualizerBand(int index, double gain);
     Q_INVOKABLE QVariantList shortcutCatalog() const;

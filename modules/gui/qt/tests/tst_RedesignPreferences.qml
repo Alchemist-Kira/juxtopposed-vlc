@@ -17,6 +17,7 @@ TestCase {
         function value(name) { return values[name] }
         function refresh() { refreshCount++; revision++ }
         function describe(name) {
+            if (name === "folderAction") return {kind: "action", editor: "action", buttonLabel: "Open"}
             if (name === "audio-spatial-mode") return {kind: "integer", title: "Spatial audio mode", choices: [{label: "Headphone virtualization", value: 2}, {label: "Surround speakers", value: 0}]}
             if (name === "volumeStep") return {kind: "float", title: "Volume step", choices: []}
             if (name === "device") return {kind: "string", title: "Output device", choices: [{label: "System default", value: ""}, {label: "Headphones", value: "native-headphones"}]}
@@ -104,6 +105,13 @@ TestCase {
         visible: false
     }
     RedesignPreferenceRow {
+        id: actionRow
+        y: 350; width: parent.width
+        backend: store; optionName: "folderAction"; label: "Open configurations folder"
+        visible: false
+    }
+    SignalSpy { id: actionSpy; target: actionRow; signalName: "actionRequested" }
+    RedesignPreferenceRow {
         id: spatialModeRow
         y: 350; width: parent.width
         backend: store; optionName: "audio-spatial-mode"; label: "Spatial audio mode"
@@ -131,6 +139,7 @@ TestCase {
     SignalSpy { id: cancelSpy; target: shortcutEditor; signalName: "cancelRequested" }
     SignalSpy { id: saveSpy; target: shortcutEditor; signalName: "saveRequested" }
     function init() {
+        actionRow.visible = false; actionSpy.clear()
         shortcutEditor.close()
         startupVolume.visible = false; deviceRow.visible = false; volumeStepRow.visible = false; spatialModeRow.visible = false; store.refreshCount = 0
         equalizer.visible = false; equalizer.expanded = false
@@ -146,6 +155,17 @@ TestCase {
         compare(field.text, "5.0")
         field.text = "2"; field.editingFinished()
         fuzzyCompare(store.value("volumeStep"), 5.12, 0.000001)
+    }
+    function test_actionButtonUsesActionWithoutChangingSettings() {
+        actionRow.visible = true
+        const button = findChild(actionRow, "preferenceActionButton")
+        compare(button.caption, "Open")
+        verify(button.width < actionRow.width / 2)
+        const revision = store.revision
+        mouseClick(button)
+        compare(actionSpy.count, 1)
+        compare(actionSpy.signalArguments[0][0], "folderAction")
+        compare(store.revision, revision)
     }
     function test_spatialModeRetainsChoiceWhileDisabled() {
         spatialModeRow.visible = true

@@ -25,6 +25,7 @@ Window {
     property bool advanced: false
     property bool expert: false
     property string search: ""
+    property string actionMessage: ""
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     RedesignPreferences { id: preferenceStore; ctx: MainCtx; autoSave: true }
     RedesignPreferencesCatalog { id: specification }
@@ -36,6 +37,7 @@ Window {
     }
     function begin() {
         preferenceStore.discard()
+        actionMessage = ""
         searchField.clear()
         visible = true
         raise(); requestActivate()
@@ -43,6 +45,11 @@ Window {
     function closeSettings() {
         content.forceActiveFocus()
         if (!preferenceStore.dirty || preferenceStore.save()) visible = false
+    }
+    function runAction(action) {
+        if (action !== "redesign-config-folder") return
+        const folder = preferenceStore.configurationFolder()
+        actionMessage = folder.toString().length && Qt.openUrlExternally(folder) ? "" : qsTr("VLC cannot open the settings folder.")
     }
     onClosing: event => { event.accepted = false; closeSettings() }
     Connections {
@@ -267,6 +274,7 @@ Window {
                                 width: parent.width
                                 backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
                                 presentation: modelData[2] || {}
+                                onActionRequested: action => root.runAction(action)
                                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                             }
                         }
@@ -303,6 +311,7 @@ Window {
                                 required property var modelData
                                 width: parent.width; backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
                                 presentation: modelData[2] || {}
+                                onActionRequested: action => root.runAction(action)
                                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                             }
                         }
@@ -331,6 +340,7 @@ Window {
                         width: parent.width
                         backend: preferenceStore; optionName: modelData.name; label: modelData.title || ""; presentation: modelData.presentation || {}
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                        onActionRequested: action => root.runAction(action)
                     }
                 }
                 Item { width: 1; height: theme.dp(24) }
@@ -339,19 +349,20 @@ Window {
         Rectangle {
             id: footer
             anchors.left: navigation.right; anchors.right: parent.right; anchors.bottom: parent.bottom
-            height: preferenceStore.errorMessage.length ? theme.dp(64) : 0
+            height: preferenceStore.errorMessage.length || root.actionMessage.length ? theme.dp(64) : 0
             visible: height > 0
             color: theme.background
             RowLayout {
                 anchors.fill: parent; anchors.margins: theme.dp(16)
                 Text {
                     Layout.fillWidth: true
-                    text: preferenceStore.errorMessage
+                    text: preferenceStore.errorMessage || root.actionMessage
                     color: "#e56b6b"; font.pixelSize: theme.dp(13); wrapMode: Text.WordWrap
                 }
                 RedesignButton {
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     caption: qsTr("Retry"); text: caption; onClicked: preferenceStore.save()
+                    visible: preferenceStore.errorMessage.length > 0
                 }
             }
         }

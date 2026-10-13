@@ -12,6 +12,7 @@ ColumnLayout {
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
+    signal actionRequested(string action)
     readonly property var description: { if (presentation.dynamicChoices) backend.revision; return backend.describe(optionName) }
     readonly property var currentValue: { backend.revision; return backend.value(optionName) }
     readonly property var choices: {
@@ -33,7 +34,7 @@ ColumnLayout {
         return backend.stage(optionName, value)
     }
     readonly property var displayedValue: presentation.inverted ? !currentValue : currentValue
-    readonly property Component editorComponent: editor === "startup-volume" ? startupVolumeEditor : editor === "slider" ? sliderEditor
+    readonly property Component editorComponent: editor === "action" ? actionEditor : editor === "startup-volume" ? startupVolumeEditor : editor === "slider" ? sliderEditor
         : description.kind === "bool" && !choices.length ? toggleEditor
         : editor === "color" ? colorEditor
         : choices.length ? choiceEditor : textEditor
@@ -70,7 +71,7 @@ ColumnLayout {
                 width: theme.dp(26); height: theme.dp(28); iconSize: theme.dp(18)
                 iconName: "history"; text: qsTr("Reset to default")
                 enabled: root.editorEnabled
-                visible: rowHover.hovered || hovered || visualFocus
+                visible: root.description.kind !== "action" && (rowHover.hovered || hovered || visualFocus)
                 onClicked: root.backend.reset(root.optionName)
             }
         }
@@ -99,6 +100,21 @@ ColumnLayout {
         sourceComponent: RedesignEqualizer {
             backend: root.backend
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        }
+    }
+    Component {
+        id: actionEditor
+        Item {
+            implicitHeight: theme.dp(34)
+            RedesignButton {
+                objectName: "preferenceActionButton"
+                anchors.right: parent.right
+                width: theme.dp(100); height: parent.height
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                caption: root.description.buttonLabel || ""; text: caption
+                background: Rectangle { radius: theme.dp(4); color: parent.hovered ? theme.hover : theme.background; border.color: parent.visualFocus ? theme.accent : "transparent" }
+                onClicked: root.actionRequested(root.optionName)
+            }
         }
     }
     Component {

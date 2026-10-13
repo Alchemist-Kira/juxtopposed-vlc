@@ -165,6 +165,11 @@ TestCase {
         field.text = "125"; field.editingFinished()
         verify(!field.invalid)
         compare(store.value("redesign-startup-volume"), 125)
+        field.text = "301"; field.editingFinished()
+        mouseClick(findChild(startupVolume, "rememberStartupVolume"))
+        verify(startupVolume.remember)
+        verify(!field.invalid)
+        compare(field.text, "125")
     }
     function test_deviceChoicesRefreshAndUseNativeIdentifiers() {
         deviceRow.visible = true

@@ -11,6 +11,10 @@ ColumnLayout {
     property color accentColor: "#d37918"
     readonly property bool remember: { backend.revision; return !!backend.value("volume-save") }
     readonly property int startupVolume: { backend.revision; return Number(backend.value("redesign-startup-volume")) }
+    onRememberChanged: if (remember) {
+        field.invalid = false
+        field.text = startupVolume.toString()
+    }
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     spacing: theme.dp(2)
     RedesignButton {

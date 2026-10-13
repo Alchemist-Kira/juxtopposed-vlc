@@ -338,6 +338,8 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         return stage(QStringLiteral("audio-device-default"), id);
     }
     if (name == QLatin1String("volume-save")) {
+        if (proposed.toBool() && m_invalid.contains(QStringLiteral("audio-startup-volume")))
+            stage(QStringLiteral("audio-startup-volume"), value(QStringLiteral("audio-startup-volume")));
         if (!proposed.toBool() && value(QStringLiteral("audio-startup-volume")).toInt() < 0)
             stage(QStringLiteral("audio-startup-volume"), value(QStringLiteral("redesign-startup-volume")));
         if (proposed.toBool() && m_ctx) {

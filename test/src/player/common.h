@@ -236,6 +236,7 @@ struct media_params
 #define DISABLE_AUDIO        (1 << 3)
 #define AUDIO_INSTANT_DRAIN  (1 << 4)
 #define CLOCK_MASTER_MONOTONIC (1 << 5)
+#define AUDIO_TEST_DEFAULTS (1 << 6)
 
 struct ctx
 {

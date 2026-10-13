@@ -97,6 +97,20 @@ aout_Close(vlc_object_t *obj)
     free(aout->sys);
 }
 
+static int aout_TestVolumeSet(audio_output_t *aout, float volume)
+{
+    aout_VolumeReport(aout, volume);
+    return 0;
+}
+
+static int aout_TestDeviceSelect(audio_output_t *aout, const char *id)
+{
+    if (id != NULL && strcmp(id, "speakers") && strcmp(id, "headphones"))
+        return -1;
+    aout_DeviceReport(aout, id != NULL ? id : "speakers");
+    return 0;
+}
+
 static int aout_Open(vlc_object_t *obj)
 {
     audio_output_t *aout = (audio_output_t *)obj;
@@ -114,6 +128,15 @@ static int aout_Open(vlc_object_t *obj)
 
     sys->ctx = var_InheritAddress(aout, "test-ctx");
     assert(sys->ctx != NULL);
+    if (sys->ctx->flags & AUDIO_TEST_DEFAULTS)
+    {
+        aout->volume_set = aout_TestVolumeSet;
+        aout->device_select = aout_TestDeviceSelect;
+        aout_HotplugReport(aout, "speakers", "Speakers");
+        aout_HotplugReport(aout, "headphones", "Headphones");
+        aout_DeviceReport(aout, "speakers");
+        aout_VolumeReport(aout, 0.75f);
+    }
 
     if (sys->ctx->flags & AUDIO_INSTANT_DRAIN)
         aout->drain = aout_InstantDrain;

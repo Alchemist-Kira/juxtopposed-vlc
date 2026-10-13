@@ -26,6 +26,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 #include <vlc_common.h>
 #include <vlc_configuration.h>
@@ -103,6 +104,9 @@ static void aout_DrainedNotify(audio_output_t *aout)
 static void aout_VolumeNotify (audio_output_t *aout, float volume)
 {
     var_SetFloat (aout, "volume", volume);
+    if (atomic_load_explicit(&aout_owner(aout)->volume_initialized, memory_order_relaxed)
+        && isfinite(volume) && volume >= 0.f && var_InheritBool(aout, "volume-save"))
+        config_PutFloat("audio-last-volume", clampf(volume, 0.f, 3.f));
 }
 
 static void aout_MuteNotify (audio_output_t *aout, bool mute)
@@ -282,6 +286,7 @@ audio_output_t *aout_New (vlc_object_t *parent)
     vlc_audio_meter_Init(&owner->meter, aout);
 
     owner->main_stream = NULL;
+    atomic_init(&owner->volume_initialized, false);
 
     /* Audio output module callbacks */
     var_Create (aout, "volume", VLC_VAR_FLOAT);
@@ -407,6 +412,33 @@ audio_output_t *aout_New (vlc_object_t *parent)
     var_Create (aout, "equalizer-preset", VLC_VAR_STRING | doinherit);
 
     owner->bitexact = var_InheritBool (aout, "audio-bitexact");
+
+    /* Apply the configured device only to the driver that enumerated it. */
+    char *device = var_InheritString(aout, "audio-device-default");
+    char *driver = var_InheritString(aout, "audio-device-default-module");
+    if (device != NULL && *device != '\0'
+        && (driver == NULL || *driver == '\0' || !strcmp(driver, module_get_object(owner->module))))
+    {
+        char **ids = NULL, **names = NULL;
+        int count = aout_DevicesList(aout, &ids, &names);
+        bool available = false;
+        for (int i = 0; i < count; ++i)
+        {
+            available |= !strcmp(ids[i], device);
+            free(ids[i]); free(names[i]);
+        }
+        free(ids); free(names);
+        if (available) aout_DeviceSet(aout, device);
+        else msg_Dbg(aout, "configured device unavailable; retaining the audio driver's default");
+    }
+    free(device); free(driver);
+
+    float volume = var_InheritBool(aout, "volume-save")
+        ? var_InheritFloat(aout, "audio-last-volume")
+        : var_InheritInteger(aout, "audio-startup-volume") / 100.f;
+    if (isfinite(volume) && volume >= 0.f && volume <= 3.f)
+        aout_VolumeSet(aout, volume);
+    atomic_store_explicit(&owner->volume_initialized, true, memory_order_relaxed);
 
     return aout;
 }

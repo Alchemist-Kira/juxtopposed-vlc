@@ -52,6 +52,7 @@ typedef struct
     vlc_mutex_t lock;
     module_t *module; /**< Output plugin (or NULL if inactive) */
     bool bitexact;
+    atomic_bool volume_initialized; /**< Startup volume has been applied. */
 
     vlc_aout_stream *main_stream;
 

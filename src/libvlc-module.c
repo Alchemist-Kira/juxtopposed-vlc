@@ -1625,6 +1625,15 @@ vlc_module_begin ()
                  VOLUME_STEP_LONGTEXT )
         change_float_range( 1., AOUT_VOLUME_DEFAULT )
     add_bool( "volume-save", true, VOLUME_SAVE_TEXT, NULL )
+    add_integer_with_range("audio-startup-volume", -1, -1, 300,
+        N_("Startup volume (%)"), N_("Volume used when remembering the last volume is disabled. -1 preserves the audio driver's default."))
+    add_float_with_range("audio-last-volume", -1.f, -1.f, 3.f,
+        N_("Last used audio volume"), NULL)
+        change_private()
+    add_string("audio-device-default", "", N_("Default audio output device"),
+        N_("Device used for new audio outputs. An empty value uses the audio driver's default."))
+    add_string("audio-device-default-module", "", N_("Default audio device driver"), NULL)
+        change_private()
     add_bool( "audio-time-stretch", true, AUDIO_TIME_STRETCH_TEXT,
                 AUDIO_TIME_STRETCH_LONGTEXT )
 #if defined(__ANDROID__) || defined(__APPLE__) || defined(_WIN32)

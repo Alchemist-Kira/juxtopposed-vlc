@@ -15,7 +15,7 @@ TestCase {
         property var values: ({resize: true, fastSeek: false, timeout: 1800})
         function value(name) { return values[name] }
         function describe(name) {
-            return {kind: name === "timeout" ? "integer" : "bool", title: name, help: "", choices: []}
+            return {kind: name === "timeout" ? "integer" : name === "clickPolicy" ? "string" : "bool", title: name, help: "", choices: []}
         }
         function stage(name, value) {
             const next = Object.assign({}, values)
@@ -69,6 +69,17 @@ TestCase {
         label: "Popup duration"
         presentation: ({factor: 0.001, suffix: " s"})
     }
+    RedesignPreferenceRow {
+        id: clickPolicyRow
+        y: 230; width: parent.width; backend: store; optionName: "clickPolicy"
+        label: "Single click on the video"
+        presentation: catalog.sections.controls.find(section => section.title === "Mouse").rows[0][2]
+    }
+    RedesignPreferenceRow {
+        id: remotePortRow
+        y: 290; width: parent.width; backend: store; optionName: "timeout"
+        label: "Port"; presentation: ({enabledWhen: "resize"})
+    }
     RedesignShortcutEditor {
         id: shortcutEditor
         parent: testCase
@@ -87,9 +98,25 @@ TestCase {
         equalizer.visible = false; equalizer.expanded = false
         equalizerStore.gains = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; equalizerStore.preamp = 12; equalizerStore.revision++
         captureSpy.clear(); cancelSpy.clear(); saveSpy.clear()
-        store.values = {resize: true, fastSeek: false, timeout: 1800}
+        store.values = {resize: true, fastSeek: false, timeout: 1800, clickPolicy: "auto"}
         store.revision++
         wait(20)
+    }
+    function test_friendlyClickChoiceKeepsNativePolicyValue() {
+        const choice = findChild(clickPolicyRow, "preferenceChoiceEditor")
+        compare(choice.displayText, "Play / Pause")
+        choice.forceActiveFocus(); keyClick(Qt.Key_Down)
+        compare(store.value("clickPolicy"), "disabled")
+        compare(choice.displayText, "Do nothing")
+    }
+    function test_dependentEditorStaysVisibleWhenDisabled() {
+        const field = findChild(remotePortRow, "preferenceTextEditor")
+        verify(field.enabled)
+        store.stage("resize", false)
+        verify(remotePortRow.visible)
+        verify(!field.enabled)
+        store.stage("resize", true)
+        verify(field.enabled)
     }
     function test_equalizerExpandsAndEditsIndividualGains() {
         equalizer.visible = true

@@ -59,10 +59,14 @@ QtObject {
                 ["extrashort-jump-size", qsTr("Very short skip"), {suffix: " s"}], ["short-jump-size", qsTr("Short skip"), {suffix: " s"}],
                 ["medium-jump-size", qsTr("Medium skip"), {suffix: " s"}], ["long-jump-size", qsTr("Long skip"), {suffix: " s"}] ] },
             { title: qsTr("Mouse"), rows: [
-                ["mouse-pause-policy", qsTr("Single click on the video")],
-                ["hotkeys-y-wheel-mode", qsTr("Scroll wheel")], ["hotkeys-x-wheel-mode", qsTr("Horizontal scroll")],
+                ["mouse-pause-policy", qsTr("Single click on the video"), {choices: [{label: qsTr("Play / Pause"), value: "auto"}, {label: qsTr("Do nothing"), value: "disabled"}, {label: qsTr("Play / Pause on release"), value: "pause-on-released"}]}],
+                ["mouse-double-click-action", qsTr("Double click on the video")],
+                ["hotkeys-y-wheel-mode", qsTr("Scroll wheel"), {choices: [{label: qsTr("Volume"), value: 0}, {label: qsTr("Seek"), value: 2}, {label: qsTr("Seek (reversed)"), value: 3}, {label: qsTr("Do nothing"), value: -1}]}],
+                ["hotkeys-x-wheel-mode", qsTr("Horizontal scroll"), {choices: [{label: qsTr("Volume"), value: 0}, {label: qsTr("Seek"), value: 2}, {label: qsTr("Seek (reversed)"), value: 3}, {label: qsTr("Do nothing"), value: -1}]}],
                 ["hotkeys-wheel-direction", qsTr("Reverse scroll direction")] ] },
-            { title: qsTr("Remotes"), rows: [ ["http-port", qsTr("Web remote port")], ["http-password", qsTr("Password")] ] } ],
+            { title: qsTr("Remotes"), rows: [ ["redesign-web-remote", qsTr("Web remote control")],
+                ["http-port", qsTr("Port"), {enabledWhen: "redesign-web-remote"}],
+                ["http-password", qsTr("Password"), {enabledWhen: "redesign-web-remote"}] ] } ],
         playback: [
             { title: qsTr("Startup"), rows: [
                 ["restore-playback-pos", qsTr("Continue where you left off")],

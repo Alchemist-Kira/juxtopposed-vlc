@@ -22,8 +22,8 @@ ColumnLayout {
     readonly property bool available: description.kind !== undefined
     visible: available
     spacing: theme.dp(4)
-    enabled: { backend.revision; return !presentation.enabledWhen || !!backend.value(presentation.enabledWhen) }
-    opacity: enabled ? 1 : 0.5
+    readonly property bool editorEnabled: { backend.revision; return description.supported !== false && (!presentation.enabledWhen || !!backend.value(presentation.enabledWhen)) }
+    opacity: editorEnabled ? 1 : 0.5
     function commit(value) {
         if (presentation.inverted) value = !value
         return backend.stage(optionName, value)
@@ -65,6 +65,7 @@ ColumnLayout {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 width: theme.dp(26); height: theme.dp(28); iconSize: theme.dp(18)
                 iconName: "history"; text: qsTr("Reset to default")
+                enabled: root.editorEnabled
                 visible: rowHover.hovered || hovered || visualFocus
                 onClicked: root.backend.reset(root.optionName)
             }
@@ -72,6 +73,7 @@ ColumnLayout {
         Loader {
             visible: !root.fullWidth
             active: visible
+            enabled: root.editorEnabled
             Layout.preferredWidth: Math.min(theme.dp(320), Math.max(theme.dp(150), root.width * 0.43))
             Layout.preferredHeight: item ? item.implicitHeight || theme.dp(34) : theme.dp(34)
             sourceComponent: root.editorComponent
@@ -82,6 +84,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: item ? item.implicitHeight : 0
         active: root.fullWidth; visible: active
+        enabled: root.editorEnabled
         sourceComponent: root.editorComponent
     }
     Loader {

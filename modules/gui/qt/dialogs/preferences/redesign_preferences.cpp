@@ -17,6 +17,19 @@
 #include "util/vlchotkeyconverter.hpp"
 
 namespace {
+bool supportsWebRemote()
+{
+    // Lua's HTTP interface is a submodule: its shortcut need not be the
+    // primary module name used by module_exists().
+    static const bool available = [] {
+        module_t** modules = nullptr;
+        const ssize_t count = vlc_module_match("interface", "luahttp", true, &modules, nullptr);
+        free(modules);
+        return count > 0;
+    }();
+    return available;
+}
+
 QString categoryFor(const QString& name, int subcat)
 {
     if (name.startsWith(QLatin1String("key-")) || name.startsWith(QLatin1String("global-key-"))
@@ -116,6 +129,13 @@ void RedesignPreferences::write(const QByteArray& name, const QVariant& value)
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-web-remote")) {
+        const auto interfaces = value(QStringLiteral("extraintf")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        return std::any_of(interfaces.cbegin(), interfaces.cend(), [](const auto& entry) {
+            const auto module = entry.section(QLatin1Char('{'), 0, 0);
+            return module == QLatin1String("http") || module == QLatin1String("luahttp");
+        });
+    }
     if (name == QLatin1String("redesign-repeat"))
         return value(QStringLiteral("repeat")).toBool() ? 1 : value(QStringLiteral("loop")).toBool() ? 2 : 0;
     if (name == QLatin1String("redesign-after-playback"))
@@ -131,6 +151,13 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-web-remote"))
+        return {{QStringLiteral("kind"), QStringLiteral("bool")}, {QStringLiteral("title"), qtr("Web remote control")},
+            {QStringLiteral("defaultValue"), false}, {QStringLiteral("value"), value(name)},
+            {QStringLiteral("supported"), supportsWebRemote()},
+            {QStringLiteral("help"), supportsWebRemote() ? qtr("Control VLC from a web browser. Restart VLC after changing the web remote, port or password.")
+                : qtr("Web remote control is unavailable in this VLC build.")}};
+
     if (name == QLatin1String("redesign-repeat") || name == QLatin1String("redesign-after-playback")) {
         const bool repeat = name == QLatin1String("redesign-repeat");
         const QStringList labels = repeat ? QStringList{qtr("Off"), qtr("Current item"), qtr("All items")}
@@ -218,6 +245,17 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-web-remote")) {
+        if (proposed.toBool() && !supportsWebRemote()) return false;
+        auto interfaces = value(QStringLiteral("extraintf")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        interfaces.erase(std::remove_if(interfaces.begin(), interfaces.end(), [](const auto& entry) {
+            const auto module = entry.section(QLatin1Char('{'), 0, 0);
+            return module == QLatin1String("http") || module == QLatin1String("luahttp");
+        }), interfaces.end());
+        if (proposed.toBool()) interfaces.append(QStringLiteral("http"));
+        return stage(QStringLiteral("extraintf"), interfaces.join(QLatin1Char(':')));
+    }
+
     if (name == QLatin1String("redesign-repeat") || name == QLatin1String("redesign-after-playback")) {
         const int choice = proposed.toInt();
         if (choice < 0 || choice > 2) return false;
@@ -309,6 +347,20 @@ bool RedesignPreferences::save()
         m_error = qtr("The preferences file could not be saved. Your edits are still open.");
         ++m_revision; emit changed(); return false;
     }
+    // These controls are inherited by the current input and action dispatcher.
+    auto* instance = vlc_object_instance(m_ctx->getIntf());
+    for (const auto& name : {QStringLiteral("mouse-pause-policy"), QStringLiteral("hotkeys-x-wheel-mode"),
+                            QStringLiteral("hotkeys-y-wheel-mode"), QStringLiteral("hotkeys-wheel-direction")}) {
+        if (!previous.contains(name)) continue;
+        const QByteArray bytes = name.toUtf8();
+        const int type = name == QLatin1String("mouse-pause-policy") ? VLC_VAR_STRING
+            : name == QLatin1String("hotkeys-wheel-direction") ? VLC_VAR_BOOL : VLC_VAR_INTEGER;
+        if (var_Type(instance, bytes.constData()) == 0) var_Create(instance, bytes.constData(), type);
+        if (type == VLC_VAR_STRING) var_SetString(instance, bytes.constData(), value(name).toString().toUtf8().constData());
+        else if (type == VLC_VAR_BOOL) var_SetBool(instance, bytes.constData(), value(name).toBool());
+        else var_SetInteger(instance, bytes.constData(), value(name).toLongLong());
+    }
+
     // Apply audio effects to the current output after persistence succeeds.
     // Defaults remain available for the next output if nothing is playing.
     auto* player = m_ctx->getIntf()->p_player;

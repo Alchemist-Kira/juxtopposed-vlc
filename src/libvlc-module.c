@@ -219,6 +219,11 @@ static const char *const ppsz_mix_mode_texts[] = {
     "4.0", "5.1", "7.1",
 };
 
+static const int spatial_mode_values[] = { AOUT_MIX_MODE_BINAURAL, AOUT_MIX_MODE_UNSET };
+static const char *const spatial_mode_texts[] = {
+    N_("Headphone virtualization"), N_("Surround speakers"),
+};
+
 #define AUDIO_FILTER_TEXT N_("Audio filters")
 #define AUDIO_FILTER_LONGTEXT N_( \
     "This adds audio post processing filters, to modify " \
@@ -1648,6 +1653,12 @@ vlc_module_begin ()
         change_integer_list( pi_stereo_mode_values, ppsz_stereo_mode_texts )
     add_integer( "mix-mode", AOUT_MIX_MODE_UNSET, MIX_MODE_TEXT, NULL )
         change_integer_list( pi_mix_mode_values, ppsz_mix_mode_texts )
+    add_bool("audio-spatial", false, N_("Spatial audio"),
+             N_("Render surround or Ambisonics audio for headphones or speakers. "
+                "Turning this off restores the selected speaker setup. Stereo sources remain unchanged."))
+    add_integer("audio-spatial-mode", AOUT_MIX_MODE_BINAURAL, N_("Spatial audio mode"),
+                N_("Headphone virtualization uses binaural rendering. Surround speakers use the selected speaker setup."))
+        change_integer_list(spatial_mode_values, spatial_mode_texts)
     add_integer( "audio-desync", 0, DESYNC_TEXT,
                  DESYNC_LONGTEXT )
         change_safe ()

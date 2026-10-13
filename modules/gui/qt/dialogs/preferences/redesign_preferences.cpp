@@ -9,6 +9,8 @@
 #include <QColorDialog>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QKeyEvent>
+#include "util/vlchotkeyconverter.hpp"
 
 namespace {
 QString categoryFor(const QString& name, int subcat)
@@ -315,4 +317,72 @@ QString RedesignPreferences::chooseColor(const QString& initial)
 {
     const QColor color = QColorDialog::getColor(QColor(initial), nullptr, qtr("Choose color"));
     return color.isValid() ? color.name() : QString();
+}
+
+QVariantList RedesignPreferences::shortcutCatalog() const
+{
+    struct Shortcut { QString name, title, group; int groupOrder, order; };
+    QList<Shortcut> shortcuts;
+    const QStringList basic{QStringLiteral("key-fullscreen"), QStringLiteral("key-leave-fullscreen"), QStringLiteral("key-position"), QStringLiteral("key-intf-show")};
+    const QStringList playback{QStringLiteral("key-play-pause"), QStringLiteral("key-stop"), QStringLiteral("key-next"), QStringLiteral("key-prev"), QStringLiteral("key-program-sid-next"), QStringLiteral("key-program-sid-prev")};
+    for (const auto& entry : m_catalog) {
+        if (!entry.name.startsWith(QLatin1String("key-"))) continue;
+        Shortcut row{entry.name, entry.title, qtr("Other"), 5, 1000};
+        if (basic.contains(entry.name)) { row.group = qtr("Basic"); row.groupOrder = 0; row.order = basic.indexOf(entry.name); }
+        else if (playback.contains(entry.name)) { row.group = qtr("Playback"); row.groupOrder = 1; row.order = playback.indexOf(entry.name); }
+        else if (entry.name.contains(QLatin1String("sub"))) { row.group = qtr("Subtitles"); row.groupOrder = 4; }
+        else if (entry.name.contains(QLatin1String("audio")) || entry.name.contains(QLatin1String("vol-"))) { row.group = qtr("Audio"); row.groupOrder = 2; }
+        else if (entry.name.contains(QLatin1String("aspect")) || entry.name.contains(QLatin1String("crop")) || entry.name.contains(QLatin1String("zoom")) || entry.name.contains(QLatin1String("snapshot")) || entry.name.contains(QLatin1String("deinterlace"))) { row.group = qtr("Video"); row.groupOrder = 3; }
+        else if (entry.name.contains(QLatin1String("jump")) || entry.name.contains(QLatin1String("rate")) || entry.name.contains(QLatin1String("frame"))) { row.group = qtr("Playback"); row.groupOrder = 1; }
+        shortcuts.append(row);
+    }
+    std::sort(shortcuts.begin(), shortcuts.end(), [](const Shortcut& a, const Shortcut& b) {
+        if (a.groupOrder != b.groupOrder) return a.groupOrder < b.groupOrder;
+        if (a.order != b.order) return a.order < b.order;
+        return QString::localeAwareCompare(a.title, b.title) < 0;
+    });
+    QVariantList result;
+    for (const auto& row : shortcuts) {
+        const QString global = QStringLiteral("global-") + row.name;
+        result.append(QVariantMap{{QStringLiteral("name"), row.name}, {QStringLiteral("title"), row.title},
+            {QStringLiteral("group"), row.group}, {QStringLiteral("globalName"), config_FindConfig(global.toUtf8().constData()) ? global : QString()}});
+    }
+    return result;
+}
+
+QString RedesignPreferences::shortcutForKey(int key, int modifiers) const
+{
+    QKeyEvent event(QEvent::KeyPress, key, Qt::KeyboardModifiers::fromInt(modifiers));
+    return VLCKeyToString(qtEventToVLCKey(&event), false);
+}
+
+QVariantList RedesignPreferences::shortcutConflicts(const QString& name, const QString& shortcut) const
+{
+    QVariantList conflicts;
+    if (shortcut.isEmpty()) return conflicts;
+    const bool global = name.startsWith(QLatin1String("global-key-"));
+    for (const auto& entry : m_catalog) {
+        if (entry.name == name || entry.name.startsWith(QLatin1String("global-key-")) != global) continue;
+        if (!entry.name.startsWith(global ? QLatin1String("global-key-") : QLatin1String("key-"))) continue;
+        if (value(entry.name).toString().split(QLatin1Char('\t')).contains(shortcut, Qt::CaseInsensitive))
+            conflicts.append(QVariantMap{{QStringLiteral("name"), entry.name}, {QStringLiteral("title"), entry.title}});
+    }
+    return conflicts;
+}
+
+bool RedesignPreferences::assignShortcut(const QString& name, const QString& shortcut, bool replaceConflicts)
+{
+    const auto* cfg = config_FindConfig(name.toUtf8().constData());
+    if (!cfg || cfg->i_type != CONFIG_ITEM_KEY) return false;
+    const auto conflicts = shortcutConflicts(name, shortcut);
+    if (!conflicts.isEmpty() && !replaceConflicts) return false;
+    for (const auto& conflict : conflicts) {
+        const QString other = conflict.toMap().value(QStringLiteral("name")).toString();
+        QStringList bindings = value(other).toString().split(QLatin1Char('\t'), Qt::SkipEmptyParts);
+        bindings.erase(std::remove_if(bindings.begin(), bindings.end(), [&shortcut](const QString& binding) {
+            return binding.compare(shortcut, Qt::CaseInsensitive) == 0;
+        }), bindings.end());
+        stage(other, bindings.join(QLatin1Char('\t')));
+    }
+    return stage(name, shortcut);
 }

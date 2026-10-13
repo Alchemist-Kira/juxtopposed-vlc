@@ -27,7 +27,7 @@ This allows embedding the engine in 3rd party applications, while letting them t
 
 ## Redesign attribution
 
-The interface on the `juxtopposed-redesign` branch is adapted from **VLC Redesign**
+The redesigned interface on `master` is adapted from **VLC Redesign**
 by [Juxtopposed](https://www.juxtopposed.com/), licensed under
 [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 The original design is available on

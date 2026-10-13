@@ -134,7 +134,7 @@ public:
     VLCDuration  m_audioDelay;
     VLCDuration  m_subtitleDelay;
     VLCDuration  m_secondarySubtitleDelay;
-    float        m_subtitleFPS = 1.0;
+    float        m_subtitleFPS = 0.f;
 
     //timer
     vlc_player_timer_id* m_player_timer = nullptr;

@@ -67,7 +67,22 @@ TestCase {
     SignalSpy { id: audioSpy; target: player; signalName: "audioTracksRequested" }
     SignalSpy { id: subtitleSpy; target: player; signalName: "subtitleTracksRequested" }
 
+    RedesignSettingSlider {
+        id: settingControl
+        x: 20; y: 20; width: 360; z: 10
+        visible: false
+        label: "Subtitle Speed"; suffix: " fps"; decimals: 3
+        from: 0; to: 60; stepSize: 0.001
+        resetValue: 0; minimumValueText: "Automatic"
+        onMoved: value => currentValue = value
+    }
+    SignalSpy { id: settingSpy; target: settingControl; signalName: "moved" }
+
     function init() {
+        settingControl.visible = false
+        settingControl.currentValue = 0
+        settingControl.resetValue = 0
+        settingSpy.clear()
         trackPicker.close()
         trackPicker.page = "subtitles"
         tracks.setProperty(0, "checked", true)
@@ -89,6 +104,64 @@ TestCase {
         audioSpy.clear()
         subtitleSpy.clear()
         wait(20)
+    }
+    function test_subtitleFrameRateAcceptsDecimalsAndAutomatic_data() {
+        return [{tag: "decimal-point", locale: "en_US", decimal: Qt.Key_Period, expected: "23.976 fps"},
+                {tag: "decimal-comma", locale: "de_DE", decimal: Qt.Key_Comma, expected: "23,976 fps"}]
+    }
+    function test_subtitleFrameRateAcceptsDecimalsAndAutomatic(data) {
+        settingControl.visible = true
+        const field = findChild(settingControl, "settingValueField")
+        field.locale = Qt.locale(data.locale)
+        compare(field.displayText, "Automatic")
+        mouseClick(field)
+        keyClick(Qt.Key_A, Qt.ControlModifier)
+        keyClick(Qt.Key_2); keyClick(Qt.Key_3); keyClick(data.decimal)
+        keyClick(Qt.Key_9); keyClick(Qt.Key_7); keyClick(Qt.Key_6)
+        keyClick(Qt.Key_Return)
+        compare(settingSpy.count, 1)
+        compare(settingControl.currentValue, 23.976)
+        compare(field.displayText, data.expected)
+        compare(field.contentItem.text, data.expected)
+        keyClick(Qt.Key_A, Qt.ControlModifier)
+        for (const letter of "Automatic") keyClick(letter)
+        keyClick(Qt.Key_Return)
+        compare(settingControl.currentValue, 0)
+        compare(field.displayText, "Automatic")
+        compare(field.contentItem.text, "Automatic")
+    }
+    function test_settingResetUsesItsOwnDefault_data() {
+        return [{tag: "subtitle-fps", value: 23.976, reset: 0},
+                {tag: "playback-speed", value: 2, reset: 1},
+                {tag: "track-delay", value: 4, reset: 0}]
+    }
+    function test_settingResetUsesItsOwnDefault(data) {
+        settingControl.visible = true
+        settingControl.currentValue = data.value
+        settingControl.resetValue = data.reset
+        mouseClick(findChild(settingControl, "settingResetButton"))
+        compare(settingSpy.count, 1)
+        compare(settingControl.currentValue, data.reset)
+    }
+    function test_subtitleFrameRateRejectsInvalidAndOutOfRangeInput_data() {
+        return [{tag: "text", keys: [Qt.Key_X]},
+                {tag: "empty", keys: [Qt.Key_Backspace]},
+                {tag: "above-range", keys: [Qt.Key_6, Qt.Key_1]},
+                {tag: "below-range", keys: [Qt.Key_Minus, Qt.Key_1]}]
+    }
+    function test_subtitleFrameRateRejectsInvalidAndOutOfRangeInput(data) {
+        settingControl.visible = true
+        settingControl.currentValue = 25
+        const field = findChild(settingControl, "settingValueField")
+        field.locale = Qt.locale("en_US")
+        mouseClick(field)
+        keyClick(Qt.Key_A, Qt.ControlModifier)
+        for (const key of data.keys) keyClick(key)
+        keyClick(Qt.Key_Return)
+        compare(settingControl.currentValue, 25)
+        compare(field.displayText, "25.000 fps")
+        compare(field.contentItem.text, "25.000 fps")
+        compare(settingSpy.count, 0)
     }
     function test_trackPickerSelectsAndDisablesTracks() {
         trackPicker.open()

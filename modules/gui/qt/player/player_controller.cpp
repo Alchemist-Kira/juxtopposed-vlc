@@ -1218,6 +1218,7 @@ PlayerControllerPrivate::PlayerControllerPrivate(PlayerController *playercontrol
         m_player_aout_listener = vlc_player_aout_AddListener( m_player, &player_aout_cbs, this );
         m_player_vout_listener = vlc_player_vout_AddListener( m_player, &player_vout_cbs, this );
         m_player_timer = vlc_player_AddTimer( m_player, VLC_TICK_FROM_MS(500), &player_timer_cbs, this );
+        m_subtitleFPS = vlc_player_GetAssociatedSubsFPS(m_player);
     }
 
     QObject::connect( &m_autoscale, &QVLCBool::valueChanged, q_ptr, &PlayerController::autoscaleChanged );

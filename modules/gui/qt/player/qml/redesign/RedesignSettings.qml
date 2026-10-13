@@ -109,6 +109,7 @@ C.Pane {
                         Layout.fillWidth: true
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Audio track delay"); suffix: " s"; decimals: 3
+                        resetValue: 0
                         from: -10; to: 10; stepSize: 0.05
                         currentValue: Player.audioDelayMS / 1000
                         onMoved: value => Player.audioDelayMS = Math.round(value * 1000)
@@ -129,6 +130,7 @@ C.Pane {
                         Layout.fillWidth: true
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Subtitle track delay"); suffix: " s"; decimals: 3
+                        resetValue: 0
                         from: -10; to: 10; stepSize: 0.05
                         currentValue: Player.subtitleDelayMS / 1000
                         onMoved: value => Player.subtitleDelayMS = Math.round(value * 1000)
@@ -136,8 +138,10 @@ C.Pane {
                     RedesignSettingSlider {
                         Layout.fillWidth: true
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        label: qsTr("Subtitle frame rate"); suffix: " fps"; decimals: 3
-                        from: 1; to: 60; stepSize: 0.001
+                        objectName: "subtitleFPSControl"
+                        label: qsTr("Subtitle Speed"); suffix: " fps"; decimals: 3
+                        from: 0; to: 60; stepSize: 0.001
+                        resetValue: 0; minimumValueText: qsTr("Automatic")
                         currentValue: Player.subtitleFPS
                         onMoved: value => Player.subtitleFPS = value
                     }

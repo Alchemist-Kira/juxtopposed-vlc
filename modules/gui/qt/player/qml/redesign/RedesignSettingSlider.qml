@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as C
+import QtQuick.Templates as T
 
 ColumnLayout {
     id: root
@@ -15,22 +16,53 @@ ColumnLayout {
     property real from: 0
     property real to: 1
     property real stepSize: 0.1
+    property real resetValue: 1
+    property string minimumValueText
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal moved(real value)
     spacing: theme.dp(8)
     RowLayout {
         Layout.fillWidth: true
         Text { Layout.fillWidth: true; text: root.label; color: theme.foreground; font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap }
-        C.SpinBox {
+        T.SpinBox {
             id: valueField
+            objectName: "settingValueField"
             property real factor: Math.pow(10, root.decimals)
-            Layout.preferredWidth: theme.dp(115)
+            Layout.preferredWidth: theme.dp(138)
+            implicitHeight: theme.dp(34)
+            leftPadding: theme.dp(14); rightPadding: theme.dp(10)
+            font.pixelSize: theme.dp(14)
             editable: true
             from: Math.round(root.from * factor); to: Math.round(root.to * factor)
             stepSize: Math.max(1, Math.round(root.stepSize * factor))
             value: Math.round(root.currentValue * factor)
-            textFromValue: (value, locale) => Number(value / factor).toLocaleString(locale, 'f', root.decimals) + root.suffix
-            valueFromText: (text, locale) => Math.round(Number.fromLocaleString(locale, text.replace(root.suffix, "").trim()) * factor)
+            textFromValue: (value, locale) => root.minimumValueText && value === from ? root.minimumValueText
+                : Number(value / factor).toLocaleString(locale, 'f', root.decimals) + root.suffix
+            valueFromText: (text, locale) => {
+                let input = text.trim()
+                if (root.minimumValueText && input.toLocaleLowerCase() === root.minimumValueText.toLocaleLowerCase()) return from
+                if (root.suffix && input.endsWith(root.suffix)) input = input.slice(0, -root.suffix.length).trim()
+                let number = NaN
+                try { if (input.length) number = Number.fromLocaleString(locale, input) }
+                catch (error) { return value }
+                const scaled = Math.round(number * factor)
+                return Number.isFinite(number) && number >= root.from && number <= root.to ? scaled : value
+            }
+            // The displayed value can contain decimals, a unit or Automatic.
+            // The integer validator of the standard SpinBox rejects those.
+            contentItem: TextInput {
+                text: valueField.displayText
+                font: valueField.font; color: theme.foreground
+                selectionColor: theme.accent; selectedTextColor: theme.background
+                verticalAlignment: TextInput.AlignVCenter
+                selectByMouse: true; clip: true
+                onActiveFocusChanged: if (activeFocus) selectAll()
+            }
+            background: Rectangle {
+                radius: theme.dp(4); color: theme.field
+                border.color: valueField.activeFocus ? theme.accent : theme.background
+            }
+            Accessible.name: root.label
             onValueModified: root.moved(value / factor)
         }
     }
@@ -58,7 +90,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Text { text: root.from + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
         Item { Layout.fillWidth: true }
-        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.from < 0 ? 0 : 1) }
+        RedesignButton { objectName: "settingResetButton"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.resetValue) }
         Item { Layout.fillWidth: true }
         Text { text: root.to + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
     }

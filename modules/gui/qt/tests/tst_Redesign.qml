@@ -119,6 +119,7 @@ TestCase {
         player.playing = false
         player.muted = false
         player.fullscreen = false
+        player.minimalView = false
         player.started = true
         player.hasVideo = true
         player.autoHideMode = 1
@@ -579,6 +580,30 @@ TestCase {
         verify(player.bottomVisible)
         player.started = false
         verify(player.bottomVisible)
+    }
+    function test_minimalViewHidesChromeAndClosesPanels() {
+        player.resumeAvailable = true
+        player.showStatistics = true
+        player.libraryOpen = true
+        player.queueOpen = true
+        player.settingsPage = "video"
+        player.minimalView = true
+        verify(!player.topVisible)
+        verify(!player.bottomVisible)
+        verify(!player.libraryOpen)
+        verify(!player.queueOpen)
+        verify(!findChild(player, "resumePlaybackPrompt").visible)
+        verify(!findChild(player, "playbackStatisticsOverlay").visible)
+        compare(player.settingsPage, "")
+        const viewport = findChild(player, "redesignViewport")
+        compare(Qt.rect(viewport.x, viewport.y, viewport.width, viewport.height), Qt.rect(0, 0, player.width, player.height))
+        player.revealControls()
+        verify(!player.topVisible)
+        verify(!player.bottomVisible)
+        player.minimalView = false
+        verify(player.topVisible)
+        verify(player.bottomVisible)
+        player.resumeAvailable = false
     }
     function test_fullscreenUsesIndependentEdges() {
         player.fullscreen = true

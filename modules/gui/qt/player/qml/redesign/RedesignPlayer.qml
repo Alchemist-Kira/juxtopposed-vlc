@@ -63,6 +63,7 @@ FocusScope {
         hasNext: MainPlaylistController.hasNext
         muted: Player.muted
         fullscreen: MainCtx.intfMainWindow.visibility === Window.FullScreen
+        minimalView: MainCtx.minimalView
         autoHideMode: MainCtx.redesignPlayerPreferences.autoHide
         controlsHideTimeout: MainCtx.redesignPlayerPreferences.hideTimeout
         showFullscreenControls: MainCtx.redesignPlayerPreferences.fullscreenControls
@@ -285,7 +286,7 @@ FocusScope {
         target: MainCtx
         function onAskShow() { view.revealControls() }
         function onMainInterfaceModesChanged() {
-            if (!MainCtx.playerView && Player.isStarted) { view.libraryOpen = true; view.libraryExpanded = true }
+            if (!MainCtx.minimalView && !MainCtx.playerView && Player.isStarted) { view.libraryOpen = true; view.libraryExpanded = true }
         }
     }
     Connections {

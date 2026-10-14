@@ -323,7 +323,8 @@ Item {
 
                 switch (MainCtx.effectiveMainInterfaceMode) {
                 case MainCtx.MAININTERFACE_MODE_MINIMAL:
-                    return "qrc:///qt/qml/VLC/Player/MinimalView.qml"
+                    return Player.isInteractive ? "qrc:///qt/qml/VLC/Player/MinimalView.qml"
+                                                : "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"
                 case  MainCtx.MAININTERFACE_MODE_PLAYER:
                     return Player.isInteractive ? "qrc:///qt/qml/VLC/Player/Player.qml"
                                                 : "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"

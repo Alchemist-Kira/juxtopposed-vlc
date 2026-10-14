@@ -32,6 +32,15 @@ FocusScope {
     property var statistics: ({})
     readonly property bool autoHideActive: started && hasVideo && (autoHideMode === 2 || (fullscreen && autoHideMode === 1))
     property bool maximized: false
+    property bool minimalView: false
+    onMinimalViewChanged: {
+        if (minimalView) {
+            libraryOpen = false
+            queueOpen = false
+            settingsPage = ""
+            forceActiveFocus()
+        }
+    }
     property bool showWindowButtons: true
     property bool libraryOpen: false
     property bool libraryExpanded: false
@@ -66,8 +75,8 @@ FocusScope {
     readonly property alias settingsItem: settingsLoader.item
     readonly property real positionSliderY: toolbar.y + seek.y
     readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable
-    readonly property bool topVisible: !fullscreen || headerEdge.hovered || header.activeFocus || revealTimer.running || controlsLocked
-    readonly property bool bottomVisible: (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool topVisible: !minimalView && (!fullscreen || headerEdge.hovered || header.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool bottomVisible: !minimalView && (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     signal togglePlayback()
@@ -144,10 +153,10 @@ FocusScope {
             bottom: parent.bottom
             left: parent.left
             right: parent.right
-            topMargin: root.libraryExpanded ? root.height - theme.dp(54 + 180 + 24) : root.fullscreen ? 0 : theme.dp(40)
-            bottomMargin: root.libraryExpanded ? theme.dp(54 + 24) : root.fullscreen ? 0 : theme.dp(54)
-            leftMargin: root.libraryExpanded ? Math.max(theme.dp(50), root.width - theme.dp(344)) : root.fullscreen ? 0 : theme.dp(10)
-            rightMargin: root.libraryExpanded ? theme.dp(24) : root.fullscreen ? 0 : theme.dp(10)
+            topMargin: root.minimalView ? 0 : root.libraryExpanded ? root.height - theme.dp(54 + 180 + 24) : root.fullscreen ? 0 : theme.dp(40)
+            bottomMargin: root.minimalView ? 0 : root.libraryExpanded ? theme.dp(54 + 24) : root.fullscreen ? 0 : theme.dp(54)
+            leftMargin: root.minimalView ? 0 : root.libraryExpanded ? Math.max(theme.dp(50), root.width - theme.dp(344)) : root.fullscreen ? 0 : theme.dp(10)
+            rightMargin: root.minimalView ? 0 : root.libraryExpanded ? theme.dp(24) : root.fullscreen ? 0 : theme.dp(10)
         }
         Rectangle { anchors.fill: parent; color: "black"; radius: theme.dp(10) }
         Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
@@ -159,7 +168,7 @@ FocusScope {
             radius: theme.dp(20)
             border.width: theme.dp(10)
             border.color: theme.background
-            visible: !root.fullscreen
+            visible: !root.fullscreen && !root.minimalView
         }
 
 
@@ -237,15 +246,16 @@ FocusScope {
             height: Math.max(0, Math.min(implicitHeight, parent.height - theme.dp(24)))
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             statistics: root.statistics
-            visible: root.showStatistics && root.started
+            visible: root.showStatistics && root.started && !root.minimalView
         }
         Rectangle {
+            objectName: "resumePlaybackPrompt"
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: theme.dp(24)
             width: Math.max(0, Math.min(parent.width - theme.dp(24), theme.dp(540)))
             height: theme.dp(width < theme.dp(420) ? 80 : 64)
-            visible: root.resumeAvailable
+            visible: root.resumeAvailable && !root.minimalView
             color: theme.panel; radius: theme.dp(8); border.color: theme.border
             RowLayout {
                 id: resumeRow

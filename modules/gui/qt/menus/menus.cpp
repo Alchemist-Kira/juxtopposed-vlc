@@ -62,7 +62,9 @@
 #include <QSignalMapper>
 #include <QApplication>
 #include <QStyleHints>
+#include <QKeyEvent>
 #include <utility>
+#include <vector>
 
 using namespace vlc::playlist;
 
@@ -748,6 +750,46 @@ QMenu* VLCMenuBar::MiscPopupMenu( qt_intf_t *p_intf, bool show )
 
 namespace {
 
+class RedesignMenuHotkeys final : public QObject
+{
+public:
+    explicit RedesignMenuHotkeys(QMenu* menu) : QObject(menu), m_menu(menu)
+    {
+        menu->installEventFilter(this);
+    }
+    void add(QAction* action, const QString& sequences)
+    {
+        for (const auto& value : sequences.split(QLatin1Char('\t'))) {
+            const auto sequence = QKeySequence::fromString(value, QKeySequence::PortableText);
+            if (!sequence.isEmpty()) m_shortcuts.emplace_back(sequence, action);
+        }
+    }
+protected:
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (!m_menu->isVisible() || (event->type() != QEvent::ShortcutOverride && event->type() != QEvent::KeyPress)) return false;
+        auto* key = static_cast<QKeyEvent*>(event);
+        if (key->key() == Qt::Key_Tab || key->key() == Qt::Key_Backtab) return false;
+        const QKeySequence sequence(QKeyCombination(key->modifiers() & ~Qt::KeypadModifier, Qt::Key(key->key())));
+        for (const auto& [binding, action] : m_shortcuts) {
+            if (!action || !action->isEnabled() || binding.matches(sequence) != QKeySequence::ExactMatch) continue;
+            key->accept();
+            if (event->type() == QEvent::KeyPress) {
+                // Keep these bindings local to the open menu. Hidden menus must
+                // not take playback keys from text fields or shortcut capture.
+                const QPointer<QAction> selected = action;
+                m_menu->close();
+                if (selected) selected->trigger();
+            }
+            return true;
+        }
+        return false;
+    }
+private:
+    QMenu* m_menu;
+    std::vector<std::pair<QKeySequence, QPointer<QAction>>> m_shortcuts;
+};
+
 QString redesignHotkey(qt_intf_t* intf, const char* name)
 {
     char* stored = var_InheritString(intf, name);
@@ -770,6 +812,7 @@ QIcon redesignMenuIcon(MainCtx* ctx, const char* name)
          qApp->styleHints()->colorScheme() == Qt::ColorScheme::Light);
     return ColorizedSvgIcon(QStringLiteral(":/menu/redesign/%1.svg").arg(QLatin1String(name)), {}, {}, {},
         {{QStringLiteral("#8F8F8F"), light ? QStringLiteral("#404040") : QStringLiteral("#8f8f8f")},
+         {QStringLiteral("#D37918"), ctx->redesignAccent().name()},
          {QStringLiteral("#AB6314"), ctx->redesignAccent().darker(120).name()}});
 }
 }
@@ -778,6 +821,12 @@ QMenu* VLCMenuBar::RedesignPopupMenu(qt_intf_t* p_intf, bool show)
 {
     auto* ctx = p_intf->p_mi;
     auto* menu = new VLCMenu(p_intf);
+    auto* hotkeys = new RedesignMenuHotkeys(menu);
+    const auto bindHotkey = [p_intf, hotkeys](QAction* action, const char* option) {
+        char* stored = var_InheritString(p_intf, option);
+        if (stored) hotkeys->add(action, qfu(stored));
+        free(stored);
+    };
     styleRedesignMenus(menu, ctx);
     menu->setFixedWidth(qRound(292 * ctx->getIntfScaleFactor()));
     const QString playHint = redesignHotkey(p_intf, "key-play-pause");
@@ -792,15 +841,19 @@ QMenu* VLCMenuBar::RedesignPopupMenu(qt_intf_t* p_intf, bool show)
     };
     updatePlay();
     connect(THEMIM, &PlayerController::playingStateChanged, play, updatePlay);
+    bindHotkey(play, "key-play-pause");
     auto* stop = menu->addAction(redesignMenuIcon(ctx, "stop"), menuLabel(qtr("Stop"), redesignHotkey(p_intf, "key-stop")), THEMPL, &PlaylistController::stop);
     stop->setEnabled(THEMIM->isStarted());
     connect(THEMIM, &PlayerController::playingStateChanged, stop, [p_intf, stop]() { stop->setEnabled(THEMIM->isStarted()); });
+    bindHotkey(stop, "key-stop");
     auto* previous = menu->addAction(redesignMenuIcon(ctx, "previous"), menuLabel(qtr("Previous Item"), redesignHotkey(p_intf, "key-prev")), THEMPL, &PlaylistController::prev);
     previous->setEnabled(THEMPL->hasPrev());
     connect(THEMPL, &PlaylistController::hasPrevChanged, previous, &QAction::setEnabled);
+    bindHotkey(previous, "key-prev");
     auto* next = menu->addAction(redesignMenuIcon(ctx, "next"), menuLabel(qtr("Next Item"), redesignHotkey(p_intf, "key-next")), THEMPL, &PlaylistController::next);
     next->setEnabled(THEMPL->hasNext());
     connect(THEMPL, &PlaylistController::hasNextChanged, next, &QAction::setEnabled);
+    bindHotkey(next, "key-next");
     const QString recordHint = redesignHotkey(p_intf, "key-record");
     auto* record = new BooleanPropertyAction(QString(), THEMIM, "recording", menu);
     const auto updateRecord = [p_intf, record, recordHint]() { record->setText(menuLabel(THEMIM->isRecording() ? qtr("Stop Recording") : qtr("Record"), recordHint)); };
@@ -810,13 +863,18 @@ QMenu* VLCMenuBar::RedesignPopupMenu(qt_intf_t* p_intf, bool show)
     record->setEnabled(THEMIM->isStarted());
     connect(THEMIM, &PlayerController::playingStateChanged, record, [p_intf, record]() { record->setEnabled(THEMIM->isStarted()); });
     menu->addAction(record);
+    bindHotkey(record, "key-record");
     menu->addSeparator();
-    auto* hide = new BooleanPropertyAction(QString(), ctx, "minimalView", menu);
+    auto* hide = menu->addAction(QString(), ctx, [ctx]() { ctx->setMinimalView(!ctx->isMinimalView()); });
+    hide->setCheckable(true);
     hide->setIcon(redesignMenuIcon(ctx, "hide-ui"));
-    const auto updateHide = [ctx, hide]() { hide->setText(menuLabel(ctx->isMinimalView() ? qtr("Show UI") : qtr("Hide UI"), QStringLiteral("Ctrl+\\"))); };
+    const auto updateHide = [ctx, hide]() {
+        hide->setChecked(ctx->isMinimalView());
+        hide->setText(menuLabel(ctx->isMinimalView() ? qtr("Show UI") : qtr("Hide UI"), QStringLiteral("Ctrl+\\")));
+    };
     updateHide();
     connect(ctx, &MainCtx::mainInterfaceModesChanged, hide, updateHide);
-    menu->addAction(hide);
+    hotkeys->add(hide, QStringLiteral("Ctrl+H\tCtrl+\\"));
     menu->addSeparator();
     const auto submenu = [&](const QString& title, const char* icon) {
         auto* child = new QMenu(title, menu);
@@ -867,6 +925,7 @@ QMenu* VLCMenuBar::RedesignPopupMenu(qt_intf_t* p_intf, bool show)
     FileMenu(p_intf, open);
     auto* quit = menu->addAction(redesignMenuIcon(ctx, "quit"), qtr("Quit VLC"), THEDP, &DialogsProvider::quit);
     quit->setShortcut(QKeySequence(QStringLiteral("Ctrl+Q")));
+    hotkeys->add(quit, QStringLiteral("Ctrl+Q"));
     styleRedesignMenus(menu, ctx);
     msg_Dbg(p_intf, "Player context menu ready: %lld entries; popup=%s",
             static_cast<long long>(menu->actions().size()), show ? "yes" : "no");

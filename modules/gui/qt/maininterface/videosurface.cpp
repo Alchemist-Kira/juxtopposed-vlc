@@ -327,6 +327,12 @@ void VideoSurface::itemChange(ItemChange change, const ItemChangeData &value)
                 // Connection is made in `::updatePaintNode()` (which is called when both the item is visible and `ItemHasContents` is set).
                 disconnect(m_synchConnection);
             }
+            else if (flags().testFlag(ItemHasContents))
+            {
+                // An invisible initial paint can consume the pending update
+                // before the synchronization connection can be made.
+                update();
+            }
             break;
         }
         default: break;

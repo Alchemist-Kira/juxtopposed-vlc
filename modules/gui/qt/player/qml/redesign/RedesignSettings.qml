@@ -92,7 +92,7 @@ C.Pane {
                     stereoModel: Player.audioStereoMode
                     audioDelaySeconds: {
                         root.preferenceStore.revision
-                        return Player.isStarted ? Player.audioDelayMS / 1000 : Number(root.preferenceStore.value("audio-desync")) / 1000
+                        return Player.isStarted && !root.preferenceStore.isStaged("audio-desync") ? Player.audioDelayMS / 1000 : Number(root.preferenceStore.value("audio-desync")) / 1000
                     }
                     onStereoRequested: index => {
                         const value = Player.audioStereoMode.choiceValue(index)
@@ -113,9 +113,12 @@ C.Pane {
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         label: qsTr("Subtitle track delay"); suffix: " s"; decimals: 3
                         resetValue: 0
-                        from: -10; to: 10; stepSize: 0.05
-                        currentValue: Player.subtitleDelayMS / 1000
-                        onMoved: value => Player.subtitleDelayMS = Math.round(value * 1000)
+                        from: -10; to: 10; inputFrom: -2147483.648; inputTo: 2147483.647; stepSize: 0.05
+                        currentValue: {
+                            root.preferenceStore.revision
+                            return Player.isStarted && !root.preferenceStore.isStaged("redesign-subtitle-delay") ? Player.subtitleDelayMS / 1000 : Number(root.preferenceStore.value("redesign-subtitle-delay")) / 1000
+                        }
+                        onMoved: value => root.preferenceStore.stage("redesign-subtitle-delay", Math.round(value * 1000))
                     }
                     RedesignSettingSlider {
                         Layout.fillWidth: true
@@ -124,8 +127,11 @@ C.Pane {
                         label: qsTr("Subtitle Speed"); suffix: " fps"; decimals: 3
                         from: 0; to: 60; stepSize: 0.001
                         resetValue: 0; minimumValueText: qsTr("Automatic")
-                        currentValue: Player.subtitleFPS
-                        onMoved: value => Player.subtitleFPS = value
+                        currentValue: {
+                            root.preferenceStore.revision
+                            return Player.isStarted && !root.preferenceStore.isStaged("sub-fps") ? Player.subtitleFPS : Number(root.preferenceStore.value("sub-fps"))
+                        }
+                        onMoved: value => root.preferenceStore.stage("sub-fps", value)
                     }
                     RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Subtitle font, size and appearance"); text: caption; onClicked: DialogsProvider.prefsDialog() }
                 }

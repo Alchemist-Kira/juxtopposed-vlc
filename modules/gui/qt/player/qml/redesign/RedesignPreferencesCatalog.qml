@@ -122,7 +122,7 @@ QtObject {
                 ["freetype-shadow-color", qsTr("Shadow color")], ["freetype-shadow-distance", qsTr("Shadow distance")],
                 ["freetype-background-color", qsTr("Background color")],
                 ["freetype-background-opacity", qsTr("Background opacity"), {editor: "slider", from: 0, to: 100, factor: 100/255, suffix: "%"}] ] },
-            { title: qsTr("Timing"), rows: [ ["sub-delay", qsTr("Subtitle delay"), {editor: "slider", from: -5, to: 5, factor: 0.1, step: 0.1, suffix: " s"}] ] },
+            { title: qsTr("Timing"), rows: [ ["redesign-subtitle-delay", qsTr("Subtitle delay"), {editor: "slider", from: -10, to: 10, factor: 0.001, step: 0.001, decimals: 3, suffix: " s"}] ] },
             { title: qsTr("On-Screen Messages"), rows: [ ["osd", qsTr("Show feedback for shortcuts")], ["video-title-show", qsTr("Show filename when a video starts")],
                 ["video-title-timeout", qsTr("Show filename for"), {editor: "slider", from: 0, to: 10, factor: 0.001, step: 0.1, suffix: " s"}] ] } ],
         library: [

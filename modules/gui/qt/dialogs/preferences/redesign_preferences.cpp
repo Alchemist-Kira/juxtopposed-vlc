@@ -34,7 +34,7 @@ const QStringList& presetOptions()
     static const QStringList names{
         QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
         QStringLiteral("sub-track"), QStringLiteral("sub-track-id"), QStringLiteral("sub-language"),
-        QStringLiteral("audio-desync"), QStringLiteral("sub-delay"), QStringLiteral("sub-fps"),
+        QStringLiteral("audio-desync"), QStringLiteral("sub-delay"), QStringLiteral("sub-delay-ms"), QStringLiteral("sub-fps"),
         QStringLiteral("stereo-mode"), QStringLiteral("mix-mode"), QStringLiteral("audio-spatial"), QStringLiteral("audio-spatial-mode"),
         QStringLiteral("audio-filter"), QStringLiteral("equalizer-preset"), QStringLiteral("equalizer-bands"),
         QStringLiteral("equalizer-preamp"), QStringLiteral("equalizer-2pass"), QStringLiteral("norm-max-level"),
@@ -244,6 +244,23 @@ QVariantMap RedesignPreferences::playerPresetOptions() const
         const auto current = value(name);
         if (current.isValid()) options.insert(name, current);
     }
+    if (m_ctx) {
+        auto* player = m_ctx->getIntf()->p_player;
+        vlc_player_Lock(player);
+        if (vlc_player_IsStarted(player)) {
+            // Shortcuts can change timing without writing the defaults. Capture
+            // the values the viewer is using, while preserving staged edits.
+            if (!isStaged(QStringLiteral("audio-desync")))
+                options.insert(QStringLiteral("audio-desync"), QVariant::fromValue<qlonglong>(MS_FROM_VLC_TICK(vlc_player_GetAudioDelay(player))));
+            if (!isStaged(QStringLiteral("redesign-subtitle-delay"))) {
+                options.insert(QStringLiteral("sub-delay"), 0);
+                options.insert(QStringLiteral("sub-delay-ms"), QVariant::fromValue<qlonglong>(MS_FROM_VLC_TICK(vlc_player_GetSubtitleDelay(player))));
+            }
+            if (!isStaged(QStringLiteral("sub-fps")))
+                options.insert(QStringLiteral("sub-fps"), vlc_player_GetAssociatedSubsFPS(player));
+        }
+        vlc_player_Unlock(player);
+    }
     return options;
 }
 
@@ -382,8 +399,9 @@ bool RedesignPreferences::stagePlayerPresetOptions(const QVariantMap& options)
     for (auto it = options.cbegin(); it != options.cend(); ++it) {
         if (it.key().startsWith(QLatin1String("audio-spatial")) && !module_exists("spatialaudio")) continue;
         if (!config_FindConfig(it.key().toUtf8().constData())) continue;
-        if (it.value() == read(it.key().toUtf8())) m_edits.remove(it.key());
-        else m_edits.insert(it.key(), it.value());
+        // Reapply even an unchanged default: a shortcut may have changed the
+        // live output since this configuration was saved.
+        m_edits.insert(it.key(), it.value());
     }
     if (!m_presetTransaction) {
         m_editsBeforePreset = edits;
@@ -449,6 +467,8 @@ bool RedesignPreferences::deletePlayerPreset(const QString& id)
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-delay"))
+        return value(QStringLiteral("sub-delay")).toLongLong() * 100 + value(QStringLiteral("sub-delay-ms")).toLongLong();
     if (name == QLatin1String("redesign-equalizer-preset")) {
         if (!value(QStringLiteral("filter:audio-filter:equalizer")).toBool()) return QString();
         const auto preset = value(QStringLiteral("equalizer-preset")).toString();
@@ -506,8 +526,22 @@ QVariant RedesignPreferences::value(const QString& name) const
     return it == m_edits.cend() ? read(name.toUtf8()) : *it;
 }
 
+bool RedesignPreferences::isStaged(const QString& name) const
+{
+    if (name == QLatin1String("redesign-subtitle-delay"))
+        return m_edits.contains(QStringLiteral("sub-delay")) || m_edits.contains(QStringLiteral("sub-delay-ms"));
+    return m_edits.contains(name);
+}
+
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-delay")) {
+        auto description = describe(QStringLiteral("sub-delay-ms"));
+        description.insert(QStringLiteral("value"), value(name));
+        description.insert(QStringLiteral("defaultValue"), 0);
+        description.insert(QStringLiteral("help"), qtr("Positive values show subtitles later. Negative values show subtitles earlier."));
+        return description;
+    }
     if (name == QLatin1String("redesign-equalizer-preset")) {
         auto result = describe(QStringLiteral("equalizer-preset"));
         if (result.isEmpty()) return {};
@@ -651,6 +685,10 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-subtitle-delay")) {
+        if (!stage(QStringLiteral("sub-delay-ms"), proposed)) return false;
+        return stage(QStringLiteral("sub-delay"), 0);
+    }
     if (name == QLatin1String("redesign-equalizer-preset")) {
         const auto preset = proposed.toString();
         if (preset.isEmpty()) return stage(QStringLiteral("filter:audio-filter:equalizer"), false);
@@ -880,6 +918,10 @@ bool RedesignPreferences::save()
     vlc_player_Lock(player);
     if (previous.contains(QStringLiteral("audio-desync")))
         vlc_player_SetAudioDelay(player, VLC_TICK_FROM_MS(value(QStringLiteral("audio-desync")).toLongLong()), VLC_PLAYER_WHENCE_ABSOLUTE);
+    if (previous.contains(QStringLiteral("sub-delay")) || previous.contains(QStringLiteral("sub-delay-ms")))
+        vlc_player_SetSubtitleDelay(player, VLC_TICK_FROM_MS(value(QStringLiteral("redesign-subtitle-delay")).toLongLong()), VLC_PLAYER_WHENCE_ABSOLUTE);
+    if (previous.contains(QStringLiteral("sub-fps")))
+        vlc_player_SetAssociatedSubsFPS(player, value(QStringLiteral("sub-fps")).toFloat());
     for (const auto category : {AUDIO_ES, SPU_ES}) {
         const QString option = category == AUDIO_ES ? QStringLiteral("audio-language") : QStringLiteral("sub-language");
         if (previous.contains(option)) {
@@ -1021,12 +1063,14 @@ QVariantList RedesignPreferences::catalog(const QString& category, const QString
 {
     QVariantList result;
     for (const auto& entry : m_catalog) {
+        if (entry.name == QLatin1String("sub-delay-ms")) continue;
         if (!search.isEmpty()) {
             if (!entry.name.contains(search, Qt::CaseInsensitive) && !entry.title.contains(search, Qt::CaseInsensitive)) continue;
         } else if (entry.category != category) continue;
         const bool track = entry.name == QLatin1String("audio-track") || entry.name == QLatin1String("sub-track");
         const bool language = entry.name == QLatin1String("audio-language") || entry.name == QLatin1String("sub-language");
-        const auto name = track || language ? QStringLiteral("redesign-") + entry.name : entry.name;
+        const auto name = entry.name == QLatin1String("sub-delay") ? QStringLiteral("redesign-subtitle-delay")
+            : track || language ? QStringLiteral("redesign-") + entry.name : entry.name;
         result.append(QVariantMap{{QStringLiteral("name"), name}, {QStringLiteral("title"), entry.title}});
     }
     return result;

@@ -19,9 +19,52 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QUuid>
 #include "util/vlchotkeyconverter.hpp"
 
 namespace {
+const QString presetOption = QStringLiteral("qt-player-presets");
+
+const QStringList& presetOptions()
+{
+    // Only media presentation belongs in a show preset. Do not capture devices,
+    // file paths, credentials, interface settings or other machine preferences.
+    static const QStringList names{
+        QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
+        QStringLiteral("sub-track"), QStringLiteral("sub-track-id"), QStringLiteral("sub-language"),
+        QStringLiteral("audio-desync"), QStringLiteral("sub-delay"), QStringLiteral("sub-fps"),
+        QStringLiteral("stereo-mode"), QStringLiteral("mix-mode"), QStringLiteral("audio-spatial"), QStringLiteral("audio-spatial-mode"),
+        QStringLiteral("audio-filter"), QStringLiteral("equalizer-preset"), QStringLiteral("equalizer-bands"),
+        QStringLiteral("equalizer-preamp"), QStringLiteral("equalizer-2pass"), QStringLiteral("norm-max-level"),
+        QStringLiteral("compressor-rms-peak"), QStringLiteral("compressor-attack"), QStringLiteral("compressor-release"),
+        QStringLiteral("compressor-threshold"), QStringLiteral("compressor-ratio"), QStringLiteral("compressor-knee"), QStringLiteral("compressor-makeup-gain"),
+        QStringLiteral("video-filter"), QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
+        QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"),
+        QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
+        QStringLiteral("subsdec-formatted"), QStringLiteral("sub-margin"), QStringLiteral("sub-text-scale"),
+        QStringLiteral("subsdelay-factor"), QStringLiteral("sub-filter"),
+        QStringLiteral("freetype-font"), QStringLiteral("freetype-fontsize"), QStringLiteral("freetype-rel-fontsize"),
+        QStringLiteral("freetype-color"), QStringLiteral("freetype-opacity"), QStringLiteral("freetype-bold"),
+        QStringLiteral("freetype-outline-thickness"), QStringLiteral("freetype-outline-color"), QStringLiteral("freetype-outline-opacity"),
+        QStringLiteral("freetype-shadow-angle"), QStringLiteral("freetype-shadow-distance"), QStringLiteral("freetype-shadow-color"),
+        QStringLiteral("freetype-shadow-opacity"), QStringLiteral("freetype-background-color"), QStringLiteral("freetype-background-opacity")
+    };
+    return names;
+}
+
+bool validPresetName(const QString& name, const QVariantList& presets, const QString& except = {})
+{
+    if (name.isEmpty() || name.size() > 80 || name.compare(qtr("Default Preset"), Qt::CaseInsensitive) == 0
+        || name.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1f]")))) return false;
+    return std::none_of(presets.cbegin(), presets.cend(), [&](const QVariant& row) {
+        const auto preset = row.toMap();
+        return preset.value(QStringLiteral("id")).toString() != except
+            && preset.value(QStringLiteral("name")).toString().compare(name, Qt::CaseInsensitive) == 0;
+    });
+}
+
 QString trackOption(const QString& name)
 {
     if (name == QLatin1String("redesign-audio-track")) return QStringLiteral("audio-track");
@@ -125,7 +168,9 @@ void RedesignPreferences::setAutoSave(bool enabled)
 void RedesignPreferences::setCtx(MainCtx* ctx)
 {
     if (m_ctx == ctx) return;
+    if (m_ctx) disconnect(m_ctx, &MainCtx::redesignPlayerPreferencesChanged, this, &RedesignPreferences::refresh);
     m_ctx = ctx;
+    if (m_ctx) connect(m_ctx, &MainCtx::redesignPlayerPreferencesChanged, this, &RedesignPreferences::refresh);
     emit ctxChanged();
 }
 
@@ -189,6 +234,198 @@ QVariantList RedesignPreferences::audioDeviceChoices() const
 void RedesignPreferences::refresh()
 {
     ++m_revision; emit changed();
+}
+
+QVariantMap RedesignPreferences::playerPresetOptions() const
+{
+    QVariantMap options;
+    for (const auto& name : presetOptions()) {
+        if (name.startsWith(QLatin1String("audio-spatial")) && !module_exists("spatialaudio")) continue;
+        const auto current = value(name);
+        if (current.isValid()) options.insert(name, current);
+    }
+    return options;
+}
+
+QVariantMap RedesignPreferences::playerPresetState() const
+{
+    const auto text = value(presetOption).toString().toUtf8();
+    if (text.isEmpty()) return {{QStringLiteral("version"), 1}, {QStringLiteral("selected"), QString()},
+        {QStringLiteral("default"), playerPresetOptions()}, {QStringLiteral("presets"), QVariantList()}};
+    if (text.size() > 1024 * 1024) return {};
+    const auto document = QJsonDocument::fromJson(text);
+    if (!document.isObject()) return {};
+    const auto state = document.object().toVariantMap();
+    if (state.value(QStringLiteral("version")).toInt() != 1
+        || state.value(QStringLiteral("default")).metaType().id() != QMetaType::QVariantMap
+        || state.value(QStringLiteral("presets")).metaType().id() != QMetaType::QVariantList) return {};
+    const auto validOptions = [](const QVariant& value) {
+        if (value.metaType().id() != QMetaType::QVariantMap) return false;
+        const auto options = value.toMap();
+        for (auto it = options.cbegin(); it != options.cend(); ++it) {
+            if (!presetOptions().contains(it.key()) || it.value().isNull()
+                || it.value().metaType().id() == QMetaType::QVariantMap || it.value().metaType().id() == QMetaType::QVariantList) return false;
+        }
+        return true;
+    };
+    if (!validOptions(state.value(QStringLiteral("default")))) return {};
+    const auto presets = state.value(QStringLiteral("presets")).toList();
+    if (presets.size() > 128) return {};
+    QSet<QString> ids;
+    for (const auto& row : presets) {
+        const auto preset = row.toMap();
+        const auto id = preset.value(QStringLiteral("id")).toString();
+        const auto name = preset.value(QStringLiteral("name")).toString();
+        if (id.isEmpty() || ids.contains(id) || !validPresetName(name, presets, id)
+            || !validOptions(preset.value(QStringLiteral("options")))) return {};
+        ids.insert(id);
+    }
+    const auto selected = state.value(QStringLiteral("selected")).toString();
+    if (!selected.isEmpty() && !ids.contains(selected)) return {};
+    return state;
+}
+
+QVariantList RedesignPreferences::playerPresets() const
+{
+    QVariantList result;
+    for (const auto& row : playerPresetState().value(QStringLiteral("presets")).toList()) {
+        const auto preset = row.toMap();
+        result.append(QVariantMap{{QStringLiteral("id"), preset.value(QStringLiteral("id"))},
+            {QStringLiteral("name"), preset.value(QStringLiteral("name"))}});
+    }
+    return result;
+}
+
+QString RedesignPreferences::selectedPlayerPreset() const
+{
+    return playerPresetState().value(QStringLiteral("selected")).toString();
+}
+
+bool RedesignPreferences::playerPresetError(const QString& message)
+{
+    m_error = message; ++m_revision; emit changed(); return false;
+}
+
+bool RedesignPreferences::storePlayerPresetState(const QVariantMap& state)
+{
+    m_edits.insert(presetOption, QString::fromUtf8(QJsonDocument::fromVariant(state).toJson(QJsonDocument::Compact)));
+    ++m_revision; emit changed();
+    return save();
+}
+
+bool RedesignPreferences::createPlayerPreset(const QString& proposed)
+{
+    auto state = playerPresetState();
+    if (state.isEmpty()) return playerPresetError(qtr("VLC cannot read the saved presets."));
+    auto presets = state.value(QStringLiteral("presets")).toList();
+    const auto name = proposed.trimmed();
+    if (!validPresetName(name, presets)) return playerPresetError(qtr("Enter a unique preset name with 1 to 80 characters."));
+    if (presets.size() >= 128) return playerPresetError(qtr("Delete a preset before you add another preset."));
+    const auto id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    presets.append(QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("name"), name}, {QStringLiteral("options"), playerPresetOptions()}});
+    state.insert(QStringLiteral("presets"), presets);
+    state.insert(QStringLiteral("selected"), id);
+    return storePlayerPresetState(state);
+}
+
+bool RedesignPreferences::selectPlayerPreset(const QString& id)
+{
+    // Finish any edits to the active preset before switching to another one.
+    if (dirty() && !save()) return false;
+    auto state = playerPresetState();
+    if (state.isEmpty()) return playerPresetError(qtr("VLC cannot read the saved presets."));
+    QVariantMap options = state.value(QStringLiteral("default")).toMap();
+    if (!id.isEmpty()) {
+        const auto presets = state.value(QStringLiteral("presets")).toList();
+        const auto it = std::find_if(presets.cbegin(), presets.cend(), [&](const QVariant& row) { return row.toMap().value(QStringLiteral("id")).toString() == id; });
+        if (it == presets.cend()) return playerPresetError(qtr("This preset is no longer available."));
+        const auto saved = it->toMap().value(QStringLiteral("options")).toMap();
+        for (auto it = saved.cbegin(); it != saved.cend(); ++it) options.insert(it.key(), it.value());
+    }
+    if (!stagePlayerPresetOptions(options)) return false;
+    state.insert(QStringLiteral("selected"), id);
+    return storePlayerPresetState(state);
+}
+
+bool RedesignPreferences::stagePlayerPresetOptions(const QVariantMap& options)
+{
+    // Validate before changing the transaction. A preset from another build can
+    // contain options for modules that are not installed here; retain those in
+    // the manifest and apply the options that this build supports.
+    const auto edits = m_edits;
+    const auto invalid = m_invalid;
+    for (auto it = options.cbegin(); it != options.cend(); ++it) {
+        if (it.key().startsWith(QLatin1String("audio-spatial")) && !module_exists("spatialaudio")) continue;
+        if (!config_FindConfig(it.key().toUtf8().constData())) continue;
+        if (!stage(it.key(), it.value())) {
+            m_edits = edits; m_invalid = invalid; m_saveTimer.stop();
+            return playerPresetError(qtr("VLC cannot apply this preset. Check its saved settings."));
+        }
+    }
+    // Some editors stage dependent settings (for example, an equalizer curve).
+    // Restore the validated snapshot exactly after those editor side effects.
+    for (auto it = options.cbegin(); it != options.cend(); ++it) {
+        if (it.key().startsWith(QLatin1String("audio-spatial")) && !module_exists("spatialaudio")) continue;
+        if (!config_FindConfig(it.key().toUtf8().constData())) continue;
+        if (it.value() == read(it.key().toUtf8())) m_edits.remove(it.key());
+        else m_edits.insert(it.key(), it.value());
+    }
+    return true;
+}
+
+bool RedesignPreferences::renamePlayerPreset(const QString& id, const QString& proposed)
+{
+    auto state = playerPresetState();
+    if (state.isEmpty()) return playerPresetError(qtr("VLC cannot read the saved presets."));
+    auto presets = state.value(QStringLiteral("presets")).toList();
+    const auto name = proposed.trimmed();
+    if (!validPresetName(name, presets, id)) return playerPresetError(qtr("Enter a unique preset name with 1 to 80 characters."));
+    for (auto& row : presets) {
+        auto preset = row.toMap();
+        if (preset.value(QStringLiteral("id")).toString() != id) continue;
+        preset.insert(QStringLiteral("name"), name); row = preset;
+        state.insert(QStringLiteral("presets"), presets);
+        return storePlayerPresetState(state);
+    }
+    return playerPresetError(qtr("This preset is no longer available."));
+}
+
+bool RedesignPreferences::duplicatePlayerPreset(const QString& id, const QString& proposed)
+{
+    auto state = playerPresetState();
+    if (state.isEmpty()) return playerPresetError(qtr("VLC cannot read the saved presets."));
+    auto presets = state.value(QStringLiteral("presets")).toList();
+    const auto name = proposed.trimmed();
+    if (!validPresetName(name, presets)) return playerPresetError(qtr("Enter a unique preset name with 1 to 80 characters."));
+    if (presets.size() >= 128) return playerPresetError(qtr("Delete a preset before you add another preset."));
+    for (const auto& row : std::as_const(presets)) {
+        auto preset = row.toMap();
+        if (preset.value(QStringLiteral("id")).toString() != id) continue;
+        preset.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+        preset.insert(QStringLiteral("name"), name);
+        presets.append(preset);
+        state.insert(QStringLiteral("presets"), presets);
+        return storePlayerPresetState(state);
+    }
+    return playerPresetError(qtr("This preset is no longer available."));
+}
+
+bool RedesignPreferences::deletePlayerPreset(const QString& id)
+{
+    auto state = playerPresetState();
+    if (state.isEmpty()) return playerPresetError(qtr("VLC cannot read the saved presets."));
+    auto presets = state.value(QStringLiteral("presets")).toList();
+    const auto it = std::find_if(presets.begin(), presets.end(), [&](const QVariant& row) { return row.toMap().value(QStringLiteral("id")).toString() == id; });
+    if (it == presets.end()) return playerPresetError(qtr("This preset is no longer available."));
+    presets.erase(it);
+    // Deleting the active preset restores the user's default presentation in
+    // the same transaction. Deleting another preset does not affect playback.
+    if (state.value(QStringLiteral("selected")).toString() == id) {
+        if (!stagePlayerPresetOptions(state.value(QStringLiteral("default")).toMap())) return false;
+        state.insert(QStringLiteral("selected"), QString());
+    }
+    state.insert(QStringLiteral("presets"), presets);
+    return storePlayerPresetState(state);
 }
 
 QVariant RedesignPreferences::value(const QString& name) const
@@ -563,6 +800,34 @@ bool RedesignPreferences::save()
 {
     m_saveTimer.stop();
     if (!m_ctx || !m_invalid.isEmpty()) return false;
+    const bool presentationChanged = std::any_of(m_edits.keyBegin(), m_edits.keyEnd(), [](const QString& name) {
+        return presetOptions().contains(name);
+    });
+    if (presentationChanged && (!value(presetOption).toString().isEmpty() || m_editPlayerPreset)) {
+        auto state = playerPresetState();
+        if (state.isEmpty() && m_editPlayerPreset) return playerPresetError(qtr("VLC cannot read the saved presets."));
+        if (!state.isEmpty()) {
+            const auto selected = state.value(QStringLiteral("selected")).toString();
+            if (m_editPlayerPreset && !selected.isEmpty()) {
+                auto presets = state.value(QStringLiteral("presets")).toList();
+                for (auto& row : presets) {
+                    auto preset = row.toMap();
+                    if (preset.value(QStringLiteral("id")).toString() != selected) continue;
+                    auto options = preset.value(QStringLiteral("options")).toMap();
+                    const auto current = playerPresetOptions();
+                    for (auto it = current.cbegin(); it != current.cend(); ++it) options.insert(it.key(), it.value());
+                    preset.insert(QStringLiteral("options"), options); row = preset;
+                }
+                state.insert(QStringLiteral("presets"), presets);
+            } else {
+                auto defaults = state.value(QStringLiteral("default")).toMap();
+                for (auto it = m_edits.cbegin(); it != m_edits.cend(); ++it)
+                    if (presetOptions().contains(it.key())) defaults.insert(it.key(), it.value());
+                state.insert(QStringLiteral("default"), defaults);
+            }
+            m_edits.insert(presetOption, QString::fromUtf8(QJsonDocument::fromVariant(state).toJson(QJsonDocument::Compact)));
+        }
+    }
     QVariantMap previous;
     for (auto it = m_edits.cbegin(); it != m_edits.cend(); ++it) {
         previous.insert(it.key(), read(it.key().toUtf8()));

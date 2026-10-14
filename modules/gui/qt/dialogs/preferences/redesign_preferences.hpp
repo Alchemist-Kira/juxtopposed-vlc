@@ -19,6 +19,10 @@ class RedesignPreferences : public QObject
     Q_PROPERTY(bool dirty READ dirty NOTIFY changed FINAL)
     Q_PROPERTY(int revision READ revision NOTIFY changed FINAL)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY changed FINAL)
+    Q_PROPERTY(bool editPlayerPreset MEMBER m_editPlayerPreset)
+    Q_PROPERTY(QVariantList playerPresets READ playerPresets NOTIFY changed FINAL)
+    Q_PROPERTY(QString selectedPlayerPreset READ selectedPlayerPreset NOTIFY changed FINAL)
+    Q_PROPERTY(bool pendingPlayerPreset READ pendingPlayerPreset NOTIFY changed FINAL)
 public:
     explicit RedesignPreferences(QObject* parent = nullptr);
     MainCtx* ctx() const { return m_ctx; }
@@ -29,6 +33,14 @@ public:
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
     Q_INVOKABLE void refresh();
+    QVariantList playerPresets() const;
+    QString selectedPlayerPreset() const;
+    bool pendingPlayerPreset() const { return m_edits.contains(QStringLiteral("qt-player-presets")); }
+    Q_INVOKABLE bool createPlayerPreset(const QString& name);
+    Q_INVOKABLE bool selectPlayerPreset(const QString& id);
+    Q_INVOKABLE bool renamePlayerPreset(const QString& id, const QString& name);
+    Q_INVOKABLE bool duplicatePlayerPreset(const QString& id, const QString& name);
+    Q_INVOKABLE bool deletePlayerPreset(const QString& id);
     Q_INVOKABLE QUrl configurationFolder() const;
     Q_INVOKABLE QVariantList equalizerBands() const;
     Q_INVOKABLE bool setEqualizerBand(int index, double gain);
@@ -56,6 +68,11 @@ private:
     QVariantList audioDeviceChoices() const;
     static QVariant read(const QByteArray& name);
     static void write(const QByteArray& name, const QVariant& value);
+    QVariantMap playerPresetState() const;
+    QVariantMap playerPresetOptions() const;
+    bool storePlayerPresetState(const QVariantMap& state);
+    bool playerPresetError(const QString& message);
+    bool stagePlayerPresetOptions(const QVariantMap& options);
     MainCtx* m_ctx = nullptr;
     QVariantMap m_edits;
     QSet<QString> m_invalid;
@@ -63,6 +80,7 @@ private:
     QString m_error;
     int m_revision = 0;
     bool m_autoSave = false;
+    bool m_editPlayerPreset = false;
     QTimer m_saveTimer;
 };
 #endif

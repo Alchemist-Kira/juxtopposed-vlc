@@ -487,6 +487,10 @@ vlc_module_begin ()
 
     add_string( "qt-accent-color", "default", ACCENT_COLOR_TEXT, ACCENT_COLOR_LONGTEXT )
 
+    // Keep named player presets in the same atomic transaction as their options.
+    add_string( "qt-player-presets", "", "Player settings presets", nullptr )
+        change_private()
+
     cannot_unload_broken_library()
 
     add_submodule ()

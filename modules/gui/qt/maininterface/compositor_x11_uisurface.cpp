@@ -71,7 +71,6 @@ CompositorX11UISurface::CompositorX11UISurface(QWindow* window, QScreen* screen)
     {
         m_backingStore = new QBackingStore(this);
         m_backingStorePainter = new QPainter;
-        m_backingStorePainter->setCompositionMode(QPainter::CompositionMode_Source);
     }
 
     m_uiRenderControl = new CompositorX11RenderControl(window);
@@ -260,6 +259,7 @@ bool CompositorX11UISurface::render()
     {
         m_backingStore->beginPaint(geometry());
         m_backingStorePainter->begin(m_backingStore->paintDevice());
+        m_backingStorePainter->setCompositionMode(QPainter::CompositionMode_Source);
         m_backingStorePainter->drawImage(QPoint(0, 0), m_uiWindow->grabWindow());
         m_backingStorePainter->end();
         m_backingStore->endPaint();

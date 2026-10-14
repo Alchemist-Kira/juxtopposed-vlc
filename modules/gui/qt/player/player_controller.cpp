@@ -33,11 +33,16 @@
 #include <vlc_cxx_helpers.hpp>
 #include <vlc_vout.h>
 #include <vlc_preparser.h>
+#include <vlc_picture.h>
+#include <vlc_block.h>
 
 #include <QFile>
 #include <QDir>
 #include <QSignalMapper>
 #include <QThreadPool>
+#include <QImage>
+#include <QBuffer>
+#include <cmath>
 #ifndef QT_HAS_LIBATOMIC
 #include <QReadLocker>
 #include <QWriteLocker>
@@ -68,6 +73,10 @@ PlayerControllerPrivate::~PlayerControllerPrivate()
     vlc_player_RemoveTimer( m_player, m_player_timer );
     if (m_preparser != nullptr)
         vlc_preparser_Delete(m_preparser);
+    if (m_seekPreparser != nullptr)
+        vlc_preparser_Delete(m_seekPreparser);
+    if (m_seekRequest != nullptr)
+        vlc_preparser_req_Release(m_seekRequest);
 }
 
 bool PlayerControllerPrivate::isCurrentItemSynced()
@@ -1278,6 +1287,10 @@ PlayerController::PlayerController( qt_intf_t *_p_intf )
 {
     connect( &d_ptr->m_position_timer, &QTimer::timeout, this, &PlayerController::updatePositionFromTimer );
     connect( &d_ptr->m_time_timer, &QTimer::timeout, this, &PlayerController::updateTimeFromTimer );
+    connect(this, &PlayerController::inputChanged, this, [this] {
+        cancelSeekPreview();
+        d_ptr->m_seekPreviewCache.clear();
+    });
 }
 
 PlayerController::~PlayerController()
@@ -1285,6 +1298,153 @@ PlayerController::~PlayerController()
 }
 
 // PLAYBACK
+
+QUrl PlayerController::getSeekPreview() const
+{
+    Q_D(const PlayerController);
+    return d->m_seekPreview;
+}
+
+double PlayerController::getSeekPreviewPosition() const
+{
+    Q_D(const PlayerController);
+    return d->m_seekPreviewPosition;
+}
+
+void PlayerController::cancelSeekPreview()
+{
+    Q_D(PlayerController);
+    ++d->m_seekGeneration;
+    d->m_seekPreviewPosition = -1;
+    d->m_pendingSeekPosition = -1;
+    if (d->m_seekRequest) {
+        vlc_preparser_Cancel(d->m_seekPreparser, d->m_seekRequest);
+        vlc_preparser_req_Release(d->m_seekRequest);
+        d->m_seekRequest = nullptr;
+    }
+    if (!d->m_seekPreview.isEmpty()) {
+        d->m_seekPreview = QUrl();
+        emit seekPreviewChanged();
+    }
+}
+
+void PlayerController::requestSeekPreview(double position)
+{
+    Q_D(PlayerController);
+    if (!std::isfinite(position) || position < 0 || position > 1
+        || !d->m_length.valid() || d->m_length.toVLCTick() <= 0 || !isSeekable()) {
+        cancelSeekPreview();
+        return;
+    }
+    if (d->m_seekRequest) {
+        // Finish the current decode, then use only the newest pointer position.
+        // Repeated cancellation can otherwise starve previews during a drag.
+        d->m_pendingSeekPosition = position;
+        return;
+    }
+    ++d->m_seekGeneration;
+
+    SharedInputItem media;
+    {
+        vlc_player_locker lock{d->m_player};
+        if (!d->isCurrentItemSynced()) return;
+        media = d->m_currentItem;
+    }
+    if (!media) return;
+
+    // Half-second buckets prevent a decoder restart for each pointer pixel.
+    const vlc_tick_t length = d->m_length.toVLCTick();
+    const vlc_tick_t time = std::min(length - 1, vlc_tick_t(position * length));
+    const vlc_tick_t bucket = time / VLC_TICK_FROM_MS(500) * VLC_TICK_FROM_MS(500);
+    if (const auto* cached = d->m_seekPreviewCache.object(bucket)) {
+        d->m_seekPreview = cached->image;
+        d->m_seekPreviewPosition = double(cached->time) / length;
+        emit seekPreviewChanged();
+        return;
+    }
+
+    if (!d->m_seekPreparser) {
+        vlc_preparser_cfg cfg{};
+        cfg.types = VLC_PREPARSER_TYPE_THUMBNAIL;
+        cfg.max_thumbnailer_threads = 1;
+        cfg.timeout = VLC_TICK_FROM_SEC(3);
+        cfg.external_process = false;
+        d->m_seekPreparser = vlc_preparser_New(VLC_OBJECT(d->p_intf), &cfg);
+        if (!d->m_seekPreparser) return;
+    }
+
+    struct Request {
+        PlayerControllerPrivate* owner;
+        quint64 generation;
+        vlc_tick_t time;
+        vlc_tick_t length;
+        double position;
+    };
+    static const vlc_thumbnailer_cbs callbacks = {
+        [](vlc_preparser_req*, int status, picture_t* picture, void* data) {
+            std::unique_ptr<Request> request(static_cast<Request*>(data));
+            auto* owner = request->owner;
+            QUrl imageUrl;
+            vlc_tick_t decodedTime = request->time;
+            if (status == VLC_SUCCESS && picture) {
+                msg_Dbg(owner->p_intf, "Seek preview: requested %" PRId64 ", decoded %" PRId64,
+                        request->time, picture->date);
+                // Some demuxers return a nearby frame even for precise seeks.
+                // Label the decoded frame, rather than the requested position.
+                if (picture->date >= VLC_TICK_0)
+                    decodedTime = std::clamp(picture->date - VLC_TICK_0, vlc_tick_t(0), request->length);
+                block_t* pixels = nullptr;
+                video_format_t format{};
+                const auto& source = picture->format;
+                const double aspect = double(source.i_visible_width) / std::max(1u, source.i_visible_height)
+                    * (source.i_sar_num && source.i_sar_den ? double(source.i_sar_num) / source.i_sar_den : 1.0);
+                const bool portrait = aspect < 1;
+                if (picture_Export(VLC_OBJECT(owner->p_intf), &pixels, &format, picture,
+                                   VLC_CODEC_RGBA, portrait ? 0 : 252, portrait ? 252 : 0, false) == VLC_SUCCESS) {
+                    if (format.i_width > 0 && format.i_width <= 252
+                        && format.i_height > 0 && format.i_height <= 252
+                        && pixels->i_buffer >= size_t(format.i_width) * format.i_height * 4) {
+                        QImage image(pixels->p_buffer, format.i_width, format.i_height,
+                                     format.i_width * 4, QImage::Format_RGBA8888);
+                        QByteArray png;
+                        QBuffer buffer(&png);
+                        buffer.open(QIODevice::WriteOnly);
+                        if (image.save(&buffer, "PNG"))
+                            imageUrl = QUrl(QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.toBase64()));
+                    }
+                    block_Release(pixels);
+                }
+            }
+            owner->callAsync([owner, generation = request->generation, time = request->time, decodedTime,
+                              length = request->length, position = request->position, imageUrl] {
+                if (owner->m_seekGeneration != generation) return;
+                vlc_preparser_req_Release(owner->m_seekRequest);
+                owner->m_seekRequest = nullptr;
+                owner->m_seekPreviewCache.insert(time, new PlayerControllerPrivate::SeekPreviewFrame{imageUrl, decodedTime});
+                owner->m_seekPreview = imageUrl;
+                owner->m_seekPreviewPosition = double(decodedTime) / length;
+                emit owner->q_func()->seekPreviewChanged();
+                const double pending = std::exchange(owner->m_pendingSeekPosition, -1);
+                if (pending >= 0 && pending != position)
+                    owner->q_func()->requestSeekPreview(pending);
+            });
+        }
+    };
+    vlc_thumbnailer_arg args{};
+    args.seek.type = decltype(args.seek)::VLC_THUMBNAILER_SEEK_TIME;
+    args.seek.time = bucket;
+    args.seek.speed = decltype(args.seek)::VLC_THUMBNAILER_SEEK_PRECISE;
+    auto request = std::make_unique<Request>(Request{d, d->m_seekGeneration, bucket, length, position});
+    d->m_seekRequest = vlc_preparser_req_NewThumbnail(d->m_seekPreparser, media.get(), &args, &callbacks, request.get());
+    if (!d->m_seekRequest) return;
+    // Callbacks may run before Submit returns, so transfer their context first.
+    Request* context = request.release();
+    if (vlc_preparser_Submit(d->m_seekPreparser, d->m_seekRequest) != VLC_SUCCESS) {
+        delete context;
+        vlc_preparser_req_Release(d->m_seekRequest);
+        d->m_seekRequest = nullptr;
+    }
+}
 
 vlc_player_t * PlayerController::getPlayer() const
 {

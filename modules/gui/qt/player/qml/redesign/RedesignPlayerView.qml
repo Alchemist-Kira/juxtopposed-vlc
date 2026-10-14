@@ -44,6 +44,11 @@ FocusScope {
     property url artwork
     property bool resumeAvailable: false
     property var timeForPosition: function(position) { return "" }
+    property url seekPreviewImage
+    property real seekPreviewImagePosition: -1
+    signal seekPreviewRequested(real position)
+    signal seekPreviewEnded()
+    function refreshSeekPreview() { seek.refreshPreview() }
     property Component titleBarDragContent
     property Component videoContent
     property Component libraryContent
@@ -442,6 +447,11 @@ FocusScope {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 enabled: root.seekable
                 timeForPosition: root.timeForPosition
+                previewEnabled: root.started && root.hasVideo && !root.presentationOnly
+                previewImage: root.seekPreviewImage
+                previewImagePosition: root.seekPreviewImagePosition
+                onPreviewRequested: position => root.seekPreviewRequested(position)
+                onPreviewEnded: root.seekPreviewEnded()
                 Binding on value { when: !seek.pressed; value: root.position; restoreMode: Binding.RestoreBindingOrValue }
                 onMoved: root.seekRequested(value)
             }

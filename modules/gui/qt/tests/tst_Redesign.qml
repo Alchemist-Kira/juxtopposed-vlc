@@ -23,6 +23,7 @@ TestCase {
         volume: 0.5
         timeText: "00:02:10"
         lengthText: "00:25:40"
+        timeForPosition: position => Number(position).toFixed(3)
         onTogglePlayback: playing = !playing
         onSeekRequested: value => position = value
         onVolumeRequested: value => volume = value
@@ -64,6 +65,8 @@ TestCase {
     SignalSpy { id: trackSelectionSpy; target: trackPicker; signalName: "selectionRequested" }
     SignalSpy { id: trackPreferencesSpy; target: trackPicker; signalName: "preferencesRequested" }
     SignalSpy { id: seekSpy; target: player; signalName: "seekRequested" }
+    SignalSpy { id: previewSpy; target: player; signalName: "seekPreviewRequested" }
+    SignalSpy { id: previewEndSpy; target: player; signalName: "seekPreviewEnded" }
     SignalSpy { id: audioSpy; target: player; signalName: "audioTracksRequested" }
     SignalSpy { id: subtitleSpy; target: player; signalName: "subtitleTracksRequested" }
 
@@ -112,9 +115,15 @@ TestCase {
         player.autoHideMode = 1
         player.lightTheme = false
         player.scaleFactor = 1
+        player.seekPreviewImage = ""
+        player.seekPreviewImagePosition = -1
+        player.forceActiveFocus()
+        mouseMove(player, 20, 200)
         testCase.width = 1280
         testCase.height = 720
         seekSpy.clear()
+        previewSpy.clear()
+        previewEndSpy.clear()
         audioSpy.clear()
         subtitleSpy.clear()
         tryCompare(findChild(player, "redesignLibraryPanel"), "reveal", 0)
@@ -266,6 +275,69 @@ TestCase {
         const before = player.position
         keyClick(Qt.Key_Right)
         verify(player.position > before)
+    }
+    readonly property url previewFixture: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAIAAAC0SDtlAAAAFUlEQVR4nGP8z0AaYCJR/agG2mgAAMeRARHH28OHAAAAAElFTkSuQmCC"
+    function test_seekHoverPreviewDoesNotSeekOrMoveTheVideo() {
+        const slider = findChild(player, "seekBar")
+        const popup = findChild(slider, "seekThumbnailPopup")
+        const bounds = videoBounds()
+        const before = player.position
+        mouseMove(slider, slider.width / 2, slider.height / 2)
+        tryVerify(() => previewSpy.count > 0)
+        compare(seekSpy.count, 0); compare(player.position, before)
+        player.seekPreviewImagePosition = slider.previewPosition
+        player.seekPreviewImage = previewFixture
+        tryCompare(popup, "visible", true)
+        compare(popup.width, 272); compare(popup.height, 189)
+        compare(videoBounds(), bounds)
+        mouseMove(player, 20, 200)
+        tryCompare(popup, "visible", false)
+        verify(previewEndSpy.count > 0)
+    }
+    function test_seekPreviewKeepsItsOwnTimestampWhileLoadingAndStopsForAudio() {
+        const slider = findChild(player, "seekBar")
+        const popup = findChild(slider, "seekThumbnailPopup")
+        mouseMove(slider, slider.width * .25, slider.height / 2)
+        tryVerify(() => previewSpy.count > 0)
+        player.seekPreviewImagePosition = slider.previewPosition
+        player.seekPreviewImage = previewFixture
+        tryCompare(popup, "visible", true)
+        const time = findChild(popup.contentItem, "seekThumbnailTime")
+        const previousTime = time.text
+        mouseMove(slider, slider.width * .75, slider.height / 2)
+        verify(popup.visible)
+        compare(time.text, previousTime)
+        player.seekPreviewImagePosition = slider.previewPosition
+        verify(popup.visible)
+        verify(time.text !== previousTime)
+        const before = previewSpy.count
+        player.refreshSeekPreview()
+        tryVerify(() => previewSpy.count > before)
+        player.hasVideo = false
+        tryCompare(popup, "visible", false)
+        const count = previewSpy.count
+        mouseMove(slider, slider.width / 2, slider.height / 2)
+        wait(200)
+        compare(previewSpy.count, count)
+    }
+    function test_seekPreviewFitsWindowEdgesAndWorksDuringScrubbing() {
+        testCase.width = 640
+        const slider = findChild(player, "seekBar")
+        const popup = findChild(slider, "seekThumbnailPopup")
+        wait(30)
+        mousePress(slider, slider.width - 2, slider.height / 2)
+        tryVerify(() => previewSpy.count > 0)
+        player.seekPreviewImagePosition = slider.previewPosition
+        player.seekPreviewImage = previewFixture
+        tryCompare(popup, "visible", true)
+        const point = popup.contentItem.parent.mapToItem(testCase, 0, 0)
+        verify(point.x >= 0); verify(point.x + popup.width <= testCase.width)
+        mouseMove(slider, 2, slider.height / 2)
+        tryVerify(() => previewSpy.count > 1)
+        player.seekPreviewImagePosition = slider.previewPosition
+        tryCompare(popup, "visible", true)
+        verify(popup.contentItem.parent.mapToItem(testCase, 0, 0).x >= 0)
+        mouseRelease(slider, 2, slider.height / 2)
     }
     function videoBounds() {
         const viewport = findChild(player, "redesignViewport")

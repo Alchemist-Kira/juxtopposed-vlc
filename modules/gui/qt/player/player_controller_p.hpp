@@ -30,6 +30,7 @@
 #include <QUrl>
 #include <QByteArray>
 #include <QPair>
+#include <QCache>
 
 #include <optional>
 
@@ -39,6 +40,7 @@
 #endif
 
 typedef struct vlc_preparser_t vlc_preparser_t;
+typedef struct vlc_preparser_req vlc_preparser_req;
 
 class PlayerControllerPrivate {
     Q_DISABLE_COPY(PlayerControllerPrivate)
@@ -92,6 +94,18 @@ public:
     qt_intf_t           *p_intf;
     vlc_player_t            *m_player;
     vlc_preparser_t         *m_preparser = nullptr;
+    vlc_preparser_t *m_seekPreparser = nullptr;
+    vlc_preparser_req *m_seekRequest = nullptr;
+    quint64 m_seekGeneration = 0;
+    QUrl m_seekPreview;
+    double m_seekPreviewPosition = -1;
+    double m_pendingSeekPosition = -1;
+    struct SeekPreviewFrame {
+        QUrl image;
+        vlc_tick_t time;
+    };
+    // Cache at most 32 thumbnails, each at most 252 x 252 pixels.
+    QCache<vlc_tick_t, SeekPreviewFrame> m_seekPreviewCache{32};
 
     //callbacks
     vlc_player_listener_id* m_player_listener = nullptr;

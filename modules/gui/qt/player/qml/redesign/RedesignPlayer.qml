@@ -16,6 +16,10 @@ FocusScope {
     readonly property real positionSliderY: view.positionSliderY
     readonly property ColorContext colorContext: ColorContext { palette: VLCStyle.palette; colorSet: ColorContext.Window }
     property bool resumeAvailable: false
+    Connections {
+        target: Player
+        function onInputChanged() { view.refreshSeekPreview() }
+    }
     function clockText(tick) {
         if (!tick.valid()) return "00:00:00"
         const parts = tick.formatHMS(0).split(":")
@@ -75,6 +79,10 @@ FocusScope {
         artwork: Player.artwork
         resumeAvailable: rootPlayer.resumeAvailable
         timeForPosition: value => rootPlayer.clockText(Player.length.scale(value))
+        seekPreviewImage: Player.seekPreview
+        seekPreviewImagePosition: Player.seekPreviewPosition
+        onSeekPreviewRequested: value => Player.requestSeekPreview(value)
+        onSeekPreviewEnded: Player.cancelSeekPreview()
         onTogglePlayback: MainPlaylistController.empty ? DialogsProvider.simpleOpenDialog() : MainPlaylistController.togglePlayPause()
         onPrevious: MainPlaylistController.prevOrReset()
         onNext: MainPlaylistController.next()

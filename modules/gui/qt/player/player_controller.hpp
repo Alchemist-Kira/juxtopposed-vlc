@@ -141,6 +141,8 @@ public:
     Q_PROPERTY(float rate READ getRate WRITE setRate NOTIFY rateChanged FINAL)
     Q_PROPERTY(QVariantMap playbackStatistics READ getPlaybackStatistics NOTIFY playbackStatisticsChanged FINAL)
     Q_PROPERTY(QUrl url READ getUrl NOTIFY inputChanged FINAL)
+    Q_PROPERTY(QUrl seekPreview READ getSeekPreview NOTIFY seekPreviewChanged FINAL)
+    Q_PROPERTY(double seekPreviewPosition READ getSeekPreviewPosition NOTIFY seekPreviewChanged FINAL)
 
     Q_PROPERTY(VLCTime time READ getTime WRITE setTime NOTIFY timeChanged FINAL)
     Q_PROPERTY(VLCTime remainingTime READ getRemainingTime NOTIFY remainingTimeChanged FINAL)
@@ -236,6 +238,8 @@ public:
 
     /* exposed actions */
 public slots:
+    void requestSeekPreview(double position);
+    void cancelSeekPreview();
     void reverse();
     void slower();
     void faster();
@@ -340,6 +344,8 @@ public slots:
     void openVLsub();
     void acknowledgeRestoreCallback();
     QUrl getUrl() const;
+    QUrl getSeekPreview() const;
+    double getSeekPreviewPosition() const;
 
     //tracks
     TrackListModel* getVideoTracks();
@@ -448,6 +454,7 @@ public slots:
     RendererManager* getRendererManager();
 
 signals:
+    void seekPreviewChanged();
     //playback
     void playingStateChanged( PlayingState state );
     void inputChanged( bool hasInput );

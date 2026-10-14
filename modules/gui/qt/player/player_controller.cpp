@@ -44,7 +44,6 @@
 #include <QThreadPool>
 #include <QImage>
 #include <QBuffer>
-#include <QCryptographicHash>
 #include <cmath>
 #ifndef QT_HAS_LIBATOMIC
 #include <QReadLocker>
@@ -1381,6 +1380,10 @@ void PlayerControllerPrivate::readSubtitleTimeline()
         }
         media = m_currentItem;
         selectedId.reset(selected->es_id, true);
+        if (const char* uri = vlc_es_id_GetSourceUri(selected->es_id)) {
+            source.uri = uri;
+            external = true;
+        }
         const QByteArray id = vlc_es_id_GetStrId(selected->es_id);
         const qsizetype split = id.indexOf("/spu/");
         const QByteArray prefix = split < 0 ? QByteArray() : id.first(split + 1);
@@ -1407,13 +1410,6 @@ void PlayerControllerPrivate::readSubtitleTimeline()
         {
             vlc_mutex_locker itemLock{&m_currentItem->lock};
             if (prefix.isEmpty()) source.uri = m_currentItem->psz_uri;
-            else for (int i = 0; i < m_currentItem->i_slaves; ++i) {
-                const auto* slave = m_currentItem->pp_slaves[i];
-                const QByteArray uri = slave->psz_uri;
-                if (QCryptographicHash::hash(uri, QCryptographicHash::Md5).toHex() + '/' == prefix) {
-                    source.uri = uri; external = true; break;
-                }
-            }
             // Preserve trusted per-item settings. The two HTTP header options
             // below are also explicitly safe in the native HTTP access module.
             for (int i = 0; i < m_currentItem->i_options; ++i) {

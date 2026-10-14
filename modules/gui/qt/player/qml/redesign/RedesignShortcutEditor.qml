@@ -157,6 +157,7 @@ C.Popup {
                 onClicked: { root.recordingName = ""; root.clearRequested(cell.optionName) }
             }
             onClicked: { root.recordingName = optionName; forceActiveFocus() }
+            Keys.onShortcutOverride: event => { event.accepted = cell.recording }
             Keys.onPressed: event => {
                 if (!recording) { event.accepted = false; return }
                 event.accepted = true

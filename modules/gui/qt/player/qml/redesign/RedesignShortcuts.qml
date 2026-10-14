@@ -9,6 +9,13 @@ RedesignShortcutEditor {
     property string pendingName: ""
     property string pendingShortcut: ""
     signal saved()
+    Binding {
+        target: MainCtx
+        property: "useGlobalShortcuts"
+        value: false
+        when: root.visible
+        restoreMode: Binding.RestoreBindingOrValue
+    }
     RedesignPreferences { id: draft; ctx: MainCtx }
     shortcuts: draft.shortcutCatalog()
     dirty: draft.dirty

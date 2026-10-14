@@ -108,7 +108,7 @@ void appendMediaIntoPlaylist(vlc_medialibrary_t* ml, int64_t playlistId, const s
     [this, initialItems](quint64, const Ctx& ctx) {
         endTransaction(); // this is intentionally called here and not after `append()`
 
-        if (ctx.createdPlaylistId.id)
+        if (ctx.createdPlaylistId.id && !initialItems.isEmpty())
         {
             append(ctx.createdPlaylistId, initialItems);
         }
@@ -119,7 +119,7 @@ void appendMediaIntoPlaylist(vlc_medialibrary_t* ml, int64_t playlistId, const s
                                                    const QVariantList & ids)
 {
     assert(m_mediaLib);
-    assert(ids.size() > 0);
+    if (ids.isEmpty()) return;
 
     if (unlikely(!setTransactionPending(true)))
         return;

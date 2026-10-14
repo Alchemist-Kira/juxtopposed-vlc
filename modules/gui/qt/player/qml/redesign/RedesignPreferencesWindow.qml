@@ -2,7 +2,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
-import QtQuick.Controls as C
+import QtQuick.Controls.Basic as C
 import VLC.MainInterface
 import VLC.Style
 import VLC.Dialogs

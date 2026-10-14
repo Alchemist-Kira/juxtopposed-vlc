@@ -2,7 +2,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
-import QtQuick.Controls as C
+import QtQuick.Controls.Basic as C
 
 ColumnLayout {
     id: root

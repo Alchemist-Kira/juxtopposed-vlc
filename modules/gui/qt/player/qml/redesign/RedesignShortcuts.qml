@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import QtQuick
-import QtQuick.Controls as C
+import QtQuick.Controls.Basic as C
 import VLC.MainInterface
 import VLC.Dialogs
 

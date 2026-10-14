@@ -35,7 +35,7 @@ Item {
         }
         RowLayout {
             Layout.fillWidth: true
-            Text { Layout.fillWidth: true; text: qsTr("%n item(s)", "", root.itemCount); color: theme.foreground; font.pixelSize: theme.dp(14) }
+            Text { Layout.fillWidth: true; text: qsTr("%n item", "%n items", root.itemCount); color: theme.foreground; font.pixelSize: theme.dp(14) }
             RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "shuffle"; text: qsTr("Shuffle"); selected: root.random; onClicked: root.shuffleRequested() }
             RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "repeat"; text: qsTr("Repeat"); selected: root.repeating; onClicked: root.repeatRequested() }
             RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "more"; text: qsTr("Queue actions"); onClicked: queueMenu.popup() }

@@ -17,7 +17,7 @@ Item {
         spacing: theme.dp(12)
         RowLayout {
             Layout.fillWidth: true
-            Text { Layout.fillWidth: true; text: qsTr("%n bookmark(s)", "", list.count); color: theme.foreground; font.pixelSize: theme.dp(14) }
+            Text { Layout.fillWidth: true; text: qsTr("%n bookmark", "%n bookmarks", list.count); color: theme.foreground; font.pixelSize: theme.dp(14) }
             RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "add"; text: qsTr("Bookmark current time"); enabled: Player.isStarted; onClicked: bookmarks.add() }
         }
         ListView {

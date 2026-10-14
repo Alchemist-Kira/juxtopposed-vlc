@@ -89,7 +89,7 @@ Item {
             Layout.fillWidth: true
             Text {
                 Layout.fillWidth: true
-                text: qsTr("%n item(s)", "", root.itemCount)
+                text: qsTr("%n item", "%n items", root.itemCount)
                 color: theme.foreground; font.pixelSize: theme.dp(14)
             }
             RedesignButton {

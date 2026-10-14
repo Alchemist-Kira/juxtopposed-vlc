@@ -67,6 +67,7 @@ FocusScope {
         controlsHideTimeout: MainCtx.redesignPlayerPreferences.hideTimeout
         showFullscreenControls: MainCtx.redesignPlayerPreferences.fullscreenControls
         showSubtitleTimeline: MainCtx.redesignPlayerPreferences.subtitleTimeline
+        showSeekPreview: MainCtx.redesignPlayerPreferences.seekPreview
         subtitleTimelineCues: Player.subtitleTimelineCues
         subtitleTimelineState: Player.subtitleTimelineState
         subtitleDelayMS: Player.subtitleDelayMS

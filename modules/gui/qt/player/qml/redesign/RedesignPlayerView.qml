@@ -23,6 +23,7 @@ FocusScope {
     property bool showFullscreenControls: true
     property bool showStatistics: false
     property bool showSubtitleTimeline: false
+    property bool showSeekPreview: true
     property var subtitleTimelineCues: []
     property string subtitleTimelineState: "off"
     property real durationSeconds: 0
@@ -489,7 +490,7 @@ FocusScope {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 enabled: root.seekable
                 timeForPosition: root.timeForPosition
-                previewEnabled: root.started && root.hasVideo && !root.presentationOnly
+                previewEnabled: root.showSeekPreview && root.started && root.hasVideo && !root.presentationOnly
                 previewImage: root.seekPreviewImage
                 previewImagePosition: root.seekPreviewImagePosition
                 timelineEnabled: root.showSubtitleTimeline

@@ -395,6 +395,8 @@ TestCase {
         verify(!playback.includes("repeat"))
         verify(!playback.includes("loop"))
         verify(!playback.includes("input-timeshift-path"))
+        const seeking = catalog.sections.playback.find(section => section.title === "Seeking")
+        verify(seeking.rows.some(row => row[0] === "qt-seek-preview"))
         const audio = catalog.sections.audio.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])
         verify(audio.includes("redesign-audio-device"))
         verify(!audio.includes("aout"))

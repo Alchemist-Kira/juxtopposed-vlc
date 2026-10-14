@@ -421,6 +421,7 @@ QVariantMap MainCtx::redesignPlayerPreferences() const
     return {{QStringLiteral("autoHide"), QVariant::fromValue<qlonglong>(config_GetInt("qt-controls-autohide"))},
         {QStringLiteral("hideTimeout"), QVariant::fromValue<qlonglong>(config_GetInt("qt-controls-hide-timeout"))},
         {QStringLiteral("fullscreenControls"), bool(config_GetInt("qt-fs-controller"))},
+        {QStringLiteral("seekPreview"), bool(config_GetInt("qt-seek-preview"))},
         {QStringLiteral("subtitleTimeline"), bool(config_GetInt("qt-subtitle-timeline"))}};
 }
 

@@ -79,7 +79,9 @@ QtObject {
             { title: qsTr("Order"), rows: [
                 ["redesign-repeat", qsTr("Repeat")], ["random", qsTr("Shuffle")],
                 ["play-and-stop", qsTr("Stop after each item")], ["redesign-after-playback", qsTr("When playback finishes")] ] },
-            { title: qsTr("Seeking"), rows: [ ["input-fast-seek", qsTr("Seek precisely"), {inverted: true}] ] },
+            { title: qsTr("Seeking"), rows: [
+                ["input-fast-seek", qsTr("Seek precisely"), {inverted: true}],
+                ["qt-seek-preview", qsTr("Show video previews on the seekbar")] ] },
             { title: qsTr("Files & Discs"), rows: [ ["dvd", qsTr("Default optical drive")],
                 ["avi-index", qsTr("Repair damaged AVI files")], ["mkv-preload-local-dir", qsTr("Load matching .mkv files from the same folder")] ] } ],
         video: [

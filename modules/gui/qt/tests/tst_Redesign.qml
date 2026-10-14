@@ -101,6 +101,7 @@ TestCase {
         statisticsSwitch.visible = false
         player.showStatistics = false
         player.showSubtitleTimeline = false
+        player.showSeekPreview = true
         player.subtitleTimelineCues = []
         player.subtitleTimelineState = "off"
         player.statistics = ({})
@@ -370,6 +371,26 @@ TestCase {
         verify(player.position > before)
     }
     readonly property url previewFixture: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAIAAAC0SDtlAAAAFUlEQVR4nGP8z0AaYCJR/agG2mgAAMeRARHH28OHAAAAAElFTkSuQmCC"
+    function test_seekPreviewCanBeTurnedOffAndOn() {
+        const slider = findChild(player, "seekBar")
+        const popup = findChild(slider, "seekThumbnailPopup")
+        verify(player.showSeekPreview)
+        mouseMove(slider, slider.width / 2, slider.height / 2)
+        tryVerify(() => previewSpy.count > 0)
+        player.seekPreviewImagePosition = slider.previewPosition
+        player.seekPreviewImage = previewFixture
+        tryCompare(popup, "visible", true)
+        player.showSeekPreview = false
+        tryCompare(popup, "visible", false)
+        const count = previewSpy.count
+        mouseMove(slider, slider.width * .7, slider.height / 2)
+        wait(200)
+        compare(previewSpy.count, count)
+        verify(previewEndSpy.count > 0)
+        player.showSeekPreview = true
+        tryVerify(() => previewSpy.count > count)
+        tryCompare(popup, "visible", true)
+    }
     function test_seekHoverPreviewDoesNotSeekOrMoveTheVideo() {
         const slider = findChild(player, "seekBar")
         const popup = findChild(slider, "seekThumbnailPopup")

@@ -387,6 +387,7 @@ qt_plugin_sources = files(
     'menus/qml_menu_wrapper.cpp',
     'menus/qml_menu_wrapper.hpp',
     'menus/menus.cpp',
+    'menus/redesign_menu_style.cpp',
     'menus/menus.hpp',
     'network/addonsmodel.cpp',
     'network/addonsmodel.hpp',

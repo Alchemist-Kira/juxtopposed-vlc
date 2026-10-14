@@ -105,6 +105,8 @@ public:
     static void VolumeEntries( qt_intf_t *p_intf, QMenu *current );
 
     static RendererMenu *rendererMenu;
+private:
+    static QMenu* RedesignPopupMenu(qt_intf_t *, bool show);
 };
 
 #endif

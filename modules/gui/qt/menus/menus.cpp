@@ -36,6 +36,7 @@
 #include <vlc_interface.h>
 
 #include "menus.hpp"
+#include "redesign_menu_style.hpp"
 
 #include "maininterface/mainctx.hpp"                     /* View modifications */
 #include "maininterface/mainctx_submodels.hpp"
@@ -59,6 +60,9 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QSignalMapper>
+#include <QApplication>
+#include <QStyleHints>
+#include <utility>
 
 using namespace vlc::playlist;
 
@@ -742,9 +746,140 @@ QMenu* VLCMenuBar::MiscPopupMenu( qt_intf_t *p_intf, bool show )
     return menu;
 }
 
+namespace {
+
+QString redesignHotkey(qt_intf_t* intf, const char* name)
+{
+    char* stored = var_InheritString(intf, name);
+    QString key = stored ? qfu(stored).section(QLatin1Char('\t'), 0, 0) : QString();
+    free(stored);
+    if (key.size() == 1) key = key.toUpper();
+    const auto sequence = QKeySequence::fromString(key, QKeySequence::PortableText);
+    return sequence.isEmpty() ? key : sequence.toString(QKeySequence::NativeText);
+}
+
+QString menuLabel(const QString& label, const QString& hint)
+{
+    return hint.isEmpty() ? label : label + QLatin1Char('\t') + hint;
+}
+
+QIcon redesignMenuIcon(MainCtx* ctx, const char* name)
+{
+    const bool light = ctx->getColorScheme()->currentScheme() == ColorSchemeModel::Day ||
+        (ctx->getColorScheme()->currentScheme() == ColorSchemeModel::System &&
+         qApp->styleHints()->colorScheme() == Qt::ColorScheme::Light);
+    return ColorizedSvgIcon(QStringLiteral(":/menu/redesign/%1.svg").arg(QLatin1String(name)), {}, {}, {},
+        {{QStringLiteral("#8F8F8F"), light ? QStringLiteral("#404040") : QStringLiteral("#8f8f8f")},
+         {QStringLiteral("#AB6314"), ctx->redesignAccent().darker(120).name()}});
+}
+}
+
+QMenu* VLCMenuBar::RedesignPopupMenu(qt_intf_t* p_intf, bool show)
+{
+    auto* ctx = p_intf->p_mi;
+    auto* menu = new VLCMenu(p_intf);
+    styleRedesignMenus(menu, ctx);
+    menu->setFixedWidth(qRound(292 * ctx->getIntfScaleFactor()));
+    const QString playHint = redesignHotkey(p_intf, "key-play-pause");
+    auto* play = menu->addAction(QString(), [p_intf]() {
+        if (THEMPL->isEmpty()) THEDP->simpleOpenDialog();
+        else THEMPL->togglePlayPause();
+    });
+    const auto updatePlay = [p_intf, ctx, play, playHint]() {
+        const bool playing = THEMIM->getPlayingState() == PlayerController::PLAYING_STATE_PLAYING;
+        play->setText(menuLabel(playing ? qtr("Pause") : qtr("Play"), playHint));
+        play->setIcon(playing ? ColorizedSvgIcon(QStringLiteral(":/menu/ic_pause_filled.svg"), ctx->redesignAccent().darker(120)) : redesignMenuIcon(ctx, "play"));
+    };
+    updatePlay();
+    connect(THEMIM, &PlayerController::playingStateChanged, play, updatePlay);
+    auto* stop = menu->addAction(redesignMenuIcon(ctx, "stop"), menuLabel(qtr("Stop"), redesignHotkey(p_intf, "key-stop")), THEMPL, &PlaylistController::stop);
+    stop->setEnabled(THEMIM->isStarted());
+    connect(THEMIM, &PlayerController::playingStateChanged, stop, [p_intf, stop]() { stop->setEnabled(THEMIM->isStarted()); });
+    auto* previous = menu->addAction(redesignMenuIcon(ctx, "previous"), menuLabel(qtr("Previous Item"), redesignHotkey(p_intf, "key-prev")), THEMPL, &PlaylistController::prev);
+    previous->setEnabled(THEMPL->hasPrev());
+    connect(THEMPL, &PlaylistController::hasPrevChanged, previous, &QAction::setEnabled);
+    auto* next = menu->addAction(redesignMenuIcon(ctx, "next"), menuLabel(qtr("Next Item"), redesignHotkey(p_intf, "key-next")), THEMPL, &PlaylistController::next);
+    next->setEnabled(THEMPL->hasNext());
+    connect(THEMPL, &PlaylistController::hasNextChanged, next, &QAction::setEnabled);
+    const QString recordHint = redesignHotkey(p_intf, "key-record");
+    auto* record = new BooleanPropertyAction(QString(), THEMIM, "recording", menu);
+    const auto updateRecord = [p_intf, record, recordHint]() { record->setText(menuLabel(THEMIM->isRecording() ? qtr("Stop Recording") : qtr("Record"), recordHint)); };
+    updateRecord();
+    connect(THEMIM, &PlayerController::recordingChanged, record, updateRecord);
+    record->setIcon(redesignMenuIcon(ctx, "record"));
+    record->setEnabled(THEMIM->isStarted());
+    connect(THEMIM, &PlayerController::playingStateChanged, record, [p_intf, record]() { record->setEnabled(THEMIM->isStarted()); });
+    menu->addAction(record);
+    menu->addSeparator();
+    auto* hide = new BooleanPropertyAction(QString(), ctx, "minimalView", menu);
+    hide->setIcon(redesignMenuIcon(ctx, "hide-ui"));
+    const auto updateHide = [ctx, hide]() { hide->setText(menuLabel(ctx->isMinimalView() ? qtr("Show UI") : qtr("Hide UI"), QStringLiteral("Ctrl+\\"))); };
+    updateHide();
+    connect(ctx, &MainCtx::mainInterfaceModesChanged, hide, updateHide);
+    menu->addAction(hide);
+    menu->addSeparator();
+    const auto submenu = [&](const QString& title, const char* icon) {
+        auto* child = new QMenu(title, menu);
+        child->setIcon(redesignMenuIcon(ctx, icon));
+        menu->addMenu(child);
+        return child;
+    };
+    auto* playback = submenu(qtr("Playback"), "playback");
+    NavigMenu(p_intf, playback);
+    auto* video = submenu(qtr("Video"), "video");
+    VideoMenu(p_intf, video);
+    auto* audio = submenu(qtr("Audio"), "audio");
+    AudioMenu(p_intf, audio);
+    auto* subtitle = submenu(qtr("Subtitle"), "subtitle");
+    SubtitleMenu(p_intf, subtitle, true);
+    menu->addSeparator();
+    auto* settings = submenu(qtr("More Settings"), "settings");
+    ToolsMenu(p_intf, settings);
+    auto* view = new QMenu(qtr("View"), settings);
+    ViewMenu(p_intf, view);
+    settings->addMenu(view);
+    auto* help = new QMenu(qtr("Help"), settings);
+    HelpMenu(p_intf, help);
+    settings->addMenu(help);
+    auto* playlist = submenu(qtr("Playlist"), "playlist");
+    auto* queue = new BooleanPropertyAction(qtr("Show Queue"), ctx->getPlayqueuePanel(), "visible", playlist);
+    queue->setShortcut(QKeySequence(QStringLiteral("Ctrl+L")));
+    playlist->addAction(queue);
+    playlist->addAction(new BooleanPropertyAction(qtr("Shuffle"), THEMPL, "random", playlist));
+    auto* repeat = new QMenu(qtr("Repeat"), playlist);
+    auto* repeatGroup = new QActionGroup(repeat);
+    const std::pair<QString, PlaylistController::PlaybackRepeat> repeatModes[] = {
+        {qtr("Off"), PlaylistController::PLAYBACK_REPEAT_NONE},
+        {qtr("Repeat All"), PlaylistController::PLAYBACK_REPEAT_ALL},
+        {qtr("Repeat Current Item"), PlaylistController::PLAYBACK_REPEAT_CURRENT}
+    };
+    for (const auto& [label, mode] : repeatModes) {
+        auto* action = repeat->addAction(label, [p_intf, mode]() { THEMPL->setRepeatMode(mode); });
+        action->setCheckable(true);
+        repeatGroup->addAction(action);
+        action->setChecked(THEMPL->getRepeatMode() == mode);
+        connect(THEMPL, &PlaylistController::repeatModeChanged, action, [p_intf, action, mode]() { action->setChecked(THEMPL->getRepeatMode() == mode); });
+    }
+    playlist->addMenu(repeat);
+    playlist->addSeparator();
+    addDPStaticEntry(playlist, qtr("Save Playlist"), ":/menu/file.svg", &DialogsProvider::savePlayingToPlaylist, "Ctrl+Y");
+    auto* open = submenu(qtr("Open Media"), "open");
+    FileMenu(p_intf, open);
+    auto* quit = menu->addAction(redesignMenuIcon(ctx, "quit"), qtr("Quit VLC"), THEDP, &DialogsProvider::quit);
+    quit->setShortcut(QKeySequence(QStringLiteral("Ctrl+Q")));
+    styleRedesignMenus(menu, ctx);
+    msg_Dbg(p_intf, "Player context menu ready: %lld entries; popup=%s",
+            static_cast<long long>(menu->actions().size()), show ? "yes" : "no");
+    if (show) menu->popup(QCursor::pos());
+    return menu;
+}
+
 /* Main Menu that sticks everything together  */
 QMenu* VLCMenuBar::PopupMenu( qt_intf_t *p_intf, bool show )
 {
+    if (p_intf->p_mi && !p_intf->b_isDialogProvider)
+        return RedesignPopupMenu(p_intf, show);
+
     /* */
     QMenu* menu = new VLCMenu(p_intf);
     input_item_t* p_input = THEMIM->getInput();

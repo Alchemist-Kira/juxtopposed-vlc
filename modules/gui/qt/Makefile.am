@@ -263,6 +263,7 @@ libqt_plugin_la_SOURCES = \
 	menus/qml_menu_wrapper.cpp \
 	menus/qml_menu_wrapper.hpp \
 	menus/menus.cpp menus/menus.hpp \
+	menus/redesign_menu_style.cpp menus/redesign_menu_style.hpp \
 	network/addonsmodel.cpp \
 	network/addonsmodel.hpp \
 	network/mediatreelistener.cpp \
@@ -905,6 +906,20 @@ libqt_plugin_la_RES = \
 	pixmaps/icons/ic_fluent_arrow_sync_24_regular.svg \
 	pixmaps/icons/regex.svg \
 	pixmaps/icons/ic_fluent_text_change_case_24_regular.svg \
+	pixmaps/menu/redesign/play.svg \
+	pixmaps/menu/redesign/stop.svg \
+	pixmaps/menu/redesign/previous.svg \
+	pixmaps/menu/redesign/next.svg \
+	pixmaps/menu/redesign/record.svg \
+	pixmaps/menu/redesign/hide-ui.svg \
+	pixmaps/menu/redesign/playback.svg \
+	pixmaps/menu/redesign/video.svg \
+	pixmaps/menu/redesign/audio.svg \
+	pixmaps/menu/redesign/subtitle.svg \
+	pixmaps/menu/redesign/settings.svg \
+	pixmaps/menu/redesign/playlist.svg \
+	pixmaps/menu/redesign/open.svg \
+	pixmaps/menu/redesign/quit.svg \
 	pixmaps/menu/add.svg \
 	pixmaps/menu/capture-card.svg \
 	pixmaps/menu/clear.svg \

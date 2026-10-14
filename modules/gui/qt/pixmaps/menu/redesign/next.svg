@@ -1,0 +1,10 @@
+<!-- Adapted, recentered and recolored from VLC Redesign by Juxtopposed, CC BY 4.0.
+https://www.juxtopposed.com/
+https://creativecommons.org/licenses/by/4.0/
+https://www.figma.com/community/file/1691465999134370980/vlc-redesign -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+<g transform="translate(-18 -160)">
+<path d="M26 177V167L32 172L26 177Z" stroke="#AB6314" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35 167V177" stroke="#AB6314" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

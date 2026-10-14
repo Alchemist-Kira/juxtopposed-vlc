@@ -17,6 +17,7 @@
  *****************************************************************************/
 #include "qml_menu_wrapper.hpp"
 #include "menus.hpp"
+#include "redesign_menu_style.hpp"
 #include "medialibrary/medialib.hpp"
 #include "medialibrary/mlplaylistlistmodel.hpp"
 #include "medialibrary/mlplaylistmodel.hpp"
@@ -117,6 +118,7 @@ void SortMenu::popup(const QPoint &point, const bool popupAbovePoint, const QVar
 {
     assert(m_ctx);
     m_menu = std::make_unique<VLCMenu>(m_ctx->getIntf());
+    styleRedesignMenus(m_menu.get(), m_ctx);
 
     connect( m_menu.get(), &QMenu::aboutToShow, this, [this]() {
         m_shown = true;
@@ -290,6 +292,7 @@ void QmlGlobalMenu::popup(QPoint pos)
     submenu = m_menu->addMenu(qtr( "&Help" ));
     HelpMenu( p_intf, submenu );
 
+    styleRedesignMenus(m_menu.get(), m_ctx);
     m_menu->popup(pos);
 }
 

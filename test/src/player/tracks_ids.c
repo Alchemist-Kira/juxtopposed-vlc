@@ -70,6 +70,7 @@ test_tracks_ids(struct ctx *ctx)
             assert(vec->data[i].selected_id);
 
             vlc_es_id_t *es_id = vec->data[i].selected_id;
+            assert(vlc_es_id_GetSourceUri(es_id) == NULL);
             const struct vlc_player_track *track =
                 vlc_player_GetTrack(player, es_id);
             assert(track);
@@ -210,12 +211,60 @@ test_tracks_ids(struct ctx *ctx)
     test_end(ctx);
 }
 
+static void
+test_external_track_source_uri(struct ctx *ctx)
+{
+    test_log("external_track_source_uri\n");
+    vlc_player_t *player = ctx->player;
+    struct media_params params = DEFAULT_MEDIA_PARAMS(VLC_TICK_FROM_SEC(100));
+    params.track_count[SPU_ES] = 0;
+    player_set_current_mock_media(ctx, "main media", &params, false);
+    player_start(ctx);
+    wait_state(ctx, VLC_PLAYER_STATE_PLAYING);
+
+    struct media_params external = DEFAULT_MEDIA_PARAMS(VLC_TICK_FROM_SEC(100));
+    external.track_count[VIDEO_ES] = 0;
+    external.track_count[AUDIO_ES] = 0;
+    input_item_t *item = create_mock_media("external subtitles", &external);
+    char *uri = input_item_GetURI(item);
+    assert(uri != NULL);
+    input_item_Release(item);
+    assert(vlc_player_AddAssociatedMedia(player, SPU_ES, uri, true, false, false)
+           == VLC_SUCCESS);
+    while (vlc_player_GetTrackCount(player, SPU_ES) != 1)
+        vlc_player_CondWait(player, &ctx->wait);
+    const struct vlc_player_track *track = vlc_player_GetTrackAt(player, SPU_ES, 0);
+    vlc_es_id_t *id = vlc_es_id_Hold(track->es_id);
+    assert(strcmp(vlc_es_id_GetSourceUri(id), uri) == 0);
+
+    /* The item cache may be replaced by a later metadata update. The active
+     * source must not borrow its URI from that cache. */
+    input_item_t *main = vlc_player_GetCurrentMedia(player);
+    vlc_mutex_lock(&main->lock);
+    for (int i = 0; i < main->i_slaves; ++i)
+        input_item_slave_Delete(main->pp_slaves[i]);
+    free(main->pp_slaves);
+    main->pp_slaves = NULL;
+    main->i_slaves = 0;
+    assert(strcmp(vlc_es_id_GetSourceUri(id), uri) == 0);
+    vlc_mutex_unlock(&main->lock);
+
+    ctx->params.track_count[SPU_ES] = 1;
+    test_prestop(ctx);
+    test_end(ctx);
+    /* Holding the track ID also keeps its immutable source URI alive. */
+    assert(strcmp(vlc_es_id_GetSourceUri(id), uri) == 0);
+    vlc_es_id_Release(id);
+    free(uri);
+}
+
 int
 main(void)
 {
     struct ctx ctx;
     ctx_init(&ctx, 0);
     test_tracks_ids(&ctx);
+    test_external_track_source_uri(&ctx);
     ctx_destroy(&ctx);
     return 0;
 }

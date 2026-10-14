@@ -39,6 +39,7 @@ struct input_source_t
     struct vlc_input_es_out *p_slave_es_out; /**< Slave es out */
 
     char *str_id;
+    char *uri; /**< Immutable external source URI, owned until last reference. */
     int auto_id;
     bool autoselected;
 

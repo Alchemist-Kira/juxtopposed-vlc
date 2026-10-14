@@ -768,6 +768,19 @@ VLC_API const char *
 vlc_es_id_GetStrId(vlc_es_id_t *id);
 
 /**
+ * Get the URI of an external track source.
+ *
+ * Unlike the input item's cached slave list, this URI describes the source
+ * that produced the track and remains valid while the track ID is held.
+ *
+ * @param id pointer to the ES track id
+ * @return external source URI, or NULL for a track from the main input;
+ * the returned string is valid until id is released
+ */
+VLC_API const char *
+vlc_es_id_GetSourceUri(vlc_es_id_t *id);
+
+/**
  * Get the ES category
  *
  * @param id pointer to the ES track id

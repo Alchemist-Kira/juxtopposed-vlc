@@ -5065,6 +5065,12 @@ vlc_es_id_GetStrId(vlc_es_id_t *id)
     return id->str_id;
 }
 
+const char *
+vlc_es_id_GetSourceUri(vlc_es_id_t *id)
+{
+    return id->source->uri;
+}
+
 enum es_format_category_e
 vlc_es_id_GetCat(vlc_es_id_t *id)
 {

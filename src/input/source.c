@@ -38,6 +38,7 @@ void input_source_Release(input_source_t *in)
     if( vlc_atomic_rc_dec( &in->rc ) )
     {
         free( in->str_id );
+        free( in->uri );
         free( in );
     }
 }

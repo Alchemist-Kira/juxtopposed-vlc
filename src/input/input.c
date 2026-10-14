@@ -2836,8 +2836,11 @@ static input_source_t *InputSourceNew( const char *psz_mrl )
         vlc_hash_md5_t md5;
 
         in->str_id = malloc(VLC_HASH_MD5_DIGEST_HEX_SIZE);
-        if( !in->str_id )
+        in->uri = strdup(psz_mrl);
+        if( !in->str_id || !in->uri )
         {
+            free(in->str_id);
+            free(in->uri);
             free( in );
             return NULL;
         }

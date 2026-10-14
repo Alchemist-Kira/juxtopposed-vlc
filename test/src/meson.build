@@ -199,6 +199,14 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_input_subtitle_duration',
+    'sources' : files('input/subtitle_duration.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['subsdelay']
+}
+
+vlc_tests += {
     'name' : 'test_src_input_subtitle_style',
     'sources' : files('input/subtitle_style.c'),
     'suite' : ['src', 'test_src'],

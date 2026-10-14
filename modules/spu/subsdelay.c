@@ -228,6 +228,16 @@ static bool SubpicIsEmpty( subpicture_t* p_subpic );
 
 static subpicture_t *SubpicClone( subpicture_t *p_source, subpicture_updater_t *updater );
 
+static void SubpicMoveRegions( subpicture_t *target, subpicture_t *source )
+{
+    /* Region lists contain a sentinel tied to its owning subpicture. Copying
+     * the list head leaves the regions linked to the old owner. */
+    vlc_spu_regions_init( &target->regions );
+    if( !vlc_spu_regions_is_empty( &source->regions ) )
+        vlc_list_replace( &source->regions, &target->regions );
+    vlc_spu_regions_init( &source->regions );
+}
+
 static void SubpicDestroyClone( subpicture_t *p_subpic );
 
 /*****************************************************************************
@@ -946,20 +956,19 @@ static void SubpicUpdateWrapper( subpicture_t *p_subpic,
         p_entry->b_last_region_saved = true;
     }
 
-    vlc_spu_regions_Clear( &p_subpic->regions );
-
     /* call source update */
     struct vlc_spu_updater_configuration new_cfg = *cfg;
     new_cfg.pts = p_entry->p_source->i_start +
                 ( (double)( p_entry->p_source->i_stop - p_entry->p_source->i_start ) * ( cfg->pts - p_entry->p_source->i_start ) ) /
                 ( p_entry->i_new_stop - p_entry->p_source->i_start );
 
-    p_entry->p_source->regions = p_entry->p_subpic->regions;
+    SubpicMoveRegions( p_entry->p_source, p_subpic );
 
     subpicture_updater_t *updater = &p_entry->p_source->updater;
-    updater->ops->update( p_entry->p_source, &new_cfg );
+    if( updater->ops != NULL )
+        updater->ops->update( p_entry->p_source, &new_cfg );
 
-    p_entry->p_subpic->regions = p_entry->p_source->regions;
+    SubpicMoveRegions( p_subpic, p_entry->p_source );
 
     SubpicLocalUpdate( p_subpic, cfg->pts );
 }
@@ -1108,6 +1117,7 @@ static subpicture_t *SubpicClone( subpicture_t *p_source, subpicture_updater_t *
 
     /* copy the entire struct */
     memcpy( p_subpic, p_source, sizeof( subpicture_t ) );
+    SubpicMoveRegions( p_subpic, p_source );
 
     /* restore private members */
     p_subpic->updater = subpic_updater;

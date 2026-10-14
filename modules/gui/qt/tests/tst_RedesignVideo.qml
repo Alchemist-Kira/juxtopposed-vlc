@@ -14,10 +14,11 @@ TestCase {
         property var values: ({})
         property var live: ({})
         property string lastOption
+        property bool hdrSupported: false
         function value(name) { return values[name] }
         function videoValue(name) { return live[name] === undefined ? values[name] : live[name] }
         function describe(name) {
-            if (name === "d3d11-hdr-mode") return {}
+            if (name === "d3d11-hdr-mode") return hdrSupported ? {kind: "string", choices: ["auto", "never", "always", "generate"].map(value => ({value: value}))} : {}
             if (["marq-opacity", "logo-opacity", "puzzle-rows", "puzzle-cols"].includes(name)) return {kind: "integer", minimum: 0, maximum: 255}
             if (["puzzle-preview", "brightness-threshold"].includes(name)) return {kind: "bool"}
             if (["marq-marquee", "marq-file", "logo-file", "erase-mask"].includes(name)) return {kind: "string", editor: name.endsWith("file") || name.endsWith("mask") ? "file" : ""}
@@ -62,6 +63,7 @@ TestCase {
             "antiflicker-window-size": 10, "antiflicker-softening-size": 10,
             "hqdn3d-luma-spat": 4, "hqdn3d-luma-temp": 6, "hqdn3d-chroma-spat": 3, "hqdn3d-chroma-temp": 4.5,
             "erase-mask": "", "erase-x": 0, "erase-y": 0, "anaglyph-scheme": "red-cyan"}
+        store.hdrSupported = false
         store.live = {}; store.revision++; store.lastOption = ""
         video.width = 356
         for (const name of ["Essential", "Crop", "Colors", "Geometry", "Overlay", "Advanced"]) item("video" + name + "Section").expanded = false
@@ -155,6 +157,73 @@ TestCase {
         compare(store.values.zoom, 1); compare(store.values.autoscale, false)
         compare(choice.displayText, "1:1 Original")
         compare(store.values.crop, ""); compare(store.values["aspect-ratio"], "")
+    }
+    function enableHdr() {
+        store.hdrSupported = true
+        store.stage("d3d11-hdr-mode", "auto")
+        wait(30)
+        return item("d3d11-hdr-modeChoice")
+    }
+    function test_hdrReferenceOrderAndNativeAvailability() {
+        const choice = item("d3d11-hdr-modeChoice")
+        verify(!choice.enabled)
+        enableHdr()
+        compare(choice.model.map(row => row.label).join("|"), "Auto|Off|HDR10|HDR10+|Dolby Vision|HLG")
+        verify(choice.enabled); verify(choice.showSelectionMark)
+        compare(choice.choiceHeight, 46); compare(choice.popupGap, 22)
+        compare(choice.displayText, "Auto")
+        for (let i = 0; i < 6; ++i) compare(choice.choiceEnabled(i), i < 3)
+        choice.currentIndex = 2; choice.activated(2)
+        compare(store.values["d3d11-hdr-mode"], "always")
+        compare(choice.displayText, "HDR10")
+        choice.currentIndex = 3; choice.activated(3)
+        compare(store.values["d3d11-hdr-mode"], "always")
+        compare(choice.currentIndex, 2)
+        store.stage("d3d11-hdr-mode", "never")
+        compare(choice.displayText, "Off")
+    }
+    function test_hdrKeyboardSkipsUnavailableFormatsInClosedAndOpenMenu() {
+        const choice = enableHdr()
+        choice.forceActiveFocus()
+        keyClick(Qt.Key_End)
+        compare(choice.currentIndex, 2); compare(store.values["d3d11-hdr-mode"], "always")
+        keyClick(Qt.Key_Down); compare(choice.currentIndex, 2)
+        keyClick(Qt.Key_H); compare(choice.currentIndex, 2)
+        keyClick(Qt.Key_D); compare(choice.currentIndex, 2)
+        keyClick(Qt.Key_Home); compare(choice.currentIndex, 0)
+        keyClick(Qt.Key_Space); tryCompare(choice.popup, "visible", true)
+        keyClick(Qt.Key_End); compare(choice.highlightedIndex, 2)
+        compare(store.values["d3d11-hdr-mode"], "auto")
+        keyClick(Qt.Key_Down); compare(choice.highlightedIndex, 2)
+        keyClick(Qt.Key_Up); compare(choice.highlightedIndex, 1)
+        keyClick(Qt.Key_Return); tryCompare(choice.popup, "visible", false)
+        compare(store.values["d3d11-hdr-mode"], "never")
+        store.stage("d3d11-hdr-mode", "always")
+        compare(choice.displayText, "HDR10")
+    }
+    function test_hdrUnavailableRowsRejectMouseSelection() {
+        const choice = enableHdr()
+        choice.popup.open(); tryCompare(choice.popup, "visible", true)
+        wait(100)
+        const row = findChild(choice.popup.contentItem, "comboChoice_4")
+        verify(row !== null); verify(!row.enabled)
+        mouseClick(row)
+        compare(store.values["d3d11-hdr-mode"], "auto")
+        verify(choice.popup.visible)
+        choice.popup.close()
+    }
+    function test_sdrToHdrRemainsAvailableUnderAdvancedAndPreservesExistingChoice() {
+        const choice = enableHdr()
+        const conversion = item("videoGenerateHdr")
+        item("videoAdvancedSection").expanded = true
+        verify(conversion.visible)
+        conversion.toggled(true)
+        compare(store.values["d3d11-hdr-mode"], "generate")
+        compare(choice.displayText, "SDR to HDR")
+        conversion.toggled(false)
+        compare(store.values["d3d11-hdr-mode"], "auto")
+        choice.currentIndex = 2; choice.activated(2)
+        verify(!conversion.checked)
     }
     function test_zoomCanReturnToEachNativeFitMode() {
         const choice = item("zoomChoice")

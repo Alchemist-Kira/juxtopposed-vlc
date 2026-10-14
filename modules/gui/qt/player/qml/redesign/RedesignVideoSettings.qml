@@ -20,6 +20,11 @@ ColumnLayout {
     spacing: 0
 
     function current(name) { backend.revision; liveRevision; return backend.videoValue(name) }
+    readonly property var hdrDescription: { backend.revision; return backend.describe("d3d11-hdr-mode") }
+    readonly property bool hdrSupported: hdrDescription.kind !== undefined
+    function supportsHdrPolicy(value) {
+        return (hdrDescription.choices || []).some(row => row.value === value)
+    }
     function enabledFilter(name, chain = "video-filter") {
         return String(current(chain) || "").split(":").includes(name)
             || (chain === "sub-source" && String(current("sub-filter") || "").split(":").includes(name))
@@ -100,6 +105,9 @@ ColumnLayout {
         property string optionName
         property var choices
         property bool zoomControl: false
+        property bool restrictChoices: false
+        property real choiceHeight: 34
+        property real popupGap: 4
         property var selectedValue: root.current(optionName)
         property string help
         property string emptyText
@@ -111,15 +119,24 @@ ColumnLayout {
             implicitHeight: theme.dp(46)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: parent.choices; textRole: "label"; valueRole: "value"
+            restrictChoices: parent.restrictChoices
+            showSelectionMark: parent.restrictChoices
+            choiceHeight: parent.choiceHeight
+            popupGap: parent.popupGap
             currentIndex: model.findIndex(row => row.value === parent.selectedValue)
+            function restoreIndexBinding() {
+                currentIndex = Qt.binding(() => model.findIndex(row => row.value === parent.selectedValue))
+            }
             // ComboBox resets its index when a custom value changes the model.
             // Restore the binding after the new model has been installed.
-            onModelChanged: Qt.callLater(() => currentIndex = Qt.binding(() => model.findIndex(row => row.value === parent.selectedValue)))
+            onModelChanged: Qt.callLater(restoreIndexBinding)
             displayText: currentIndex < 0 ? parent.emptyText : currentText
             Accessible.name: parent.label
             onActivated: {
+                if (!choiceEnabled(currentIndex)) { restoreIndexBinding(); return }
                 if (parent.zoomControl) root.setZoomSelection(currentValue)
                 else root.backend.stage(parent.optionName, currentValue)
+                restoreIndexBinding()
             }
             C.ToolTip.text: parent.help
             C.ToolTip.visible: hovered && C.ToolTip.text.length > 0
@@ -230,11 +247,21 @@ ColumnLayout {
     }
     Choice {
         label: qsTr("HDR"); optionName: "d3d11-hdr-mode"
-        enabled: root.backend.describe(optionName).kind !== undefined
+        enabled: root.hdrSupported
         opacity: enabled ? 1 : .5
-        choices: [{label: qsTr("Auto"), value: "auto"}, {label: qsTr("Off"), value: "never"}, {label: qsTr("On"), value: "always"}, {label: qsTr("Generate HDR from SDR"), value: "generate"}]
-        help: enabled ? qsTr("Use this mode when the video starts.") : qsTr("This video output does not support this setting.")
-        emptyText: qsTr("Auto")
+        restrictChoices: true
+        choiceHeight: 46; popupGap: 22
+        choices: [
+            {label: qsTr("Auto"), value: "auto", enabled: root.supportsHdrPolicy("auto")},
+            {label: qsTr("Off"), value: "never", enabled: root.supportsHdrPolicy("never")},
+            {label: "HDR10", value: "always", enabled: root.supportsHdrPolicy("always")},
+            {label: "HDR10+", value: "hdr10plus", enabled: false},
+            {label: "Dolby Vision", value: "dolbyvision", enabled: false},
+            {label: "HLG", value: "hlg", enabled: false}
+        ]
+        help: enabled ? qsTr("Use Direct3D11 output for this setting. The mode applies when a video output starts. Unavailable formats are dimmed.")
+                      : qsTr("This VLC build does not include Direct3D11 HDR output.")
+        emptyText: root.current(optionName) === "generate" ? qsTr("SDR to HDR") : qsTr("Auto")
     }
     Choice {
         label: qsTr("Resolution"); optionName: "preferred-resolution"
@@ -507,6 +534,15 @@ ColumnLayout {
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         settings: ColumnLayout {
             spacing: theme.dp(8)
+            RedesignSwitchRow {
+                objectName: "videoGenerateHdr"
+                Layout.fillWidth: true
+                visible: root.supportsHdrPolicy("generate")
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                label: qsTr("Generate HDR from SDR")
+                checked: root.current("d3d11-hdr-mode") === "generate"
+                onToggled: checked => root.backend.stage("d3d11-hdr-mode", checked ? "generate" : "auto")
+            }
             RedesignModelChoice { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; label: qsTr("Video Track"); choiceModel: root.videoTracksModel; onSelectionRequested: index => root.trackRequested(index) }
             RedesignModelChoice { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; label: qsTr("Deinterlace"); choiceModel: root.deinterlaceModel; onSelectionRequested: index => root.deinterlaceRequested(index) }
             RedesignSwitchRow {

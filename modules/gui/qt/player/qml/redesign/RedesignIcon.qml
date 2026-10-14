@@ -10,12 +10,13 @@ Image {
     id: root
     property string name
     property color color: "#8f8f8f"
+    property real sidebarReveal: 0
     sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
     fillMode: Image.PreserveAspectFit
     readonly property var paths: {
     "cone": "<g transform=\"translate(-13 -8)\"><path d=\"M29.7912 22.4111L30.1798 23.5778C29.014 24.4334 27.2264 25.2111 25.0502 25.2111C22.7963 25.2111 21.0864 24.4334 19.9206 23.5778L20.3092 22.4111H18.5216C18.133 22.4111 17.8999 22.6445 17.7444 22.9556L16.0345 29.4889C15.8791 29.9556 16.2677 30.5 16.8118 30.5H33.211C33.755 30.5 34.0659 30.0334 33.9882 29.4889L32.2006 22.9556C32.1229 22.6445 31.812 22.4111 31.4234 22.4111H29.7912Z\" fill=\"COLOR\" />\n<path d=\"M20.8535 20.1552C21.7862 20.8552 23.1852 21.4774 24.9728 21.4774C26.7603 21.4774 28.1593 20.7774 29.092 20.1552L28.0039 16.4219C27.3044 16.8885 26.294 17.1997 24.9728 17.1997C23.6515 17.1997 22.6411 16.8108 21.9416 16.4219L20.8535 20.1552Z\" fill=\"COLOR\" />\n<path d=\"M22.9517 12.8444L23.6512 10.4333C24.0398 9.18889 25.8274 9.18889 26.216 10.4333L26.9155 12.8444C26.3714 13 25.7496 13.1556 24.9724 13.1556C24.1952 13.1556 23.5734 13 22.9517 12.8444Z\" fill=\"COLOR\" />\n</g>",
     "more": "<g transform=\"translate(-53 -8)\"><path d=\"M71.0063 19.9951L71.0062 19.9951\" stroke=\"COLOR\" stroke-width=\"3\" stroke-linecap=\"round\" />\n<path d=\"M65.0063 19.9951L65.0062 19.9951\" stroke=\"COLOR\" stroke-width=\"3\" stroke-linecap=\"round\" />\n<path d=\"M59.0063 19.9951L59.0062 19.9951\" stroke=\"COLOR\" stroke-width=\"3\" stroke-linecap=\"round\" />\n</g>",
-    "sidebar": "<g transform=\"translate(-91 -8)\"><path d=\"M97 11.75H109C110.243 11.75 111.25 12.7574 111.25 14V26C111.25 27.2426 110.243 28.25 109 28.25H97C95.7574 28.25 94.75 27.2426 94.75 26V14C94.75 12.7574 95.7574 11.75 97 11.75Z\" stroke=\"COLOR\" stroke-width=\"1.5\" />\n<rect x=\"97\" y=\"14\" width=\"2\" height=\"12\" rx=\"0.5\" fill=\"COLOR\" />\n</g>",
+    "sidebar": "<g transform=\"translate(-91 -8)\"><path d=\"M97 11.75H109C110.243 11.75 111.25 12.7574 111.25 14V26C111.25 27.2426 110.243 28.25 109 28.25H97C95.7574 28.25 94.75 27.2426 94.75 26V14C94.75 12.7574 95.7574 11.75 97 11.75Z\" stroke=\"COLOR\" stroke-width=\"1.5\" />\n</g>",
     "folder": "<g transform=\"translate(-143 -8)\"><path d=\"M164 25V17.5408C164 16.1376 162.862 15 161.459 15H156.803C155.677 15 154.625 14.4371 154 13.5C153.375 12.5629 152.323 12 151.197 12H148.598C147.163 12 146 13.163 146 14.5976V25C146 26.6569 147.343 28 149 28H161C162.657 28 164 26.6569 164 25Z\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n</g>",
     "minimize": "<g transform=\"translate(-1776 -8)\"><path d=\"M1782 20H1794\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n</g>",
     "maximize": "<g transform=\"translate(-1812 -8)\"><path d=\"M1830 14H1818V26H1830V14Z\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n</g>",
@@ -64,5 +65,14 @@ Image {
     source: "data:image/svg+xml;utf8," + encodeURIComponent(
         '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">'
         + (paths[name] || "").split("COLOR").join(color.toString()) + "</svg>")
+    // The icon fill follows the exact same reveal value as the sidebar.
+    Rectangle {
+        visible: root.name === "sidebar"
+        x: root.width * 6 / 24; y: root.height * 6 / 24
+        width: root.width * (2 + 4 * root.sidebarReveal) / 24
+        height: root.height * 12 / 24
+        radius: root.width * 0.5 / 24
+        color: root.color
+    }
     Accessible.ignored: true
 }

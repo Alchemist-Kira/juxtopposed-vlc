@@ -27,6 +27,7 @@ FocusScope {
     property bool showWindowButtons: true
     property bool libraryOpen: false
     property bool libraryExpanded: false
+    property bool libraryInitialized: false
     onLibraryOpenChanged: if (!libraryOpen) libraryExpanded = false
     property bool queueOpen: false
     property string settingsPage: ""
@@ -103,7 +104,8 @@ FocusScope {
     onFullscreenChanged: revealControls()
     Rectangle { anchors.fill: parent; color: theme.background }
 
-    // Panels resize the actual video surface; playback continues while browsing.
+    // Side panels cover the picture. Their state must not change the video
+    // surface geometry or trigger a new video size/aspect ratio.
     Item {
         id: viewport
         objectName: "redesignViewport"
@@ -115,8 +117,8 @@ FocusScope {
             right: parent.right
             topMargin: root.libraryExpanded ? root.height - theme.dp(54 + 180 + 24) : root.fullscreen ? 0 : theme.dp(40)
             bottomMargin: root.libraryExpanded ? theme.dp(54 + 24) : root.fullscreen ? 0 : theme.dp(54)
-            leftMargin: root.libraryExpanded ? Math.max(theme.dp(50), root.width - theme.dp(344) - ((root.queueOpen || root.settingsPage.length > 0) ? rightPanel.width : 0)) : root.libraryOpen ? library.width : root.fullscreen ? 0 : theme.dp(10)
-            rightMargin: root.libraryExpanded ? theme.dp(24) + ((root.queueOpen || root.settingsPage.length > 0) ? rightPanel.width : 0) : (root.queueOpen || root.settingsPage.length > 0) ? rightPanel.width : root.fullscreen ? 0 : theme.dp(10)
+            leftMargin: root.libraryExpanded ? Math.max(theme.dp(50), root.width - theme.dp(344)) : root.fullscreen ? 0 : theme.dp(10)
+            rightMargin: root.libraryExpanded ? theme.dp(24) : root.fullscreen ? 0 : theme.dp(10)
         }
         Rectangle { anchors.fill: parent; color: "black"; radius: theme.dp(10) }
         Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
@@ -242,19 +244,34 @@ FocusScope {
     Rectangle {
         id: library
         objectName: "redesignLibraryPanel"
-        visible: root.libraryOpen
-        width: root.libraryExpanded ? root.width - ((root.queueOpen || root.settingsPage.length > 0) ? rightPanel.width : 0) : Math.min(theme.dp(427), root.width * (root.width < theme.dp(900) ? 0.48 : 0.38))
-        anchors.top: header.bottom; anchors.bottom: toolbar.top; anchors.left: parent.left
+        property real reveal: root.libraryOpen ? 1 : 0
+        Behavior on reveal { NumberAnimation { duration: 150; easing.type: Easing.OutExpo } }
+        visible: reveal > 0
+        width: root.libraryExpanded ? root.width : Math.min(theme.dp(427), root.width * (root.width < theme.dp(900) ? 0.48 : 0.38))
+        x: (reveal - 1) * width
+        anchors.top: header.bottom; anchors.bottom: toolbar.top
         color: theme.panel
-        Loader { id: libraryLoader; anchors.fill: parent; sourceComponent: root.libraryContent; active: root.libraryOpen }
+        clip: true
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+        Loader {
+            id: libraryLoader
+            anchors.fill: parent
+            sourceComponent: root.libraryContent
+            active: root.libraryOpen || root.libraryInitialized
+            enabled: root.libraryOpen
+            onLoaded: root.libraryInitialized = true
+        }
     }
     Rectangle {
         id: rightPanel
+        objectName: "redesignRightPanel"
+        z: 2
         visible: root.queueOpen || root.settingsPage.length > 0
-        width: Math.min(theme.dp(400), root.width * (root.libraryOpen ? 0.32 : 0.48))
+        width: Math.min(theme.dp(400), root.width * 0.48)
         anchors.top: header.bottom; anchors.bottom: toolbar.top; anchors.right: parent.right
         color: theme.panel
         border.color: theme.border
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
         Loader {
             anchors.fill: parent
             sourceComponent: root.queueContent
@@ -309,7 +326,9 @@ FocusScope {
                 implicitWidth: theme.dp(46)
                 objectName: "libraryToggleButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "sidebar"; text: qsTr("Show library"); selected: root.libraryOpen
+                iconName: "sidebar"; text: root.libraryOpen ? qsTr("Hide library") : qsTr("Show library")
+                iconReveal: library.reveal
+                Accessible.checkable: true; Accessible.checked: root.libraryOpen
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
             Rectangle { Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }

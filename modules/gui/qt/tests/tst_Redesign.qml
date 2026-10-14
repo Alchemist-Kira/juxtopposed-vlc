@@ -114,6 +114,7 @@ TestCase {
         seekSpy.clear()
         audioSpy.clear()
         subtitleSpy.clear()
+        tryCompare(findChild(player, "redesignLibraryPanel"), "reveal", 0)
         wait(20)
     }
     function test_statisticsSwitchUsesMouseAndKeyboard() {
@@ -263,23 +264,89 @@ TestCase {
         keyClick(Qt.Key_Right)
         verify(player.position > before)
     }
-    function test_panelsResizeVideo() {
+    function videoBounds() {
         const viewport = findChild(player, "redesignViewport")
-        const initialWidth = viewport.width
+        return Qt.rect(viewport.x, viewport.y, viewport.width, viewport.height)
+    }
+    function test_panelsOverlayVideo() {
+        const viewport = findChild(player, "redesignViewport")
+        const bounds = videoBounds()
+        const sidebar = findChild(player, "redesignLibraryPanel")
         mouseClick(findChild(player, "libraryToggleButton"))
         verify(player.libraryOpen)
-        verify(viewport.width < initialWidth)
-        verify(viewport.x >= findChild(player, "redesignLibraryPanel").width)
+        tryCompare(sidebar, "reveal", 1)
+        compare(videoBounds(), bounds)
+        verify(sidebar.x < viewport.x + viewport.width && sidebar.x + sidebar.width > viewport.x)
         mouseClick(findChild(player, "queueButton"))
         verify(player.queueOpen)
-        verify(viewport.width > 0)
+        compare(videoBounds(), bounds)
         mouseClick(findChild(player, "playbackSettingsButton"))
         compare(player.settingsPage, "playback")
         verify(!player.queueOpen)
+        compare(videoBounds(), bounds)
         player.forceActiveFocus()
         keyClick(Qt.Key_Escape)
         verify(!player.libraryOpen)
         compare(player.settingsPage, "")
+        tryCompare(sidebar, "reveal", 0)
+        compare(videoBounds(), bounds)
+        trackPicker.open()
+        wait(30)
+        compare(videoBounds(), bounds)
+    }
+    function test_sidebarSlideAndIconStaySynchronized() {
+        const sidebar = findChild(player, "redesignLibraryPanel")
+        const button = findChild(player, "libraryToggleButton")
+        const bounds = videoBounds()
+        player.libraryOpen = true
+        wait(32)
+        verify(sidebar.reveal > 0 && sidebar.reveal < 1)
+        verify(sidebar.x < 0 && sidebar.x > -sidebar.width)
+        compare(button.iconReveal, sidebar.reveal)
+        compare(videoBounds(), bounds)
+        // A second click reverses an unfinished slide without a jump in video size.
+        player.libraryOpen = false
+        verify(sidebar.visible)
+        tryCompare(sidebar, "reveal", 0)
+        verify(!sidebar.visible)
+        compare(button.iconReveal, 0)
+        compare(videoBounds(), bounds)
+        player.libraryOpen = true
+        tryCompare(sidebar, "reveal", 1)
+        compare(sidebar.x, 0)
+        compare(button.iconReveal, 1)
+    }
+    function test_sidebarKeepsItsPageWhenClosed() {
+        const sidebar = findChild(player, "redesignLibraryPanel")
+        player.libraryOpen = true
+        tryCompare(sidebar, "reveal", 1)
+        const content = player.libraryItem
+        content.category = 4
+        player.libraryOpen = false
+        tryCompare(sidebar, "reveal", 0)
+        compare(player.libraryItem, content)
+        player.libraryOpen = true
+        tryCompare(sidebar, "reveal", 1)
+        compare(player.libraryItem.category, 4)
+    }
+    function test_overlaysKeepVideoBoundsInFullscreenAndSmallWindow_data() {
+        return [{tag: "fullscreen", fullscreen: true, width: 1280, height: 720},
+                {tag: "small-window", fullscreen: false, width: 640, height: 360}]
+    }
+    function test_overlaysKeepVideoBoundsInFullscreenAndSmallWindow(data) {
+        player.fullscreen = data.fullscreen
+        testCase.width = data.width; testCase.height = data.height
+        wait(20)
+        const bounds = videoBounds()
+        player.libraryOpen = true
+        player.settingsPage = "audio"
+        wait(170)
+        compare(videoBounds(), bounds)
+        player.settingsPage = "subtitles"
+        compare(videoBounds(), bounds)
+        player.settingsPage = ""
+        player.queueOpen = true
+        compare(videoBounds(), bounds)
     }
     function test_minimumWindowAndScaling() {
         testCase.width = 640

@@ -6,6 +6,7 @@
 #include "subtitle_timeline_scanner.hpp"
 #include <vlc_block.h>
 #include <vlc_codec.h>
+#include <vlc_configuration.h>
 #include <vlc_demux.h>
 #include <vlc_es_out.h>
 #include <vlc_objects.h>
@@ -259,6 +260,18 @@ SubtitleTimelineScan scanSubtitleTimeline(vlc_object_t *parent,
     auto *context = static_cast<vlc_object_t *>(vlc_object_create(parent, sizeof(vlc_object_t)));
     if (!context) { vlc_interrupt_set(previous); return result; }
     context->no_interact = true;
+    for (auto it = source.options.cbegin(); it != source.options.cend(); ++it) {
+        const auto name = it.key().toUtf8();
+        const int type = config_GetType(name.constData());
+        if (!type) continue;
+        var_Create(context, name.constData(), type);
+        switch (type) {
+        case VLC_VAR_BOOL: var_SetBool(context, name.constData(), it.value().toBool()); break;
+        case VLC_VAR_INTEGER: var_SetInteger(context, name.constData(), it.value().toLongLong()); break;
+        case VLC_VAR_FLOAT: var_SetFloat(context, name.constData(), it.value().toFloat()); break;
+        case VLC_VAR_STRING: var_SetString(context, name.constData(), it.value().toString().toUtf8().constData()); break;
+        }
+    }
     // Demux headers can inherit source options, but this reader has no outputs.
     var_Create(context, "interact", VLC_VAR_BOOL);
     var_SetBool(context, "interact", false);

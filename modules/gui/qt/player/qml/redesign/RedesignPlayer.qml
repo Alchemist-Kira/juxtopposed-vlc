@@ -39,6 +39,7 @@ FocusScope {
         value: !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible
         restoreMode: Binding.RestoreBindingOrValue
     }
+    Binding { target: Player; property: "subtitleTimelineEnabled"; value: MainCtx.redesignPlayerPreferences.subtitleTimeline }
 
     Component.onCompleted: {
         MainCtx.playqueuePanel.docked = true
@@ -64,6 +65,12 @@ FocusScope {
         autoHideMode: MainCtx.redesignPlayerPreferences.autoHide
         controlsHideTimeout: MainCtx.redesignPlayerPreferences.hideTimeout
         showFullscreenControls: MainCtx.redesignPlayerPreferences.fullscreenControls
+        showSubtitleTimeline: MainCtx.redesignPlayerPreferences.subtitleTimeline
+        subtitleTimelineCues: Player.subtitleTimelineCues
+        subtitleTimelineState: Player.subtitleTimelineState
+        subtitleDelayMS: Player.subtitleDelayMS
+        durationSeconds: Player.lengthSeconds
+        onSubtitleDelayRequested: milliseconds => playerPreferences.stage("redesign-subtitle-delay", milliseconds)
         maximized: MainCtx.intfMainWindow.visibility === Window.Maximized
         showWindowButtons: MainCtx.clientSideDecoration && !fullscreen
         position: Player.position
@@ -192,6 +199,8 @@ FocusScope {
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 page: view.settingsPage
                 showStatistics: view.showStatistics
+                showSubtitleTimeline: view.showSubtitleTimeline
+                subtitleTimelineState: view.subtitleTimelineState
                 sleepTimerMinutes: sleepTimer.minutes
                 onStatisticsRequested: enabled => view.showStatistics = enabled
                 onPageRequested: page => view.settingsPage = page

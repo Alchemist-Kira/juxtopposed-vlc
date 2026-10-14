@@ -365,6 +365,7 @@ vlc_module_begin ()
               nullptr )
 
     add_bool("qt-remember-window-geometry", true, N_("Remember window size and position"), nullptr)
+    add_bool("qt-subtitle-timeline", false, N_("Show Subtitle Timeline on Seekbar"), nullptr)
     add_integer("qt-controls-autohide", 1, N_("Auto-hide the controls"), nullptr)
         change_integer_list(redesign_autohide_values, redesign_autohide_labels)
     add_integer_with_range("qt-controls-hide-timeout", 1800, 0, 10000,

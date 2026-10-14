@@ -23,6 +23,7 @@
 #include "dialogs/extensions/extensions_manager.hpp"
 #include "player_controller.hpp"
 #include "player_controller_p.hpp"
+#include "subtitle_timeline_scanner.hpp"
 #include "util/shared_input_item.hpp"
 
 #include <vlc_actions.h>           /* ACTION_ID */
@@ -42,6 +43,7 @@
 #include <QThreadPool>
 #include <QImage>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <cmath>
 #ifndef QT_HAS_LIBATOMIC
 #include <QReadLocker>
@@ -65,6 +67,10 @@ using SharedTitleList = ::vlc::vlc_shared_data_ptr<vlc_player_title_list,
 PlayerControllerPrivate::~PlayerControllerPrivate()
 {
     assert(m_smpteTimerRequestCount == 0);
+    m_subtitleTimelineEnabled = false;
+    resetSubtitleTimeline();
+    // Finish cancelled reads before the interface and queued callbacks die.
+    m_subtitleTimelineWorkers.waitForDone();
 
     vlc_player_locker locker{m_player}; //this also locks the player
     vlc_player_vout_RemoveListener( m_player, m_player_vout_listener );
@@ -326,6 +332,7 @@ void PlayerControllerPrivate::UpdateSpuOrder(vlc_es_id_t *es_id, enum vlc_vout_o
         default:
             break;
     }
+    resetSubtitleTimeline();
 }
 
 int PlayerControllerPrivate::interpolateTime(vlc_tick_t system_now)
@@ -1291,10 +1298,208 @@ PlayerController::PlayerController( qt_intf_t *_p_intf )
         cancelSeekPreview();
         d_ptr->m_seekPreviewCache.clear();
     });
+    auto* d = d_ptr.data();
+    d->m_subtitleTimelineWorkers.setMaxThreadCount(1);
+    d->m_subtitleTimelineRefresh.setSingleShot(true);
+    d->m_subtitleTimelineRefresh.setInterval(100);
+    d->m_subtitleTimelineTimeout.setSingleShot(true);
+    d->m_subtitleTimelineTimeout.setInterval(15000);
+    connect(&d->m_subtitleTimelineRefresh, &QTimer::timeout, this, [d] { d->readSubtitleTimeline(); });
+    connect(&d->m_subtitleTimelineTimeout, &QTimer::timeout, this, [d] {
+        if (d->m_subtitleTimelineRequest) vlc_interrupt_kill(d->m_subtitleTimelineRequest->interrupt);
+    });
+    const auto refreshTimeline = [d] { d->resetSubtitleTimeline(); };
+    connect(this, &PlayerController::inputChanged, this, refreshTimeline);
+    connect(this, &PlayerController::subtitleFPSChanged, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::dataChanged, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::rowsInserted, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::rowsRemoved, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::modelReset, this, refreshTimeline);
+    connect(&d->m_videoTracks, &QAbstractItemModel::dataChanged, this, refreshTimeline);
+    connect(&d->m_videoTracks, &QAbstractItemModel::rowsInserted, this, refreshTimeline);
 }
 
 PlayerController::~PlayerController()
 {
+}
+
+bool PlayerController::getSubtitleTimelineEnabled() const { return d_ptr->m_subtitleTimelineEnabled; }
+QVariantList PlayerController::getSubtitleTimelineCues() const { return d_ptr->m_subtitleTimelineCues; }
+QString PlayerController::getSubtitleTimelineState() const { return d_ptr->m_subtitleTimelineState; }
+double PlayerController::getLengthSeconds() const { return d_ptr->m_length.valid() ? d_ptr->m_length.toSecf() : 0; }
+
+void PlayerController::setSubtitleTimelineEnabled(bool enabled)
+{
+    Q_D(PlayerController);
+    if (d->m_subtitleTimelineEnabled == enabled) return;
+    d->m_subtitleTimelineEnabled = enabled;
+    d->resetSubtitleTimeline();
+    emit subtitleTimelineEnabledChanged();
+}
+
+void PlayerControllerPrivate::resetSubtitleTimeline()
+{
+    ++m_subtitleTimelineGeneration;
+    m_subtitleTimelineRefresh.stop();
+    m_subtitleTimelineTimeout.stop();
+    if (m_subtitleTimelineRequest) vlc_interrupt_kill(m_subtitleTimelineRequest->interrupt);
+    m_subtitleTimelineRequest.reset();
+    m_subtitleTimelineWorkers.clear();
+    m_subtitleTimelineCues.clear();
+    m_subtitleTimelineState = m_subtitleTimelineEnabled ? QStringLiteral("loading") : QStringLiteral("off");
+    emit q_ptr->subtitleTimelineChanged();
+    if (m_subtitleTimelineEnabled) m_subtitleTimelineRefresh.start();
+}
+
+void PlayerControllerPrivate::readSubtitleTimeline()
+{
+    SubtitleTimelineSource source;
+    bool external = false;
+    SharedInputItem media;
+    SharedEsId selectedId;
+    {
+        vlc_player_locker lock{m_player};
+        if (!isCurrentItemSynced() || !m_currentItem) {
+            m_subtitleTimelineState = QStringLiteral("no-track");
+            emit q_ptr->subtitleTimelineChanged();
+            return;
+        }
+        const vlc_player_track* selected = nullptr;
+        for (size_t i = 0; i < vlc_player_GetTrackCount(m_player, SPU_ES); ++i) {
+            const auto* track = vlc_player_GetTrackAt(m_player, SPU_ES, i);
+            if (track->selected && track->es_id != m_secondarySpuEsId.get()) { selected = track; break; }
+        }
+        if (!selected) {
+            m_subtitleTimelineState = QStringLiteral("no-track");
+            emit q_ptr->subtitleTimelineChanged();
+            return;
+        }
+        media = m_currentItem;
+        selectedId.reset(selected->es_id, true);
+        const QByteArray id = vlc_es_id_GetStrId(selected->es_id);
+        const qsizetype split = id.indexOf("/spu/");
+        const QByteArray prefix = split < 0 ? QByteArray() : id.first(split + 1);
+        if ((!prefix.isEmpty() && prefix.size() != 33) || (prefix.isEmpty() && !id.startsWith("spu/"))) {
+            m_subtitleTimelineState = QStringLiteral("unavailable");
+            emit q_ptr->subtitleTimelineChanged();
+            return; // Derived closed-caption IDs cannot be reopened as SPU tracks.
+        }
+        source.subtitleIndex = 0;
+        for (size_t i = 0; i < vlc_player_GetTrackCount(m_player, SPU_ES); ++i) {
+            const auto* track = vlc_player_GetTrackAt(m_player, SPU_ES, i);
+            if (track == selected) break;
+            const QByteArray other = vlc_es_id_GetStrId(track->es_id);
+            if (prefix.isEmpty() ? other.startsWith("spu/") : other.startsWith(QByteArray(prefix + "spu/")))
+                ++source.subtitleIndex;
+        }
+        source.duration = vlc_player_GetLength(m_player);
+        if (const auto* video = vlc_player_GetSelectedTrack(m_player, VIDEO_ES)) {
+            const auto& format = video->fmt.video;
+            source.videoWidth = format.i_visible_width;
+            source.videoHeight = format.i_visible_height;
+            if (format.i_frame_rate_base) source.originalFPS = double(format.i_frame_rate) / format.i_frame_rate_base;
+        }
+        {
+            vlc_mutex_locker itemLock{&m_currentItem->lock};
+            if (prefix.isEmpty()) source.uri = m_currentItem->psz_uri;
+            else for (int i = 0; i < m_currentItem->i_slaves; ++i) {
+                const auto* slave = m_currentItem->pp_slaves[i];
+                const QByteArray uri = slave->psz_uri;
+                if (QCryptographicHash::hash(uri, QCryptographicHash::Md5).toHex() + '/' == prefix) {
+                    source.uri = uri; external = true; break;
+                }
+            }
+            // Preserve trusted per-item settings. The two HTTP header options
+            // below are also explicitly safe in the native HTTP access module.
+            for (int i = 0; i < m_currentItem->i_options; ++i) {
+                QByteArray option = m_currentItem->ppsz_options[i];
+                if (option.startsWith(':')) option.remove(0, 1);
+                const auto equal = option.indexOf('=');
+                QByteArray name = equal < 0 ? option : option.first(equal);
+                const QByteArray value = equal < 0 ? QByteArray() : option.sliced(equal + 1);
+                bool negative = false;
+                int type = config_GetType(name.constData());
+                if (!type && equal < 0 && name.startsWith("no")) {
+                    name.remove(0, name.startsWith("no-") ? 3 : 2);
+                    type = config_GetType(name.constData()); negative = true;
+                }
+                const bool trusted = unsigned(i) < m_currentItem->optflagc
+                    && (m_currentItem->optflagv[i] & VLC_INPUT_OPTION_TRUSTED);
+                if (!type || (!trusted && name != "http-referrer" && name != "http-user-agent")) continue;
+                if (type != VLC_VAR_BOOL && value.isEmpty()) continue;
+                QVariant parsed;
+                switch (type) {
+                case VLC_VAR_BOOL: {
+                    bool number = false; const auto integer = value.toLongLong(&number, 0);
+                    parsed = equal < 0 ? !negative : number ? integer != 0 : value.toLower() == "true" || value.toLower() == "yes";
+                    break;
+                }
+                case VLC_VAR_INTEGER: parsed = value.toLongLong(nullptr, 0); break;
+                case VLC_VAR_FLOAT: parsed = value.toFloat(); break;
+                case VLC_VAR_STRING: parsed = QString::fromUtf8(value); break;
+                default: continue;
+                }
+                source.options.insert(QString::fromUtf8(name), parsed);
+            }
+        }
+        if (external) {
+            source.demux = "subtitle";
+            const float fps = vlc_player_GetAssociatedSubsFPS(m_player);
+            if (source.originalFPS > 1 && fps > 1) source.subtitleRate = source.originalFPS / fps;
+        } else {
+            const auto demux = source.options.value(QStringLiteral("demux")).toString().toUtf8();
+            if (!demux.isEmpty()) source.demux = demux;
+        }
+    }
+    if (source.uri.isEmpty()) {
+        m_subtitleTimelineState = QStringLiteral("unavailable");
+        emit q_ptr->subtitleTimelineChanged();
+        return;
+    }
+    auto request = std::make_shared<SubtitleTimelineRequest>();
+    if (!request->interrupt) {
+        m_subtitleTimelineState = QStringLiteral("unavailable");
+        emit q_ptr->subtitleTimelineChanged();
+        return;
+    }
+    m_subtitleTimelineRequest = request;
+    m_subtitleTimelineTimeout.start();
+    source.deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(15);
+    const auto generation = m_subtitleTimelineGeneration;
+    m_subtitleTimelineWorkers.start([this, request, source, external, generation, media, selectedId]() mutable {
+        auto result = scanSubtitleTimeline(VLC_OBJECT(p_intf), source, request->interrupt);
+        if (external && result.status == SubtitleTimelineScan::Failed) {
+            source.demux = "any";
+            result = scanSubtitleTimeline(VLC_OBJECT(p_intf), source, request->interrupt);
+        }
+        QVariantList cues;
+        if (result.status == SubtitleTimelineScan::Complete) {
+            cues.reserve(result.cues.size());
+            for (const auto& cue : result.cues)
+                cues.append(QVariantMap{{QStringLiteral("start"), double(cue.start) / CLOCK_FREQ},
+                                        {QStringLiteral("stop"), double(cue.stop) / CLOCK_FREQ}});
+        }
+        callAsync([this, generation, media, selectedId, status = result.status, cues = std::move(cues)] {
+            if (generation != m_subtitleTimelineGeneration) return;
+            {
+                vlc_player_locker lock{m_player};
+                const auto* selected = vlc_player_GetTrack(m_player, selectedId.get());
+                if (vlc_player_GetCurrentMedia(m_player) != media.get()
+                    || !selected || !selected->selected || selected->es_id == m_secondarySpuEsId.get()) {
+                    resetSubtitleTimeline();
+                    return;
+                }
+            }
+            m_subtitleTimelineTimeout.stop();
+            m_subtitleTimelineRequest.reset();
+            m_subtitleTimelineCues = std::move(cues);
+            m_subtitleTimelineState = status == SubtitleTimelineScan::Complete
+                ? m_subtitleTimelineCues.isEmpty() ? QStringLiteral("empty") : QStringLiteral("ready")
+                : QStringLiteral("unavailable");
+            msg_Dbg(p_intf, "Subtitle timeline: %lld cues, status %d", static_cast<long long>(m_subtitleTimelineCues.size()), int(status));
+            emit q_ptr->subtitleTimelineChanged();
+        });
+    });
 }
 
 // PLAYBACK

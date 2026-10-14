@@ -1002,6 +1002,7 @@ qml_tests = {
     'tst_Redesign': files('tests/tst_Redesign.qml'),
     'tst_RedesignPreferences': files('tests/tst_RedesignPreferences.qml'),
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
+    'tst_RedesignSubtitleTimeline': files('tests/tst_RedesignSubtitleTimeline.qml'),
     'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
     'tst_RedesignVideo': files('tests/tst_RedesignVideo.qml'),
     'tst_RedesignOnboarding': files('tests/tst_RedesignOnboarding.qml'),

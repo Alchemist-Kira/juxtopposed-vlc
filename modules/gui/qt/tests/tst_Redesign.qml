@@ -95,6 +95,9 @@ TestCase {
         settingSpy.clear()
         statisticsSwitch.visible = false
         player.showStatistics = false
+        player.showSubtitleTimeline = false
+        player.subtitleTimelineCues = []
+        player.subtitleTimelineState = "off"
         player.statistics = ({})
         player.started = true
         trackPicker.close()
@@ -139,6 +142,23 @@ TestCase {
         verify(!player.showStatistics)
         player.showStatistics = true
         verify(toggle.checked)
+    }
+    function test_zoomedSubtitleTimelineFollowsGlobalPlayerPosition() {
+        player.showSubtitleTimeline = true
+        player.subtitleTimelineState = "ready"
+        player.subtitleTimelineCues = [{start: 10, stop: 20}, {start: 80, stop: 95}]
+        player.durationSeconds = 100
+        player.position = 0.45
+        const seek = findChild(player, "seekBar")
+        seek.zoomTimeline(4)
+        player.position = 0.9
+        tryVerify(() => seek.from <= 0.9 && seek.to >= 0.9)
+        tryCompare(seek, "value", 0.9)
+        const viewport = findChild(player, "redesignViewport")
+        const before = [viewport.x, viewport.y, viewport.width, viewport.height]
+        player.libraryOpen = true; player.settingsPage = "playback"
+        wait(220)
+        compare([viewport.x, viewport.y, viewport.width, viewport.height], before)
     }
     function test_statisticsOverlayUpdatesAndFitsVideo() {
         const overlay = findChild(player, "playbackStatisticsOverlay")

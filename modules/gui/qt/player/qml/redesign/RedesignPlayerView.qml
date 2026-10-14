@@ -22,6 +22,12 @@ FocusScope {
     property int controlsHideTimeout: 1800
     property bool showFullscreenControls: true
     property bool showStatistics: false
+    property bool showSubtitleTimeline: false
+    property var subtitleTimelineCues: []
+    property string subtitleTimelineState: "off"
+    property real durationSeconds: 0
+    property int subtitleDelayMS: 0
+    signal subtitleDelayRequested(int milliseconds)
     property var statistics: ({})
     readonly property bool autoHideActive: started && hasVideo && (autoHideMode === 2 || (fullscreen && autoHideMode === 1))
     property bool maximized: false
@@ -450,9 +456,20 @@ FocusScope {
                 previewEnabled: root.started && root.hasVideo && !root.presentationOnly
                 previewImage: root.seekPreviewImage
                 previewImagePosition: root.seekPreviewImagePosition
+                timelineEnabled: root.showSubtitleTimeline
+                timelineCues: root.subtitleTimelineCues
+                timelineState: root.subtitleTimelineState
+                durationSeconds: root.durationSeconds
+                playbackPosition: root.position
+                subtitleDelayMS: root.subtitleDelayMS
+                onSubtitleDelayRequested: milliseconds => root.subtitleDelayRequested(milliseconds)
                 onPreviewRequested: position => root.seekPreviewRequested(position)
                 onPreviewEnded: root.seekPreviewEnded()
-                Binding on value { when: !seek.pressed; value: root.position; restoreMode: Binding.RestoreBindingOrValue }
+                Binding on value {
+                    when: !seek.pressed
+                    value: { seek.from; seek.to; return root.position }
+                    restoreMode: Binding.RestoreBindingOrValue
+                }
                 onMoved: root.seekRequested(value)
             }
             Text {

@@ -8,6 +8,8 @@ ColumnLayout {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property bool showStatistics: false
+    property bool showSubtitleTimeline: false
+    property string subtitleTimelineState: "off"
     property bool reversed: false
     property bool reverseAvailable: false
     property real playbackRate: 1
@@ -21,12 +23,29 @@ ColumnLayout {
     ]
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal statisticsRequested(bool enabled)
+    signal subtitleTimelineRequested(bool enabled)
     signal reverseRequested(bool reversed)
     signal rateRequested(real rate)
     signal sleepTimerRequested(int minutes)
     signal visualizationRequested(int index)
     spacing: 0
 
+    RedesignSwitchRow {
+        objectName: "showSubtitleTimelineSetting"
+        Layout.fillWidth: true
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        label: qsTr("Show Subtitle Timeline on Seekbar"); checked: root.showSubtitleTimeline
+        onToggled: checked => root.subtitleTimelineRequested(checked)
+    }
+    Text {
+        Layout.fillWidth: true; Layout.bottomMargin: theme.dp(10)
+        visible: root.showSubtitleTimeline && root.subtitleTimelineState !== "ready" && root.subtitleTimelineState !== "off"
+        text: root.subtitleTimelineState === "loading" ? qsTr("Reading subtitle times…")
+            : root.subtitleTimelineState === "no-track" ? qsTr("Select a subtitle track to show its times.")
+            : root.subtitleTimelineState === "empty" ? qsTr("This subtitle track has no cue times.")
+            : qsTr("VLC cannot read the times for this subtitle track.")
+        color: theme.foreground; font.pixelSize: theme.dp(12); wrapMode: Text.WordWrap
+    }
     RedesignSwitchRow {
         objectName: "showStatisticsSetting"
         Layout.fillWidth: true

@@ -22,6 +22,8 @@ C.Pane {
     property bool lightTheme: false
     property string page: "playback"
     property bool showStatistics: false
+    property bool showSubtitleTimeline: false
+    property string subtitleTimelineState: "off"
     property int sleepTimerMinutes: 0
     required property var preferenceStore
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
@@ -73,11 +75,14 @@ C.Pane {
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     visible: root.page === "playback"
                     showStatistics: root.showStatistics
+                    showSubtitleTimeline: root.showSubtitleTimeline
+                    subtitleTimelineState: root.subtitleTimelineState
                     sleepTimerMinutes: root.sleepTimerMinutes
                     playbackRate: Player.rate; rateAvailable: Player.ratechangable
                     reversed: Player.rate < 0; reverseAvailable: Player.rewindable && Player.ratechangable
                     visualizationModel: Player.audioVisualization
                     onStatisticsRequested: enabled => root.statisticsRequested(enabled)
+                    onSubtitleTimelineRequested: enabled => root.preferenceStore.stage("qt-subtitle-timeline", enabled)
                     onReverseRequested: reversed => Player.rate = (reversed ? -1 : 1) * Math.abs(Player.rate)
                     onRateRequested: value => Player.rate = (Player.rate < 0 ? -1 : 1) * value
                     onSleepTimerRequested: minutes => root.sleepTimerRequested(minutes)

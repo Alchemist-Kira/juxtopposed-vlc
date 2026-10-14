@@ -71,6 +71,7 @@ const QStringList& presetOptions()
     // credentials, general file paths or other machine preferences.
     static const QStringList names = [] {
         QStringList names{
+            QStringLiteral("qt-subtitle-timeline"),
             QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
             QStringLiteral("sub-track"), QStringLiteral("sub-track-id"), QStringLiteral("sub-language"),
             QStringLiteral("audio-desync"), QStringLiteral("sub-delay"), QStringLiteral("sub-delay-ms"), QStringLiteral("sub-fps"),

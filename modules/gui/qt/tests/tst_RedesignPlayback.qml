@@ -11,6 +11,7 @@ TestCase {
     property real rateValue: 1
     property bool canReverse: true
     property bool statisticsVisible: false
+    property bool timelineVisible: false
     RedesignSleepTimer { id: sleepTimer }
     SignalSpy { id: expirySpy; target: sleepTimer; signalName: "triggered" }
     ListModel { id: visualizations }
@@ -23,6 +24,8 @@ TestCase {
             sleepTimerMinutes: sleepTimer.minutes
             visualizationModel: visualizations
             showStatistics: testCase.statisticsVisible
+            showSubtitleTimeline: testCase.timelineVisible
+            onSubtitleTimelineRequested: enabled => testCase.timelineVisible = enabled
             onRateRequested: value => testCase.rateValue = (testCase.rateValue < 0 ? -1 : 1) * value
             onReverseRequested: reversed => testCase.rateValue = (reversed ? -1 : 1) * Math.abs(testCase.rateValue)
             onSleepTimerRequested: minutes => sleepTimer.start(minutes)
@@ -34,7 +37,7 @@ TestCase {
     }
     function init() {
         sleepTimer.start(0); expirySpy.clear()
-        rateValue = 1; canReverse = true; statisticsVisible = false
+        rateValue = 1; canReverse = true; statisticsVisible = false; timelineVisible = false
         visualizations.clear()
         visualizations.append({display: "Disable", checked: true})
         visualizations.append({display: "Spectrum", checked: false})
@@ -44,6 +47,15 @@ TestCase {
         wait(20)
     }
     function field(name) { return findChild(panelLoader.item, name) }
+    function test_subtitleTimelineIsFirstAndAcceptsMouseAndKeyboard() {
+        const row = field("showSubtitleTimelineSetting")
+        verify(row.y < field("showStatisticsSetting").y)
+        const toggle = findChild(row, "settingSwitch")
+        verify(!toggle.checked)
+        mouseClick(toggle); verify(timelineVisible)
+        toggle.forceActiveFocus(); keyClick(Qt.Key_Space)
+        verify(!timelineVisible)
+    }
     function editRate(text) {
         const input = field("settingValueField")
         mouseClick(input)

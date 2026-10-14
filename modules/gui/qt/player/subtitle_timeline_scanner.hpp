@@ -6,6 +6,7 @@
 #include <vlc_interrupt.h>
 #include <QByteArray>
 #include <QVector>
+#include <QVariantMap>
 
 struct SubtitleTimelineCue
 {
@@ -17,6 +18,8 @@ struct SubtitleTimelineSource
 {
     QByteArray uri;
     QByteArray demux = "any";
+    // Already validated input options. Never pass untrusted options here.
+    QVariantMap options;
     // Index among subtitle tracks in this source, excluding other slaves.
     int subtitleIndex = 0;
     vlc_tick_t duration = 0;

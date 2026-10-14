@@ -31,6 +31,8 @@
 #include <QByteArray>
 #include <QPair>
 #include <QCache>
+#include <QThreadPool>
+#include <vlc_interrupt.h>
 
 #include <optional>
 
@@ -64,6 +66,8 @@ public:
     void UpdateSpuOrder(vlc_es_id_t *es_id, enum vlc_vout_order spu_order);
     int interpolateTime(vlc_tick_t system_now);
     bool isCurrentItemSynced();
+    void resetSubtitleTimeline();
+    void readSubtitleTimeline();
 
     // Lazily reads m_syltRaw (the raw sylt-data buffer captured during
     // UpdateMeta) into a list of TimedText entries. The cache is
@@ -106,6 +110,18 @@ public:
     };
     // Cache at most 32 thumbnails, each at most 252 x 252 pixels.
     QCache<vlc_tick_t, SeekPreviewFrame> m_seekPreviewCache{32};
+    bool m_subtitleTimelineEnabled = false;
+    QVariantList m_subtitleTimelineCues;
+    QString m_subtitleTimelineState = QStringLiteral("off");
+    QTimer m_subtitleTimelineRefresh;
+    QTimer m_subtitleTimelineTimeout;
+    QThreadPool m_subtitleTimelineWorkers;
+    quint64 m_subtitleTimelineGeneration = 0;
+    struct SubtitleTimelineRequest {
+        vlc_interrupt_t* interrupt = vlc_interrupt_create();
+        ~SubtitleTimelineRequest() { if (interrupt) vlc_interrupt_destroy(interrupt); }
+    };
+    std::shared_ptr<SubtitleTimelineRequest> m_subtitleTimelineRequest;
 
     //callbacks
     vlc_player_listener_id* m_player_listener = nullptr;

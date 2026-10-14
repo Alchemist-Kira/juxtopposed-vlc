@@ -143,11 +143,15 @@ public:
     Q_PROPERTY(QUrl url READ getUrl NOTIFY inputChanged FINAL)
     Q_PROPERTY(QUrl seekPreview READ getSeekPreview NOTIFY seekPreviewChanged FINAL)
     Q_PROPERTY(double seekPreviewPosition READ getSeekPreviewPosition NOTIFY seekPreviewChanged FINAL)
+    Q_PROPERTY(bool subtitleTimelineEnabled READ getSubtitleTimelineEnabled WRITE setSubtitleTimelineEnabled NOTIFY subtitleTimelineEnabledChanged FINAL)
+    Q_PROPERTY(QVariantList subtitleTimelineCues READ getSubtitleTimelineCues NOTIFY subtitleTimelineChanged FINAL)
+    Q_PROPERTY(QString subtitleTimelineState READ getSubtitleTimelineState NOTIFY subtitleTimelineChanged FINAL)
 
     Q_PROPERTY(VLCTime time READ getTime WRITE setTime NOTIFY timeChanged FINAL)
     Q_PROPERTY(VLCTime remainingTime READ getRemainingTime NOTIFY remainingTimeChanged FINAL)
     Q_PROPERTY(double position READ getPosition WRITE setPosition NOTIFY positionChanged FINAL)
     Q_PROPERTY(VLCDuration length READ getLength NOTIFY lengthChanged FINAL)
+    Q_PROPERTY(double lengthSeconds READ getLengthSeconds NOTIFY lengthChanged FINAL)
 
     Q_PROPERTY(bool seekable READ isSeekable NOTIFY seekableChanged FINAL)
     Q_PROPERTY(bool rewindable READ isRewindable NOTIFY rewindableChanged FINAL)
@@ -238,6 +242,7 @@ public:
 
     /* exposed actions */
 public slots:
+    void setSubtitleTimelineEnabled(bool enabled);
     void requestSeekPreview(double position);
     void cancelSeekPreview();
     void reverse();
@@ -346,6 +351,10 @@ public slots:
     QUrl getUrl() const;
     QUrl getSeekPreview() const;
     double getSeekPreviewPosition() const;
+    double getLengthSeconds() const;
+    bool getSubtitleTimelineEnabled() const;
+    QVariantList getSubtitleTimelineCues() const;
+    QString getSubtitleTimelineState() const;
 
     //tracks
     TrackListModel* getVideoTracks();
@@ -455,6 +464,8 @@ public slots:
 
 signals:
     void seekPreviewChanged();
+    void subtitleTimelineEnabledChanged();
+    void subtitleTimelineChanged();
     //playback
     void playingStateChanged( PlayingState state );
     void inputChanged( bool hasInput );

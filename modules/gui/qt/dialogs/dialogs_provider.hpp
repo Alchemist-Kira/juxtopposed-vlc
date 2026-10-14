@@ -234,6 +234,7 @@ public slots:
     void pluginDialog();
     void epgDialog();
     void setPopupMenu();
+    void popupPlayerMenu(const QPoint& position);
     void destroyPopupMenu();
 
     void openFileGenericDialog( intf_dialog_args_t * );

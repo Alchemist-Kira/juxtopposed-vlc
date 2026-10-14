@@ -47,7 +47,8 @@ TestCase {
     }
     function test_orderAndSize() {
         compare(menu.width, 375)
-        compare(menu.count, 15)
+        compare(menu.count, 13)
+        compare(menu.height, 585)
         compare(menu.itemAt(0).height, 48)
         compare(menu.itemAt(1).text, "Open Folder")
         compare(menu.itemAt(2).text, "Open Network Stream")

@@ -552,7 +552,14 @@ void DialogsProvider::epgDialog()
 
 void DialogsProvider::setPopupMenu()
 {
-    popupMenu.reset(VLCMenuBar::PopupMenu( p_intf, true ));
+    popupPlayerMenu(QCursor::pos());
+}
+
+void DialogsProvider::popupPlayerMenu(const QPoint& position)
+{
+    emit releaseMouseEvents();
+    popupMenu.reset(VLCMenuBar::PopupMenu(p_intf, false));
+    if (popupMenu) popupMenu->popup(position);
 }
 
 void DialogsProvider::destroyPopupMenu()

@@ -147,7 +147,4 @@ C.Menu {
     MenuRow { text: qsTr("Customize Player"); glyph: "menu-customize"; onTriggered: root.activate("customize") }
     MenuRow { text: qsTr("Settings"); glyph: "menu-settings"; hint: "Ctrl+P"; onTriggered: root.activate("settings") }
     MenuRow { text: qsTr("About VLC"); glyph: "menu-about"; hint: "Shift+F1"; onTriggered: root.activate("about") }
-    // Keep VLC's remaining commands available while the redesign is in progress.
-    MenuDivider { }
-    MenuRow { text: qsTr("All VLC Actions"); glyph: "more"; onTriggered: root.activate("advanced") }
 }

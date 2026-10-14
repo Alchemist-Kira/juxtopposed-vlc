@@ -7,7 +7,6 @@ import VLC.Playlist
 import VLC.Style
 import VLC.Util
 import VLC.Dialogs
-import VLC.Menus as Menus
 import VLC.Widgets as Widgets
 
 FocusScope {
@@ -27,6 +26,21 @@ FocusScope {
     }
     RedesignSleepTimer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
     RedesignPreferences { id: playerPreferences; ctx: MainCtx; autoSave: true; editPlayerPreset: true }
+    Shortcut {
+        sequences: ["Menu", "Shift+F10"]
+        context: Qt.WindowShortcut
+        enabled: {
+            const window = rootPlayer.Window.window
+            const item = window ? window.activeFocusItem : null
+            return MainCtx.useGlobalShortcuts && !(item instanceof TextInput) && !(item instanceof TextEdit)
+        }
+        onActivated: {
+            mediaMenu.dismiss()
+            tracksPopup.close()
+            const item = rootPlayer.Window.window.activeFocusItem || view
+            DialogsProvider.popupPlayerMenu(item.mapToGlobal(item.width / 2, item.height / 2))
+        }
+    }
     Shortcut {
         sequences: { playerPreferences.revision; return String(playerPreferences.value("key-toggle-library") || "").split("\t").filter(sequence => sequence.length > 0) }
         context: Qt.WindowShortcut
@@ -258,23 +272,18 @@ FocusScope {
         onActionRequested: action => {
             switch (action) {
             case "file": DialogsProvider.simpleOpenDialog(); break
-            case "subtitles": DialogsProvider.loadSubtitlesFile(); break
             case "directory": DialogsProvider.PLOpenDir(); break
             case "disc": DialogsProvider.openDiscDialog(); break
             case "network": DialogsProvider.openNetDialog(); break
             case "capture": DialogsProvider.openCaptureDialog(); break
             case "convert": DialogsProvider.openAndTranscodingDialogs(); break
-            case "stream": DialogsProvider.openAndStreamingDialogs(); break
-            case "library": view.libraryOpen = true; view.libraryExpanded = true; break
             case "customize": DialogsProvider.showToolbarEditorDialog(); break
             case "shortcuts": shortcutEditor.open(); break
             case "settings": DialogsProvider.prefsDialog(); break
-            case "advanced": globalMenu.popup(view.mapToGlobal(0, view.theme.dp(40))); break
             case "about": DialogsProvider.aboutDialog(); break
             }
         }
     }
-    Menus.QmlGlobalMenu { id: globalMenu; ctx: MainCtx }
     // VideoSurface continues to provide VLC's native context menu and hotkeys.
     QmlAudioContextMenu { id: audioContextMenu; ctx: MainCtx }
     TapHandler {

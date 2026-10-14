@@ -915,7 +915,15 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         // Editing an enabled effect must preserve its position. Moving an
         // adjust filter after transform can discard the transform orientation.
         if (!proposed.toBool()) filters.removeAll(parts[2]);
-        else if (!filters.contains(parts[2])) filters.append(parts[2]);
+        else if (!filters.contains(parts[2])) {
+            // Transform describes the final display orientation. A new pixel
+            // effect after it can replace that format and lose the flip.
+            const int transform = filters.indexOf(QStringLiteral("transform"));
+            if (parts[1] == QLatin1String("video-filter") && transform >= 0)
+                filters.insert(transform, parts[2]);
+            else
+                filters.append(parts[2]);
+        }
         return stage(parts[1], filters.join(QLatin1Char(':')));
     }
 

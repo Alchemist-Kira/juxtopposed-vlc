@@ -423,6 +423,7 @@ qt_plugin_sources = files(
     'player/player_controller_p.hpp',
     'player/subtitle_timeline_scanner.cpp',
     'player/subtitle_timeline_scanner.hpp',
+    'util/seek_preview_cache.hpp',
     'util/seek_preview_image_provider.hpp',
     'player/player_controlbar_model.cpp',
     'player/player_controlbar_model.hpp',

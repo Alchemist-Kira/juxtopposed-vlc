@@ -25,6 +25,7 @@
 #include "util/varchoicemodel.hpp"
 #include "util/shared_input_item.hpp"
 #include "util/renderer_manager.hpp"
+#include "util/seek_preview_cache.hpp"
 
 #include <QTimer>
 #include <QUrl>
@@ -68,6 +69,11 @@ public:
     bool isCurrentItemSynced();
     void resetSubtitleTimeline();
     void readSubtitleTimeline();
+    void resetSeekPreview();
+    void updateSeekSampling();
+    void sampleSeekPreview();
+    bool startSeekPreview(vlc_tick_t time, bool background);
+    void cancelSeekRequest();
 
     // Lazily reads m_syltRaw (the raw sylt-data buffer captured during
     // UpdateMeta) into a list of TimedText entries. The cache is
@@ -104,12 +110,14 @@ public:
     QUrl m_seekPreview;
     double m_seekPreviewPosition = -1;
     double m_pendingSeekPosition = -1;
-    struct SeekPreviewFrame {
-        QUrl image;
-        vlc_tick_t time;
-    };
-    // Cache at most 32 thumbnails, each at most 252 x 252 pixels.
-    QCache<vlc_tick_t, SeekPreviewFrame> m_seekPreviewCache{32};
+    SeekPreviewCache m_seekPreviewCache;
+    QTimer m_seekSampleTimer;
+    QVector<qint64> m_seekSamplePoints;
+    vlc_tick_t m_seekSampleLength = 0;
+    bool m_seekPreviewEnabled = false;
+    bool m_seekPreviewActive = false;
+    bool m_seekRequestBackground = false;
+    int m_seekSampleFailures = 0;
     bool m_subtitleTimelineEnabled = false;
     QVariantList m_subtitleTimelineCues;
     QString m_subtitleTimelineState = QStringLiteral("off");

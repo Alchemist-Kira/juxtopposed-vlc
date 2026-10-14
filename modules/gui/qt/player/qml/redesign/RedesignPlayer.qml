@@ -53,6 +53,7 @@ FocusScope {
         value: !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible && !shortcutEditor.visible
         restoreMode: Binding.RestoreBindingOrValue
     }
+    Binding { target: Player; property: "seekPreviewEnabled"; value: MainCtx.redesignPlayerPreferences.seekPreview }
     Binding { target: Player; property: "subtitleTimelineEnabled"; value: MainCtx.redesignPlayerPreferences.subtitleTimeline }
 
     Component.onCompleted: {

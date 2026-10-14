@@ -141,6 +141,7 @@ public:
     Q_PROPERTY(float rate READ getRate WRITE setRate NOTIFY rateChanged FINAL)
     Q_PROPERTY(QVariantMap playbackStatistics READ getPlaybackStatistics NOTIFY playbackStatisticsChanged FINAL)
     Q_PROPERTY(QUrl url READ getUrl NOTIFY inputChanged FINAL)
+    Q_PROPERTY(bool seekPreviewEnabled READ getSeekPreviewEnabled WRITE setSeekPreviewEnabled NOTIFY seekPreviewEnabledChanged FINAL)
     Q_PROPERTY(QUrl seekPreview READ getSeekPreview NOTIFY seekPreviewChanged FINAL)
     Q_PROPERTY(double seekPreviewPosition READ getSeekPreviewPosition NOTIFY seekPreviewChanged FINAL)
     Q_PROPERTY(bool subtitleTimelineEnabled READ getSubtitleTimelineEnabled WRITE setSubtitleTimelineEnabled NOTIFY subtitleTimelineEnabledChanged FINAL)
@@ -351,6 +352,8 @@ public slots:
     void openVLsub();
     void acknowledgeRestoreCallback();
     QUrl getUrl() const;
+    bool getSeekPreviewEnabled() const;
+    void setSeekPreviewEnabled(bool enabled);
     QUrl getSeekPreview() const;
     double getSeekPreviewPosition() const;
     double getLengthSeconds() const;
@@ -466,6 +469,7 @@ public slots:
 
 signals:
     void seekPreviewChanged();
+    void seekPreviewEnabledChanged();
     void subtitleTimelineEnabledChanged();
     void subtitleTimelineChanged();
     //playback

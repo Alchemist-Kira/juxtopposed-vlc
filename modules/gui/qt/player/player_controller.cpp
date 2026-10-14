@@ -67,6 +67,8 @@ using SharedTitleList = ::vlc::vlc_shared_data_ptr<vlc_player_title_list,
 PlayerControllerPrivate::~PlayerControllerPrivate()
 {
     assert(m_smpteTimerRequestCount == 0);
+    m_seekSampleTimer.stop();
+    m_seekPreviewEnabled = false;
     m_subtitleTimelineEnabled = false;
     resetSubtitleTimeline();
     // Finish cancelled reads before the interface and queued callbacks die.
@@ -1299,10 +1301,18 @@ PlayerController::PlayerController( qt_intf_t *_p_intf )
     connect( &d_ptr->m_position_timer, &QTimer::timeout, this, &PlayerController::updatePositionFromTimer );
     connect( &d_ptr->m_time_timer, &QTimer::timeout, this, &PlayerController::updateTimeFromTimer );
     connect(this, &PlayerController::inputChanged, this, [this] {
-        cancelSeekPreview();
-        d_ptr->m_seekPreviewCache.clear();
+        d_ptr->resetSeekPreview();
+        d_ptr->updateSeekSampling();
     });
     auto* d = d_ptr.data();
+    d->m_seekSampleTimer.setSingleShot(true);
+    connect(&d->m_seekSampleTimer, &QTimer::timeout, this, [d] { d->sampleSeekPreview(); });
+    const auto updateSamples = [d] { d->updateSeekSampling(); };
+    connect(this, &PlayerController::lengthChanged, this, updateSamples);
+    connect(this, &PlayerController::seekableChanged, this, updateSamples);
+    connect(this, &PlayerController::hasVideoOutputChanged, this, updateSamples);
+    connect(this, &PlayerController::playingStateChanged, this, updateSamples);
+    connect(this, &PlayerController::bufferingChanged, this, updateSamples);
     d->m_subtitleTimelineWorkers.setMaxThreadCount(1);
     d->m_subtitleTimelineRefresh.setSingleShot(true);
     d->m_subtitleTimelineRefresh.setInterval(100);
@@ -1517,58 +1527,153 @@ double PlayerController::getSeekPreviewPosition() const
     return d->m_seekPreviewPosition;
 }
 
+bool PlayerController::getSeekPreviewEnabled() const
+{
+    Q_D(const PlayerController);
+    return d->m_seekPreviewEnabled;
+}
+
+void PlayerController::setSeekPreviewEnabled(bool enabled)
+{
+    Q_D(PlayerController);
+    if (d->m_seekPreviewEnabled == enabled) return;
+    d->m_seekPreviewEnabled = enabled;
+    if (enabled) d->updateSeekSampling();
+    else d->resetSeekPreview();
+    emit seekPreviewEnabledChanged();
+}
+
+void PlayerControllerPrivate::cancelSeekRequest()
+{
+    ++m_seekGeneration;
+    if (m_seekRequest) {
+        vlc_preparser_Cancel(m_seekPreparser, m_seekRequest);
+        vlc_preparser_req_Release(m_seekRequest);
+        m_seekRequest = nullptr;
+    }
+    m_seekRequestBackground = false;
+}
+
+void PlayerControllerPrivate::resetSeekPreview()
+{
+    Q_Q(PlayerController);
+    m_seekSampleTimer.stop();
+    m_seekPreviewActive = false;
+    m_pendingSeekPosition = -1;
+    cancelSeekRequest();
+    m_seekPreviewCache.clear();
+    m_seekSamplePoints.clear();
+    m_seekSampleLength = 0;
+    m_seekSampleFailures = 0;
+    m_seekPreviewPosition = -1;
+    if (!m_seekPreview.isEmpty()) {
+        m_seekPreview = QUrl();
+        emit q->seekPreviewChanged();
+    }
+}
+
+void PlayerControllerPrivate::updateSeekSampling()
+{
+    Q_Q(PlayerController);
+    const bool started = m_playing_status == PlayerController::PLAYING_STATE_STARTED
+        || m_playing_status == PlayerController::PLAYING_STATE_PLAYING
+        || m_playing_status == PlayerController::PLAYING_STATE_PAUSED;
+    if (!m_seekPreviewEnabled || !started) {
+        resetSeekPreview();
+        return;
+    }
+    if (!m_hasVideo || !q->isSeekable() || !m_length.valid() || m_length.toVLCTick() <= 0
+        || m_buffering < 1) {
+        m_seekSampleTimer.stop();
+        if (m_seekRequestBackground) cancelSeekRequest();
+        return;
+    }
+    const vlc_tick_t length = m_length.toVLCTick();
+    const bool first = m_seekSampleLength != length;
+    if (first) {
+        m_seekSamplePoints = SeekPreviewCache::samplesFor(length);
+        m_seekSampleLength = length;
+        m_seekSampleFailures = 0;
+    }
+    if (!m_seekPreviewActive && !m_seekRequest && !m_seekSamplePoints.empty()
+        && m_seekSampleFailures < 3 && !m_seekSampleTimer.isActive())
+        m_seekSampleTimer.start(first ? 1500 : 500);
+}
+
+void PlayerControllerPrivate::sampleSeekPreview()
+{
+    if (m_seekPreviewActive || m_seekRequest || m_seekSamplePoints.empty()) return;
+    if (!startSeekPreview(m_seekSamplePoints.front(), true)) {
+        m_seekSamplePoints.removeFirst();
+        ++m_seekSampleFailures;
+        updateSeekSampling();
+    }
+}
+
 void PlayerController::cancelSeekPreview()
 {
     Q_D(PlayerController);
-    ++d->m_seekGeneration;
-    d->m_seekPreviewPosition = -1;
+    d->m_seekPreviewActive = false;
     d->m_pendingSeekPosition = -1;
-    if (d->m_seekRequest) {
-        vlc_preparser_Cancel(d->m_seekPreparser, d->m_seekRequest);
-        vlc_preparser_req_Release(d->m_seekRequest);
-        d->m_seekRequest = nullptr;
-    }
+    if (!d->m_seekRequestBackground) d->cancelSeekRequest();
+    d->m_seekPreviewPosition = -1;
     if (!d->m_seekPreview.isEmpty()) {
         d->m_seekPreview = QUrl();
         emit seekPreviewChanged();
     }
+    d->updateSeekSampling();
 }
 
 void PlayerController::requestSeekPreview(double position)
 {
     Q_D(PlayerController);
-    if (!std::isfinite(position) || position < 0 || position > 1
+    if (!d->m_seekPreviewEnabled || !std::isfinite(position) || position < 0 || position > 1
         || !d->m_length.valid() || d->m_length.toVLCTick() <= 0 || !isSeekable()) {
         cancelSeekPreview();
         return;
     }
-    if (d->m_seekRequest) {
-        // Finish the current decode, then use only the newest pointer position.
-        // Repeated cancellation can otherwise starve previews during a drag.
-        d->m_pendingSeekPosition = position;
-        return;
-    }
-    ++d->m_seekGeneration;
-
-    SharedInputItem media;
-    {
-        vlc_player_locker lock{d->m_player};
-        if (!d->isCurrentItemSynced()) return;
-        media = d->m_currentItem;
-    }
-    if (!media) return;
-
-    // Half-second buckets prevent a decoder restart for each pointer pixel.
+    d->m_seekPreviewActive = true;
+    d->m_seekSampleTimer.stop();
     const vlc_tick_t length = d->m_length.toVLCTick();
     const vlc_tick_t time = std::min(length - 1, vlc_tick_t(position * length));
-    const vlc_tick_t bucket = time / VLC_TICK_FROM_MS(500) * VLC_TICK_FROM_MS(500);
-    if (const auto* cached = d->m_seekPreviewCache.object(bucket)) {
+    const vlc_tick_t bucket = time / SeekPreviewCache::Bucket * SeekPreviewCache::Bucket;
+    const auto exact = d->m_seekPreviewCache.exact(bucket);
+    const auto cached = exact ? exact : d->m_seekPreviewCache.nearest(bucket);
+    if (cached) {
         d->m_seekPreview = cached->image;
         d->m_seekPreviewPosition = double(cached->time) / length;
         emit seekPreviewChanged();
+    }
+    if (exact) {
+        // An older in-flight frame must not replace this cached pointer target.
+        d->cancelSeekRequest();
+        d->m_pendingSeekPosition = -1;
         return;
     }
+    // Coarse work yields to the pointer. Finish an active precise decode so
+    // continuous movement cannot cancel every frame before it is available.
+    if (d->m_seekRequestBackground) d->cancelSeekRequest();
+    if (d->m_seekRequest) {
+        d->m_pendingSeekPosition = position;
+        return;
+    }
+    d->startSeekPreview(bucket, false);
+}
 
+bool PlayerControllerPrivate::startSeekPreview(vlc_tick_t bucket, bool background)
+{
+    auto* d = this;
+    if (!m_seekPreviewEnabled || m_seekRequest || !m_length.valid()) return false;
+    const vlc_tick_t length = m_length.toVLCTick();
+    if (length <= 0) return false;
+    SharedInputItem media;
+    {
+        vlc_player_locker lock{m_player};
+        if (!isCurrentItemSynced()) return false;
+        media = m_currentItem;
+    }
+    if (!media) return false;
+    ++m_seekGeneration;
     if (!d->m_seekPreparser) {
         vlc_preparser_cfg cfg{};
         cfg.types = VLC_PREPARSER_TYPE_THUMBNAIL;
@@ -1576,7 +1681,7 @@ void PlayerController::requestSeekPreview(double position)
         cfg.timeout = VLC_TICK_FROM_SEC(15);
         cfg.external_process = false;
         d->m_seekPreparser = vlc_preparser_New(VLC_OBJECT(d->p_intf), &cfg);
-        if (!d->m_seekPreparser) return;
+        if (!d->m_seekPreparser) return false;
     }
 
     struct Request {
@@ -1584,7 +1689,7 @@ void PlayerController::requestSeekPreview(double position)
         quint64 generation;
         vlc_tick_t time;
         vlc_tick_t length;
-        double position;
+        bool background;
     };
     static const vlc_thumbnailer_cbs callbacks = {
         [](vlc_preparser_req*, int status, picture_t* picture, void* data) {
@@ -1593,7 +1698,8 @@ void PlayerController::requestSeekPreview(double position)
             QUrl imageUrl;
             vlc_tick_t decodedTime = request->time;
             if (status == VLC_SUCCESS && picture) {
-                msg_Dbg(owner->p_intf, "Seek preview: requested %" PRId64 ", decoded %" PRId64,
+                msg_Dbg(owner->p_intf, "%s: requested %" PRId64 ", decoded %" PRId64,
+                        request->background ? "Seek preview sample" : "Seek preview",
                         request->time, picture->date);
                 // Some demuxers return a nearby frame even for precise seeks.
                 // Label the decoded frame, rather than the requested position.
@@ -1625,35 +1731,49 @@ void PlayerController::requestSeekPreview(double position)
                 msg_Dbg(owner->p_intf, "Seek preview unavailable: status %d at %" PRId64,
                         status, request->time);
             owner->callAsync([owner, generation = request->generation, time = request->time, decodedTime,
-                              length = request->length, position = request->position, imageUrl] {
+                              length = request->length, background = request->background, imageUrl] {
                 if (owner->m_seekGeneration != generation) return;
                 vlc_preparser_req_Release(owner->m_seekRequest);
                 owner->m_seekRequest = nullptr;
-                if (!imageUrl.isEmpty())
-                    owner->m_seekPreviewCache.insert(time, new PlayerControllerPrivate::SeekPreviewFrame{imageUrl, decodedTime});
-                owner->m_seekPreview = imageUrl;
-                owner->m_seekPreviewPosition = double(decodedTime) / length;
-                emit owner->q_func()->seekPreviewChanged();
-                const double pending = std::exchange(owner->m_pendingSeekPosition, -1);
-                if (pending >= 0 && pending != position)
-                    owner->q_func()->requestSeekPreview(pending);
+                owner->m_seekRequestBackground = false;
+                const bool saved = owner->m_seekPreviewCache.insert(time, imageUrl, decodedTime, background);
+                if (background) {
+                    owner->m_seekSamplePoints.removeOne(time);
+                    owner->m_seekSampleFailures = saved ? 0 : owner->m_seekSampleFailures + 1;
+                } else {
+                    if (saved) {
+                        owner->m_seekSampleFailures = 0;
+                        owner->m_seekPreview = imageUrl;
+                        owner->m_seekPreviewPosition = double(decodedTime) / length;
+                        emit owner->q_func()->seekPreviewChanged();
+                    }
+                    const double pending = std::exchange(owner->m_pendingSeekPosition, -1);
+                    if (pending >= 0) owner->q_func()->requestSeekPreview(pending);
+                }
+                owner->updateSeekSampling();
             });
         }
     };
     vlc_thumbnailer_arg args{};
     args.seek.type = decltype(args.seek)::VLC_THUMBNAILER_SEEK_TIME;
     args.seek.time = bucket;
-    args.seek.speed = decltype(args.seek)::VLC_THUMBNAILER_SEEK_PRECISE;
-    auto request = std::make_unique<Request>(Request{d, d->m_seekGeneration, bucket, length, position});
+    args.seek.speed = background ? decltype(args.seek)::VLC_THUMBNAILER_SEEK_FAST
+                                 : decltype(args.seek)::VLC_THUMBNAILER_SEEK_PRECISE;
+    auto request = std::make_unique<Request>(Request{d, d->m_seekGeneration, bucket, length, background});
     d->m_seekRequest = vlc_preparser_req_NewThumbnail(d->m_seekPreparser, media.get(), &args, &callbacks, request.get());
-    if (!d->m_seekRequest) return;
+    if (!d->m_seekRequest) return false;
+    d->m_seekRequestBackground = background;
+    msg_Dbg(p_intf, "Seek preview request: %s at %" PRId64, background ? "sample" : "precise", bucket);
     // Callbacks may run before Submit returns, so transfer their context first.
     Request* context = request.release();
     if (vlc_preparser_Submit(d->m_seekPreparser, d->m_seekRequest) != VLC_SUCCESS) {
         delete context;
         vlc_preparser_req_Release(d->m_seekRequest);
         d->m_seekRequest = nullptr;
+        d->m_seekRequestBackground = false;
+        return false;
     }
+    return true;
 }
 
 vlc_player_t * PlayerController::getPlayer() const

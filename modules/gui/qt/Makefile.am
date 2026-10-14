@@ -293,7 +293,7 @@ libqt_plugin_la_SOURCES = \
 	player/delay_estimator.cpp \
 	player/delay_estimator.hpp \
 	player/player_controller.cpp player/player_controller.hpp player/player_controller_p.hpp \
-	util/seek_preview_image_provider.hpp \
+	util/seek_preview_cache.hpp util/seek_preview_image_provider.hpp \
 	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
 	player/control_list_model.cpp player/control_list_model.hpp \
@@ -1849,7 +1849,7 @@ test_redesign_folder_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_redesign_folder_model
 TESTS += test_redesign_folder_model
 
-test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.cpp util/seek_preview_image_provider.hpp
+test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.cpp util/seek_preview_image_provider.hpp util/seek_preview_cache.hpp
 nodist_test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.moc
 BUILT_SOURCES += tests/test_seek_preview_image_provider.moc
 CLEANFILES += tests/test_seek_preview_image_provider.moc

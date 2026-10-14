@@ -747,6 +747,9 @@ qml_modules += {
        'player/qml/redesign/RedesignPreferencesCatalog.qml',
        'player/qml/redesign/RedesignPreferencesWindow.qml',
        'player/qml/redesign/RedesignSettingSlider.qml',
+       'player/qml/redesign/RedesignSleepTimer.qml',
+       'player/qml/redesign/RedesignModelChoice.qml',
+       'player/qml/redesign/RedesignPlaybackSettings.qml',
        'player/qml/redesign/RedesignSwitchRow.qml',
        'player/qml/redesign/RedesignStatistics.qml',
        'player/qml/redesign/RedesignSettings.qml',
@@ -985,6 +988,7 @@ qml_tests = {
     'tst_FSM': files('tests/tst_FSM.qml'),
     'tst_Redesign': files('tests/tst_Redesign.qml'),
     'tst_RedesignPreferences': files('tests/tst_RedesignPreferences.qml'),
+    'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
 }
 
 qmllibs = []

@@ -22,6 +22,7 @@ C.Pane {
     property bool lightTheme: false
     property string page: "playback"
     property bool showStatistics: false
+    property int sleepTimerMinutes: 0
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal pageRequested(string page)
     signal closeRequested()
@@ -37,15 +38,18 @@ C.Pane {
         Rectangle {
             Layout.fillWidth: true; height: theme.dp(50); color: theme.field
             RowLayout {
-                anchors.fill: parent; anchors.leftMargin: theme.dp(8); anchors.rightMargin: theme.dp(8)
-                spacing: 0
+                anchors.fill: parent; anchors.leftMargin: theme.dp(14); anchors.rightMargin: theme.dp(14)
+                spacing: theme.dp(14)
                 Repeater {
                     model: [{key: "playback", icon: "play", label: qsTr("Playback")}, {key: "video", icon: "video", label: qsTr("Video")}, {key: "audio", icon: "audio", label: qsTr("Audio")}, {key: "subtitles", icon: "subtitles", label: qsTr("Subtitles")}]
                     RedesignButton {
                         required property var modelData
                         Layout.fillWidth: true
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        iconSize: theme.dp(18)
+                        Layout.fillHeight: true
+                        captionFontSize: 12; iconSize: theme.dp(16)
+                        selectedForeground: theme.foreground
+                        background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
                         iconName: modelData.icon; text: modelData.label
                         caption: root.width > theme.dp(360) ? modelData.label : ""
                         selected: root.page === modelData.key
@@ -61,50 +65,22 @@ C.Pane {
             clip: true
             ColumnLayout {
                 width: parent.width
-                spacing: theme.dp(20)
-                // Padding belongs to the content so the background is uninterrupted.
-                Item { Layout.fillWidth: true; height: 0 }
-                ColumnLayout {
+                spacing: 0
+                Item { Layout.fillWidth: true; height: theme.dp(11) }
+                RedesignPlaybackSettings {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
-                    spacing: theme.dp(22)
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     visible: root.page === "playback"
-                    RedesignSwitchRow {
-                        Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        objectName: "showStatisticsSetting"
-                        label: qsTr("Show Statistics"); checked: root.showStatistics
-                        onToggled: checked => root.statisticsRequested(checked)
-                    }
-                    RedesignSettingSlider {
-                        objectName: "playbackRateControl"
-                        Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        label: qsTr("Speed"); suffix: "×"; decimals: 2
-                        from: 0.25; to: 2; stepSize: 0.05
-                        currentValue: Player.rate; enabled: Player.ratechangable
-                        onMoved: value => Player.rate = value
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reverse"); text: caption; enabled: Player.rewindable; onClicked: Player.reverse() }
-                        RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Next frame"); text: caption; enabled: Player.hasVideoOutput; onClicked: Player.frameNext() }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text { Layout.fillWidth: true; text: qsTr("Sleep timer"); color: theme.foreground; font.pixelSize: theme.dp(14) }
-                        C.ComboBox {
-                            model: [qsTr("Off"), qsTr("15 minutes"), qsTr("30 minutes"), qsTr("60 minutes"), qsTr("90 minutes")]
-                            onActivated: index => root.sleepTimerRequested([0, 15, 30, 60, 90][index])
-                        }
-                    }
-                    RedesignTracks {
-                        Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        heading: qsTr("Audio visualizer"); trackModel: Player.audioVisualization
-                        onSelectionRequested: (index, selected) => root.select(trackModel, index, selected)
-                    }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Media information and statistics"); text: caption; onClicked: DialogsProvider.mediaInfoDialog() }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Stop playback"); text: caption; iconName: "stop"; onClicked: MainPlaylistController.stop() }
+                    showStatistics: root.showStatistics
+                    sleepTimerMinutes: root.sleepTimerMinutes
+                    playbackRate: Player.rate; rateAvailable: Player.ratechangable
+                    reversed: Player.rate < 0; reverseAvailable: Player.rewindable && Player.ratechangable
+                    visualizationModel: Player.audioVisualization
+                    onStatisticsRequested: enabled => root.statisticsRequested(enabled)
+                    onReverseRequested: reversed => Player.rate = (reversed ? -1 : 1) * Math.abs(Player.rate)
+                    onRateRequested: value => Player.rate = (Player.rate < 0 ? -1 : 1) * value
+                    onSleepTimerRequested: minutes => root.sleepTimerRequested(minutes)
+                    onVisualizationRequested: index => root.select(Player.audioVisualization, index, true)
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
@@ -177,6 +153,7 @@ C.Pane {
             }
         }
         Rectangle {
+            visible: root.page !== "playback"
             Layout.fillWidth: true; height: theme.dp(64); color: theme.panel
             border.color: theme.border
             RowLayout {

@@ -13,7 +13,7 @@ RowLayout {
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal toggled(bool checked)
     spacing: theme.dp(12)
-    implicitHeight: theme.dp(52)
+    Layout.minimumHeight: theme.dp(52)
     opacity: enabled ? 1 : 0.5
     Text {
         Layout.fillWidth: true

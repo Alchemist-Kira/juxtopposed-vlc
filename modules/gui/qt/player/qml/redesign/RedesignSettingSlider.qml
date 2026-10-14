@@ -15,9 +15,14 @@ ColumnLayout {
     property real currentValue: 0
     property real from: 0
     property real to: 1
+    property real inputFrom: from
+    property real inputTo: to
     property real stepSize: 0.1
     property real resetValue: 1
     property string minimumValueText
+    property bool trimTrailingZeros: false
+    property var ticks: []
+    property real sliderTopMargin: 0
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal moved(real value)
     spacing: theme.dp(8)
@@ -33,11 +38,18 @@ ColumnLayout {
             leftPadding: theme.dp(14); rightPadding: theme.dp(10)
             font.pixelSize: theme.dp(14)
             editable: true
-            from: Math.round(root.from * factor); to: Math.round(root.to * factor)
+            from: Math.round(root.inputFrom * factor); to: Math.round(root.inputTo * factor)
             stepSize: Math.max(1, Math.round(root.stepSize * factor))
             value: Math.round(root.currentValue * factor)
-            textFromValue: (value, locale) => root.minimumValueText && value === from ? root.minimumValueText
-                : Number(value / factor).toLocaleString(locale, 'f', root.decimals) + root.suffix
+            textFromValue: (value, locale) => {
+                if (root.minimumValueText && value === from) return root.minimumValueText
+                const number = value / factor
+                let precision = root.decimals
+                if (root.trimTrailingZeros) {
+                    while (precision > 0 && Math.round(number * Math.pow(10, precision - 1)) / Math.pow(10, precision - 1) === number) --precision
+                }
+                return Number(number).toLocaleString(locale, 'f', precision) + root.suffix
+            }
             valueFromText: (text, locale) => {
                 let input = text.trim()
                 if (root.minimumValueText && input.toLocaleLowerCase() === root.minimumValueText.toLocaleLowerCase()) return from
@@ -46,7 +58,7 @@ ColumnLayout {
                 try { if (input.length) number = Number.fromLocaleString(locale, input) }
                 catch (error) { return value }
                 const scaled = Math.round(number * factor)
-                return Number.isFinite(number) && number >= root.from && number <= root.to ? scaled : value
+                return Number.isFinite(number) && number >= root.inputFrom && number <= root.inputTo ? scaled : value
             }
             // The displayed value can contain decimals, a unit or Automatic.
             // The integer validator of the standard SpinBox rejects those.
@@ -68,7 +80,9 @@ ColumnLayout {
     }
     C.Slider {
         id: slider
+        objectName: "settingSlider"
         Layout.fillWidth: true
+        Layout.topMargin: theme.dp(root.sliderTopMargin)
         implicitHeight: theme.dp(24)
         from: root.from; to: root.to; stepSize: root.stepSize
         Binding on value { when: !slider.pressed; value: root.currentValue }
@@ -78,8 +92,19 @@ ColumnLayout {
             x: slider.leftPadding; y: slider.topPadding + slider.availableHeight / 2 - height / 2
             width: slider.availableWidth; height: theme.dp(14); radius: theme.dp(5); color: theme.field
             Rectangle { width: slider.position * parent.width; height: parent.height; radius: parent.radius; color: theme.progress }
+            Repeater {
+                model: root.ticks
+                Rectangle {
+                    required property real modelData
+                    width: theme.dp(1); height: theme.dp(7)
+                    x: sliderHandle.width / 2 + (modelData - root.from) / (root.to - root.from) * (parent.width - sliderHandle.width)
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: theme.background
+                }
+            }
         }
         handle: Rectangle {
+            id: sliderHandle
             x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
             y: slider.topPadding + slider.availableHeight / 2 - height / 2
             width: theme.dp(8); height: theme.dp(24); radius: theme.dp(4); color: theme.accent
@@ -88,10 +113,28 @@ ColumnLayout {
     }
     RowLayout {
         Layout.fillWidth: true
+        visible: root.ticks.length === 0
         Text { text: root.from + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
         Item { Layout.fillWidth: true }
         RedesignButton { objectName: "settingResetButton"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.resetValue) }
         Item { Layout.fillWidth: true }
         Text { text: root.to + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
+    }
+    Item {
+        Layout.fillWidth: true
+        implicitHeight: theme.dp(16)
+        visible: root.ticks.length > 0
+        Repeater {
+            model: root.ticks
+            Text {
+                required property int index
+                required property real modelData
+                objectName: "settingTick_" + index
+                x: Math.max(0, Math.min(parent.width - width, slider.leftPadding + sliderHandle.width / 2
+                    + (modelData - root.from) / (root.to - root.from) * (slider.availableWidth - sliderHandle.width) - width / 2))
+                text: Number(modelData).toLocaleString(Qt.locale(), 'f', Number.isInteger(modelData) ? 0 : String(modelData).split('.')[1].length)
+                color: theme.foreground; font.pixelSize: theme.dp(11)
+            }
+        }
     }
 }

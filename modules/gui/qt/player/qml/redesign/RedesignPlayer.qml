@@ -21,13 +21,17 @@ FocusScope {
         const parts = tick.formatHMS(0).split(":")
         return parts.length === 2 ? "00:" + parts.join(":") : parts.join(":")
     }
-    Timer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
+    RedesignSleepTimer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
+    Binding {
+        target: MainCtx
+        property: "preferHotkeys"
+        value: !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible
+        restoreMode: Binding.RestoreBindingOrValue
+    }
 
     Component.onCompleted: {
-        MainCtx.preferHotkeys = true
         MainCtx.playqueuePanel.docked = true
     }
-    Component.onDestruction: MainCtx.preferHotkeys = false
 
     RedesignPlayerView {
         id: view
@@ -171,10 +175,11 @@ FocusScope {
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 page: view.settingsPage
                 showStatistics: view.showStatistics
+                sleepTimerMinutes: sleepTimer.minutes
                 onStatisticsRequested: enabled => view.showStatistics = enabled
                 onPageRequested: page => view.settingsPage = page
                 onCloseRequested: view.settingsPage = ""
-                onSleepTimerRequested: minutes => { sleepTimer.stop(); if (minutes > 0) { sleepTimer.interval = minutes * 60000; sleepTimer.start() } }
+                onSleepTimerRequested: minutes => sleepTimer.start(minutes)
             }
         }
     }

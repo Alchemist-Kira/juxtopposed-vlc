@@ -8,6 +8,8 @@ C.ComboBox {
     property real scaleFactor: 1
     property bool lightTheme: false
     property bool showCurvePreviews: false
+    property var labelOverrides: ({})
+    function labelAt(index) { const text = textAt(index); return labelOverrides[text] || text }
     signal aboutToOpen()
     property color accentColor: "#d37918"
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
@@ -32,7 +34,7 @@ C.ComboBox {
         required property int index
         width: ListView.view.width
         implicitHeight: root.theme.dp(34)
-        text: root.textAt(index)
+        text: root.labelAt(index)
         highlighted: root.highlightedIndex === index
         contentItem: RowLayout {
             spacing: root.theme.dp(10)
@@ -59,7 +61,7 @@ C.ComboBox {
             }
             Text {
                 Layout.fillWidth: true
-                text: root.textAt(index); font: root.font; color: root.theme.foreground
+                text: root.labelAt(index); font: root.font; color: root.theme.foreground
                 verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
             }
         }

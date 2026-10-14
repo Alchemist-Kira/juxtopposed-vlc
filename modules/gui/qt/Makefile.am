@@ -1182,6 +1182,9 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignConfirmationDialog.qml \
 	player/qml/redesign/RedesignPreferencesWindow.qml \
 	player/qml/redesign/RedesignSettingSlider.qml \
+	player/qml/redesign/RedesignSleepTimer.qml \
+	player/qml/redesign/RedesignModelChoice.qml \
+	player/qml/redesign/RedesignPlaybackSettings.qml \
 	player/qml/redesign/RedesignSwitchRow.qml \
 	player/qml/redesign/RedesignStatistics.qml \
 	player/qml/redesign/RedesignSettings.qml \
@@ -1923,7 +1926,7 @@ qml_test_CXXFLAGS = $(AM_CXXFLAGS) $(QT_CFLAGS) -fPIC $(CXXFLAGS_qt) ${QT_QUICK_
 qml_test_LDADD = $(QT_INDIRECT_LIBS) ${QT_QUICK_TEST_LIBS} $(QT_LIBS) $(LIBS_qt) libqml_module_util.a
 qml_test_LDFLAGS = $(AM_LDFLAGS) $(QT_QUICK_TEST_LDFLAGS)
 check_PROGRAMS += qml_test
-EXTRA_DIST += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml
-TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml
+EXTRA_DIST += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml
+TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml
 endif
 endif

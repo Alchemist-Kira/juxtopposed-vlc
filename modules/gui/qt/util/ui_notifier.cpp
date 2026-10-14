@@ -40,6 +40,6 @@ void UINotifier::setupNotifications()
     {
         if (m_ctx->isMinimalView())
             emit showNotification(MinimalView
-                                  , qtr("Minimal View"));
+                                  , qtr("Controls hidden"));
     });
 }

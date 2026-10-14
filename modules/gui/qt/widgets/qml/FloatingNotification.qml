@@ -54,12 +54,6 @@ Column {
             required property int index
             required property string text
 
-            readonly property ColorContext colorContext: ColorContext {
-                id: theme
-
-                colorSet: ColorContext.Window
-            }
-
             function resetLifetime() {
                 lifetime.restart()
                 state = "VISIBLE"
@@ -67,14 +61,15 @@ Column {
 
             anchors.horizontalCenter: parent.horizontalCenter
 
-            color: theme.bg.primary
+            color: VLCStyle.palette.isDark ? "#191919" : "#acacac"
+            border.color: VLCStyle.palette.isDark ? "#292929" : "#969696"
 
             focus: false
 
-            width: notifText.implicitWidth
+            width: Math.min(notifText.implicitWidth, root.width)
             height: notifText.implicitHeight
 
-            radius: VLCStyle.dp(3, VLCStyle.scale)
+            radius: VLCStyle.dp(8, VLCStyle.scale)
 
             scale: 0
 
@@ -159,13 +154,18 @@ Column {
 
             }
 
-            SubtitleLabel {
+            Text {
                 id: notifText
-
-                padding: VLCStyle.margin_small
-
-                color: theme.fg.primary
-
+                width: parent.width
+                leftPadding: VLCStyle.dp(14, VLCStyle.scale)
+                rightPadding: leftPadding
+                topPadding: VLCStyle.dp(10, VLCStyle.scale)
+                bottomPadding: topPadding
+                color: VLCStyle.palette.isDark ? "#8f8f8f" : "#404040"
+                font.pixelSize: VLCStyle.dp(14, VLCStyle.scale)
+                font.weight: Font.Normal
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
                 text: delegate.text
             }
         }
@@ -181,10 +181,8 @@ Column {
                     found = true
 
                     const del = repeater.itemAt(i)
-                    if (del.text !== text) {
-                        del.text = text
-                        del.resetLifetime()
-                    }
+                    model.setProperty(i, "text", text)
+                    if (del) del.resetLifetime()
 
                     break
                 }

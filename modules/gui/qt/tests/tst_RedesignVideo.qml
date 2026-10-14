@@ -104,6 +104,48 @@ TestCase {
         compare(video.rotationDegrees, 180)
         video.setFlip(2); compare(video.flip, 2); compare(video.rotationDegrees, 180)
     }
+    function test_quarterTurnsKeepTheWholeFrameAndLogicalFlipChoice() {
+        const rows = [
+            {angle: 90, types: ["90", "transpose", "antitranspose"]},
+            {angle: 180, types: ["180", "vflip", "hflip"]},
+            {angle: 270, types: ["270", "antitranspose", "transpose"]},
+            {angle: -90, types: ["270", "antitranspose", "transpose"]}
+        ]
+        for (const row of rows) for (let flip = 0; flip <= 2; ++flip) {
+            verify(video.setOrientation(row.angle, flip))
+            compare(video.rotationDegrees, row.angle); compare(video.flip, flip)
+            compare(store.values["transform-type"], row.types[flip])
+            compare(store.values["video-filter"], "transform")
+            compare(store.values["rotate-angle"], 0)
+        }
+        video.setRotation(0)
+        compare(video.flip, 2); compare(store.values["transform-type"], "vflip")
+        video.setFlip(0); compare(store.values["video-filter"], "")
+    }
+    function test_switchingFromQuarterToFreeAngleRetainsOtherEffects() {
+        store.stage("video-filter", "adjust:sharpen")
+        video.setOrientation(90, 1)
+        compare(store.values["video-filter"], "adjust:sharpen:transform")
+        video.setRotation(45)
+        compare(video.flip, 1); compare(video.rotationDegrees, 45)
+        compare(store.values["video-filter"], "adjust:sharpen:rotate:transform")
+        compare(store.values["rotate-angle"], -45)
+        video.setRotation(-180)
+        compare(video.flip, 1); compare(video.rotationDegrees, -180)
+        compare(store.values["video-filter"], "adjust:sharpen:transform")
+        verify(!video.setRotation(NaN)); verify(!video.setRotation(361)); verify(!video.setFlip(3))
+    }
+    function test_externalNativeTransformChangesReplaceSavedLogicalHint() {
+        video.setOrientation(180, 1)
+        compare(store.values["transform-type"], "vflip")
+        compare(video.rotationDegrees, 180); compare(video.flip, 1)
+        store.live = {"video-filter": "transform", "transform-type": "90"}; store.revision++
+        compare(video.rotationDegrees, 90); compare(video.flip, 0)
+        store.live = {"video-filter": "rotate", "rotate-angle": 15}; store.revision++
+        compare(video.rotationDegrees, -15); compare(video.flip, 0)
+        store.stage("qt-video-transform-state", "invalid json")
+        compare(video.rotationDegrees, 0); compare(video.flip, 2)
+    }
     function test_zoomSetsPixelFittingWithoutChangingOtherDefaults() {
         const choice = item("zoomChoice")
         choice.currentIndex = 3; choice.activated(3)

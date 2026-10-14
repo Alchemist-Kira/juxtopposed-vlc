@@ -33,25 +33,43 @@ ColumnLayout {
         return result
     }
     readonly property string videoTransform: enabledFilter("transform") ? String(current("transform-type")) : ""
-    readonly property int flip: videoTransform === "hflip" || videoTransform === "transpose" ? 1 : videoTransform === "vflip" || videoTransform === "antitranspose" ? 2 : 0
-    readonly property real rotationDegrees: (enabledFilter("rotate") ? Number(current("rotate-angle")) : 0)
-        + ({"90": 90, "180": 180, "270": 270, "transpose": 90, "antitranspose": 90}[videoTransform] || 0)
-    function setFlip(index) {
-        const angle = rotationDegrees
-        const legacy = videoTransform && videoTransform !== "hflip" && videoTransform !== "vflip"
-        if (backend.stage("transform-type", index === 2 ? "vflip" : "hflip")) {
-            effect("transform", index !== 0)
-            if (legacy) setRotation(angle)
+    readonly property real pixelRotation: enabledFilter("rotate") ? Number(current("rotate-angle")) : 0
+    readonly property var orientation: {
+        // Several Rotate/Flip pairs have the same native transform. Retain the
+        // chosen pair only while its native settings still match the output.
+        try {
+            const state = JSON.parse(String(current("qt-video-transform-state") || "{}"))
+            if (state.transform === videoTransform && state.pixelRotation === pixelRotation
+                && Number.isInteger(state.flip) && state.flip >= 0 && state.flip <= 2
+                && Number.isFinite(state.angle) && Math.abs(state.angle) <= 360)
+                return state
+        } catch (error) { }
+        return {
+            flip: videoTransform === "hflip" || videoTransform === "transpose" ? 1 : videoTransform === "vflip" || videoTransform === "antitranspose" ? 2 : 0,
+            angle: -pixelRotation + ({"90": 90, "180": 180, "270": 270, "transpose": 90, "antitranspose": 90}[videoTransform] || 0)
         }
     }
-    function setRotation(angle) {
-        const flipIndex = flip
-        if (videoTransform && videoTransform !== "hflip" && videoTransform !== "vflip") {
-            backend.stage("transform-type", flipIndex === 2 ? "vflip" : "hflip")
-            effect("transform", flipIndex !== 0)
-        }
-        if (backend.stage("rotate-angle", angle)) effect("rotate", angle !== 0)
+    readonly property int flip: orientation.flip
+    readonly property real rotationDegrees: orientation.angle
+    function setOrientation(angle, flipIndex) {
+        if (!Number.isFinite(angle) || Math.abs(angle) > 360 || !Number.isInteger(flipIndex) || flipIndex < 0 || flipIndex > 2) return false
+        const quarter = angle % 90 === 0
+        const turns = ((angle / 90) % 4 + 4) % 4
+        const transforms = [["", "90", "180", "270"], ["hflip", "transpose", "vflip", "antitranspose"], ["vflip", "antitranspose", "hflip", "transpose"]]
+        const transform = quarter ? transforms[flipIndex][turns] : flipIndex === 1 ? "hflip" : flipIndex === 2 ? "vflip" : ""
+        // Native free-angle rotation uses the opposite sign to transform.
+        const pixels = quarter ? 0 : -angle
+        // Keep the orientation transform last. Pixel filters can replace an
+        // earlier orientation with their output format.
+        effect("transform", false)
+        if (!backend.stage("rotate-angle", pixels)) return false
+        effect("rotate", !quarter)
+        if (transform.length && !backend.stage("transform-type", transform)) return false
+        effect("transform", transform.length > 0)
+        return backend.stage("qt-video-transform-state", JSON.stringify({transform: transform, pixelRotation: pixels, flip: flipIndex, angle: angle}))
     }
+    function setFlip(index) { return setOrientation(rotationDegrees, index) }
+    function setRotation(angle) { return setOrientation(angle, flip) }
     function borders() {
         const parts = String(current("crop") || "").split("+")
         return parts.length === 4 && parts.every(value => /^\d+$/.test(value)) ? parts.map(Number) : [0, 0, 0, 0]

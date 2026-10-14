@@ -80,7 +80,7 @@ const QStringList& presetOptions()
             QStringLiteral("compressor-rms-peak"), QStringLiteral("compressor-attack"), QStringLiteral("compressor-release"),
             QStringLiteral("compressor-threshold"), QStringLiteral("compressor-ratio"), QStringLiteral("compressor-knee"), QStringLiteral("compressor-makeup-gain"),
             QStringLiteral("video-filter"), QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
-            QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"),
+            QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"), QStringLiteral("qt-video-transform-state"),
             QStringLiteral("fit"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
             QStringLiteral("subsdec-formatted"), QStringLiteral("sub-margin"), QStringLiteral("sub-text-scale"),
             QStringLiteral("sub-text-use-embedded-style"), QStringLiteral("sub-text-size-mode"), QStringLiteral("sub-text-size-pixels"),
@@ -480,6 +480,9 @@ bool RedesignPreferences::selectPlayerPreset(const QString& id)
         if (it == presets.cend()) return playerPresetError(qtr("This preset is no longer available."));
         const auto saved = it->toMap().value(QStringLiteral("options")).toMap();
         for (auto it = saved.cbegin(); it != saved.cend(); ++it) options.insert(it.key(), it.value());
+        // A default hint cannot describe an older preset's native transform.
+        if (!saved.contains(QStringLiteral("qt-video-transform-state")))
+            options.insert(QStringLiteral("qt-video-transform-state"), QString());
     }
     if (!stagePlayerPresetOptions(options)) return false;
     state.insert(QStringLiteral("selected"), id);
@@ -493,6 +496,10 @@ bool RedesignPreferences::stagePlayerPresetOptions(const QVariantMap& options)
     // the manifest and apply the options that this build supports.
     const auto edits = m_edits;
     const auto invalid = m_invalid;
+    // Older presets have native transforms but no logical Rotate/Flip hint.
+    // Do not let the previous preset's ambiguous pair label their output.
+    if (!options.contains(QStringLiteral("qt-video-transform-state")))
+        stage(QStringLiteral("qt-video-transform-state"), QString());
     for (auto it = options.cbegin(); it != options.cend(); ++it) {
         if (it.key().startsWith(QLatin1String("audio-spatial")) && !module_exists("spatialaudio")) continue;
         if (!config_FindConfig(it.key().toUtf8().constData())) continue;

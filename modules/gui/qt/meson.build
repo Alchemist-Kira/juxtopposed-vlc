@@ -586,7 +586,6 @@ ui_sources = files(
     'dialogs/extended/equalizer.ui',
     'dialogs/extended/video_effects.ui',
     'dialogs/fingerprint/fingerprintdialog.ui',
-    'dialogs/firstrun/firstrunwizard.ui',
     'dialogs/help/about.ui',
     'dialogs/help/update.ui',
     'dialogs/messages/messages_panel.ui',
@@ -758,6 +757,7 @@ qml_modules += {
        'player/qml/redesign/RedesignSubtitleSettings.qml',
        'player/qml/redesign/RedesignVideoSettings.qml',
        'player/qml/redesign/RedesignOnboardingView.qml',
+       'player/qml/redesign/RedesignOnboardingWindow.qml',
        'player/qml/redesign/RedesignFilterSection.qml',
        'player/qml/redesign/RedesignSwitchRow.qml',
        'player/qml/redesign/RedesignStatistics.qml',
@@ -1002,6 +1002,7 @@ qml_tests = {
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
     'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
     'tst_RedesignVideo': files('tests/tst_RedesignVideo.qml'),
+    'tst_RedesignOnboarding': files('tests/tst_RedesignOnboarding.qml'),
     'tst_RedesignPlayerPreset': files('tests/tst_RedesignPlayerPreset.qml'),
     'tst_RedesignSubtitles': files('tests/tst_RedesignSubtitles.qml'),
 }

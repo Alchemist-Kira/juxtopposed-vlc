@@ -1,362 +1,168 @@
-/*****************************************************************************
- * Copyright (C) 2021 VLC authors and VideoLAN
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * ( at your option ) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
- *****************************************************************************/
-
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2021-2026 VLC authors and VideoLAN
 #include "firstrunwizard.hpp"
-#include "util/color_scheme_model.hpp"
-#include "maininterface/mainctx.hpp"
+#include "dialogs/preferences/redesign_preferences.hpp"
 #include "dialogs/toolbar/controlbar_profile_model.hpp"
 #include "medialibrary/medialib.hpp"
+#include "util/color_scheme_model.hpp"
 
-#include <QPushButton>
-#include <QButtonGroup>
+#include <QColor>
+#include <QDir>
 #include <QFileDialog>
-
-#include <vlc_common.h>
+#include <QFileInfo>
+#include <QKeySequence>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QUrl>
 #include <vlc_configuration.h>
-#include <vlc_url.h>
 #include <vlc_cxx_helpers.hpp>
 
-FirstRunWizard::FirstRunWizard( qt_intf_t *_p_intf, QWidget *parent)
-               : QWizard( parent )
+FirstRunWizard::FirstRunWizard(QObject* parent) : QObject(parent) {}
+
+void FirstRunWizard::setCtx(MainCtx* ctx)
 {
-    p_intf = _p_intf;
-
-    /* Set windown properties */
-    setWindowTitle( qtr( "Welcome" ) );
-    setWindowModality( Qt::WindowModal );
-
-    // NOTE: Aero style seems to be incompatible with
-    //       Qt Modern Windows Style dark mode
-    setWizardStyle(QWizard::ModernStyle);
-
-    /* Build the Ui */
-    ui.setupUi( this );
-
-    /* Set the privacy and network policy */
-    ui.policy->setHtml( qtr( "<p>In order to protect your privacy, <i>VLC media player</i> "
-        "does <b>not</b> collect personal data or transmit them, "
-        "not even in anonymized form, to anyone."
-        "</p>\n"
-        "<p>Nevertheless, <i>VLC</i> is able to automatically retrieve "
-        "information about the media in your play queue from third party "
-        "Internet-based services. This includes cover art, track names, "
-        "artist names and other meta-data."
-        "</p>\n"
-        "<p>Consequently, this may entail identifying some of your media files to third party "
-        "entities. Therefore the <i>VLC</i> developers require your express "
-        "consent for the media player to access the Internet automatically."
-        "</p>\n" ) );
-    ui.policy->setReadOnly( true );
-
-    /* Set up the button group for colour schemes. */
-    /* Creating in Qt Designer has unstable ordering when calling buttons() */
-    colorSchemeGroup = new QButtonGroup( this );
-    colorSchemeGroup->addButton( ui.systemButton );
-    colorSchemeGroup->addButton( ui.lightButton );
-    colorSchemeGroup->addButton( ui.darkButton );
-    colorSchemeGroup->setExclusive( true );
-
-    colorSchemeImages = new QButtonGroup( this );
-    colorSchemeImages->addButton( ui.daynightImage );
-    colorSchemeImages->addButton( ui.lightImage );
-    colorSchemeImages->addButton( ui.darkImage );
-
-    /* Setup the layout page */
-    ui.layoutGroup->setId( ui.modernButton, 0 );
-    ui.layoutGroup->setId( ui.classicButton, 1 );
-
-    layoutImages = new QButtonGroup( this );
-    layoutImages->addButton( ui.modernImage );
-    layoutImages->addButton( ui.classicImage );
-    layoutImages->setId( ui.modernImage, MODERN );
-    layoutImages->setId( ui.classicImage, CLASSIC );
-
-    /* Set the tooltips for each of the layout choices */
-    ui.classicButton->setToolTip( qtr("<ul>"
-                                      "<li>No client-side decoration</li>"
-                                      "<li>Toolbar menu</li>"
-                                      "<li>Pinned video controls</li>"
-                                      "</ul>") );
-
-    ui.modernButton->setToolTip( qtr("<ul>"
-                                     "<li>Client-side decoration</li>"
-                                     "<li>No toolbar menu</li>"
-                                     "<li>Video controls unpinned</li>"
-                                     "</ul>") );
-
-    /* Remove the cancel button */
-    setOption( QWizard::NoCancelButton );
-
-    /* Create new instance of MLFoldersModel */
-    if ( vlc_ml_instance_get( p_intf ) )
-    {
-        const auto foldersModel = new MLFoldersModel( this );
-        foldersModel->setCtx( p_intf->p_mi );
-        ui.entryPoints->setMLFoldersModel( foldersModel );
-        mlFoldersEditor = ui.entryPoints;
-        mlFoldersModel = foldersModel;
-    }
-    else
-    {
-        ui.enableMl->setChecked( false );
-    }
-
-    /* Disable the ML button as toggling doesn't actually do anything */
-    ui.enableMl->setEnabled(false);
-
-    /* Slots and Signals */
-    connect( ui.addButton, &QPushButton::clicked, this, &FirstRunWizard::MLaddNewFolder );
-    connect( colorSchemeGroup, qOverload<QAbstractButton*>( &QButtonGroup::buttonClicked ), this, &FirstRunWizard::updateColorLabel );
-    connect( colorSchemeImages, qOverload<QAbstractButton*>( &QButtonGroup::buttonClicked ), this, &FirstRunWizard::imageColorSchemeClick );
-    connect( ui.layoutGroup, qOverload<QAbstractButton*>( &QButtonGroup::buttonClicked ), this, &FirstRunWizard::updateLayoutLabel );
-    connect( layoutImages, qOverload<QAbstractButton*>( &QButtonGroup::buttonClicked ), this, &FirstRunWizard::imageLayoutClick );
-    connect( this->button(QWizard::FinishButton), &QPushButton::clicked, this, &FirstRunWizard::finish );
+    if (m_ctx == ctx) return;
+    m_ctx = ctx;
+    emit ctxChanged();
 }
 
-/**
- * Function called when the finish button is pressed.
- * Processes all inputted settings according to chosen options
- */
-void FirstRunWizard::finish()
+bool FirstRunWizard::hasMediaLibrary() const
 {
-    /* Welcome Page settings  */
-    config_PutInt( "metadata-network-access", ui.privacyCheckbox->isChecked() );
-    config_PutInt( "qt-privacy-ask", 0 );
+    return m_ctx && vlc_ml_instance_get(m_ctx->getIntf());
+}
 
-    /* Colour Page settings */
-    p_intf->p_mi->getColorScheme()->setCurrentIndex( colorSchemeGroup->checkedId() );
+QString FirstRunWizard::defaultFolder() const
+{
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+    if (path.isEmpty() || !QFileInfo(path).isDir()) return {};
+    const auto home = QDir::homePath();
+    return QDir::toNativeSeparators(path.startsWith(home + QLatin1Char('/')) ? QStringLiteral("~") + path.mid(home.size()) : path);
+}
 
-    /* Layout Page settings */
-    config_PutInt( "qt-menubar", ui.layoutGroup->checkedId() );
-    config_PutInt( "qt-titlebar", ui.layoutGroup->checkedId() );
+QString FirstRunWizard::folderPath(const QString& folder)
+{
+    QString path = QDir::fromNativeSeparators(folder.trimmed());
+    if (path == QLatin1String("~") || path.startsWith(QLatin1String("~/")))
+        path.replace(0, 1, QDir::homePath());
+    return path.isEmpty() ? QString() : QDir(path).absolutePath();
+}
 
-    config_PutInt( "qt-pin-controls", ui.layoutGroup->checkedId() );
+bool FirstRunWizard::fail(const QString& error)
+{
+    m_error = error;
+    emit errorChanged();
+    return false;
+}
 
-    {
-        ControlbarProfileModel* controlbarModel = p_intf->p_mi->controlbarProfileModel();
-        assert(controlbarModel);
+bool FirstRunWizard::validateFolder(const QString& folder)
+{
+    if (hasMediaLibrary() && !folder.trimmed().isEmpty()) {
+        const QFileInfo selected(folderPath(folder));
+        if (!selected.isDir() || !selected.isReadable())
+            return fail(qtr("Select an existing folder, or clear the field to skip this step."));
+    }
+    m_error.clear(); emit errorChanged(); return true;
+}
 
-        ControlbarProfileModel::Style style;
-        if( ui.layoutGroup->checkedId() )
-            style = ControlbarProfileModel::Style::CLASSIC_STYLE;
-        else
-            style = ControlbarProfileModel::Style::DEFAULT_STYLE;
+QString FirstRunWizard::browseFolder(const QString& initial)
+{
+    return QFileDialog::getExistingDirectory(nullptr, qtr("Select a media folder"), folderPath(initial));
+}
 
-        std::unique_ptr<ControlbarProfile> profile( controlbarModel->generateProfileFromStyle( style ) );
-        assert( profile );
-        const std::optional<int> index = controlbarModel->findModel( profile.get() );
-        if( index )
-            controlbarModel->setSelectedProfile( *index );
-        else
-            controlbarModel->insertProfile( std::move( profile ), true );
+QVariantList FirstRunWizard::shortcuts() const
+{
+    if (!m_ctx) return {};
+    RedesignPreferences preferences;
+    preferences.setCtx(m_ctx);
+    const auto key = [&](const QString& name) {
+        const auto first = preferences.value(name).toString().section(QLatin1Char('\t'), 0, 0);
+        return first.isEmpty() ? qtr("Not set") : QKeySequence::fromString(first, QKeySequence::PortableText).toString(QKeySequence::NativeText);
+    };
+    QVariantList rows;
+    const auto row = [&](const QString& title, const QStringList& keys) {
+        rows.append(QVariantMap{{QStringLiteral("title"), title}, {QStringLiteral("keys"), keys}});
+    };
+    row(qtr("Play / Pause"), {key(QStringLiteral("key-play-pause"))});
+    row(qtr("Seek Backward / Forward"), {key(QStringLiteral("key-jump-short")), key(QStringLiteral("key-jump+short"))});
+    row(qtr("Previous / Next Item"), {key(QStringLiteral("key-prev")), key(QStringLiteral("key-next"))});
+    row(qtr("Previous / Next Frame"), {key(QStringLiteral("key-frame-previous")), key(QStringLiteral("key-frame-next"))});
+    row(qtr("Cycle Subtitle Track"), {key(QStringLiteral("key-subtitle-track"))});
+    row(qtr("Cycle Audio Track"), {key(QStringLiteral("key-audio-track"))});
+    row(qtr("Toggle Fullscreen"), {key(QStringLiteral("key-toggle-fullscreen"))});
+    row(qtr("Increase / Decrease Volume"), {key(QStringLiteral("key-vol-up")), key(QStringLiteral("key-vol-down"))});
+    // The queue shortcut is declared by GlobalShortcuts.qml, not a core action.
+    row(qtr("Show / Hide Queue"), {QKeySequence(QStringLiteral("Ctrl+L")).toString(QKeySequence::NativeText)});
+    row(qtr("Show / Hide File Browser"), {key(QStringLiteral("key-toggle-library"))});
+    row(qtr("Take a Snapshot"), {key(QStringLiteral("key-snapshot"))});
+    row(qtr("Record"), {key(QStringLiteral("key-record"))});
+    return rows;
+}
+
+bool FirstRunWizard::finish(const QString& folder, int scheme, const QString& accent, bool onlineMetadata)
+{
+    if (!m_ctx || !validateFolder(folder)) return false;
+    const QColor color(accent);
+    if (scheme < ColorSchemeModel::System || scheme > ColorSchemeModel::Night || !color.isValid())
+        return fail(qtr("Select a theme and color."));
+
+    // Check the interface file with a fresh handle: an earlier failed sync
+    // must not prevent a later retry from succeeding.
+    const auto* stored = m_ctx->getIntf()->mainSettings;
+    const auto schemeKey = QStringLiteral("MainWindow/color-scheme-index");
+    QSettings settings(stored->fileName(), stored->format());
+    const auto oldScheme = settings.value(schemeKey);
+    settings.setValue(schemeKey, scheme);
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        // Restore the shared settings cache even when the file is unavailable.
+        if (oldScheme.isValid()) settings.setValue(schemeKey, oldScheme);
+        else settings.remove(schemeKey);
+        settings.sync();
+        return fail(qtr("VLC cannot save the theme. Check the settings folder and try again."));
     }
 
-    /* Commit changes to the scanned folders for the Media Library */
-    if( vlc_ml_instance_get( p_intf ) && mlFoldersEditor )
-        mlFoldersEditor->commit();
-
-    /* Reload the indexing service for the media library */
-    if( p_intf->p_mi->getMediaLibrary() )
-        p_intf->p_mi->getMediaLibrary()->reload();
-
-    p_intf->p_mi->reloadPrefs();
-    p_intf->p_mi->controlbarProfileModel()->save();
-    config_SaveConfigFile( p_intf );
-}
-
-/**
- * Opens a QFileDialog for the user to select a folder to add to the Media Library
- * If a folder is selected, add it to the list of folders under MLFoldersEditor
- */
-void FirstRunWizard::MLaddNewFolder()
-{
-    QUrl newEntryPoint = QFileDialog::getExistingDirectoryUrl( this, qtr("Choose a folder to add to the Media Library"),
-                                                               QUrl( QDir::homePath() ));
-
-    if( !newEntryPoint.isEmpty() && !mlFoldersEditor->contains( newEntryPoint ) )
-        mlFoldersEditor->add( newEntryPoint );
-}
-
-/**
- * Automatically updates the label on the color scheme page depending
- * on the currently selected radio button choice
- * @param id The id of the button we are updating the label of
- */
-void FirstRunWizard::updateColorLabel( QAbstractButton* btn )
-{
-    switch ( colorSchemeGroup->id(btn) )
-    {
-        case ColorSchemeModel::System:
-            ui.explainerLabel->setText( qtr( "<i>VLC will automatically switch to dark mode accordingly with system settings</i>" ) );
-            break;
-        case ColorSchemeModel::Day:
-            ui.explainerLabel->setText( qtr( "<i>VLC will automatically use light mode</i>" ) );
-            break;
-        case ColorSchemeModel::Night:
-            ui.explainerLabel->setText( qtr( "<i>VLC will automatically use dark mode</i>" ) );
-            break;
+    RedesignPreferences preferences;
+    preferences.setCtx(m_ctx);
+    preferences.stage(QStringLiteral("metadata-network-access"), onlineMetadata);
+    preferences.stage(QStringLiteral("qt-privacy-ask"), false);
+    preferences.stage(QStringLiteral("qt-accent-color"), color.name(QColor::HexRgb));
+    preferences.stage(QStringLiteral("qt-menubar"), false);
+    preferences.stage(QStringLiteral("qt-titlebar"), false);
+    preferences.stage(QStringLiteral("qt-pin-controls"), false);
+    if (!preferences.save()) {
+        if (oldScheme.isValid()) settings.setValue(schemeKey, oldScheme);
+        else settings.remove(schemeKey);
+        settings.sync();
+        return fail(preferences.errorMessage());
     }
-}
+    m_ctx->getColorScheme()->setCurrentIndex(scheme);
 
-/**
- * Automatically updates the label depending on the currently selected layout
- * @param id The id of the button we are updating the label of
- */
-void FirstRunWizard::updateLayoutLabel( QAbstractButton* btn )
-{
-    switch ( ui.layoutGroup->id( btn ) )
-    {
-        case MODERN:
-            ui.layoutExplainer->setText( qtr( "<i>VLC will use a modern layout with no menubar or pinned controls but with client-side decoration</i>" ) );
-            break;
-        case CLASSIC:
-            ui.layoutExplainer->setText( qtr( "<i>VLC will use a classic layout with a menubar and pinned controls but with no client-side decoration</i>" ) );
-            break;
+    auto* profiles = m_ctx->controlbarProfileModel();
+    std::unique_ptr<ControlbarProfile> profile(profiles->generateProfileFromStyle(ControlbarProfileModel::Style::DEFAULT_STYLE));
+    const auto existing = profiles->findModel(profile.get());
+    if (existing) profiles->setSelectedProfile(*existing);
+    else profiles->insertProfile(std::move(profile), true);
+    profiles->save();
+
+    // Scanning runs on the media-library thread, as in the native folder editor.
+    if (hasMediaLibrary() && !folder.trimmed().isEmpty()) {
+        const auto url = QUrl::fromLocalFile(folderPath(folder)).toEncoded();
+        m_ctx->getMediaLibrary()->runOnMLThread(this, [url](vlc_medialibrary_t* library) {
+            vlc_ml_add_folder(library, url.constData());
+        });
     }
+    if (auto* library = m_ctx->getMediaLibrary()) library->reload();
+    m_error.clear(); emit errorChanged(); return true;
 }
 
-/**
- * Checks the correct button when the corresponding image is clicked
- * for the color scheme page.
- * @param id The id of the image that was clicked
- */
-void FirstRunWizard::imageColorSchemeClick( QAbstractButton* btn )
+bool FirstRunWizard::skip()
 {
-    QAbstractButton* groupBtn = colorSchemeGroup->buttons().at( colorSchemeImages->id( btn ) );
-    assert( groupBtn );
-    groupBtn->setChecked( true );
-    updateColorLabel( groupBtn );
-}
-
-/**
- * Checks the correct button when the corresponding image is clicked
- * for the layouts page.
- * @param id The id of the image that was clicked
- */
-void FirstRunWizard::imageLayoutClick( QAbstractButton* btn )
-{
-    QAbstractButton* layoutBtn = ui.layoutGroup->buttons().at( layoutImages->id( btn ) );
-    assert( layoutBtn );
-    layoutBtn->setChecked( true );
-    updateLayoutLabel( layoutBtn );
-}
-
-/**
- * Defines the navigation of pages for the wizard
- * @return int - the page id to go to or -1 if we are done
- */
-int FirstRunWizard::nextId() const
-{
-    switch ( currentId() )
-    {
-        case WELCOME_PAGE:
-            if( ui.enableMl->isChecked() )
-                return FOLDER_PAGE;
-            else
-                return COLOR_SCHEME_PAGE;
-        case FOLDER_PAGE:
-            return COLOR_SCHEME_PAGE;
-        case COLOR_SCHEME_PAGE:
-            return LAYOUT_PAGE;
-        default:
-            return -1;
-    }
-}
-
-/**
- * Sets up the buttons and options for the color scheme page
- * Needs to be set up later or else the main interface hasn't been created yet
- * Color schemes are always in the order system/auto, day then night
- */
-void FirstRunWizard::initializePage( int id )
-{
-    if(id == COLOR_SCHEME_PAGE)
-    {
-        QVector<ColorSchemeModel::Item> schemes = p_intf->p_mi->getColorScheme()->getSchemes();
-        auto schemeButtons = colorSchemeGroup->buttons();
-        auto schemeImages = colorSchemeImages->buttons();
-
-        /* Number of buttons should be equal to the schemes we can choose from */
-        assert( schemes.size() == schemeButtons.size() );
-        assert( schemes.size() == schemeImages.size() );
-
-        for( int i = 0; i < schemes.size(); i++ )
-        {
-            colorSchemeGroup->setId( schemeButtons.at(i), schemes.at(i).scheme );
-            colorSchemeImages->setId( schemeImages.at(i), schemes.at(i).scheme );
-            schemeButtons.at(i)->setText( schemes.at(i).text );
-            if( !i ) updateColorLabel( schemeButtons.at(i) );
-        }
-    }
-    else if ( id == FOLDER_PAGE )
-        addDefaults();
-}
-
-/**
- * Processes the default options on rejection of the FirstRun Wizard.
- * The default options are:
- * - Yes to metadata
- * - System/Auto colour scheme
- * - Modern VLC layout
- */
-void FirstRunWizard::reject()
-{
-    assert(p_intf->p_mi);
-    /* Welcome Page settings  */
-    config_PutInt( "metadata-network-access", 1 );
-    config_PutInt( "qt-privacy-ask", 0 );
-
-    /* Colour Page settings */
-    p_intf->p_mi->getColorScheme()->setCurrentIndex( 0 );
-
-    /* Layout Page settings */
-    config_PutInt( "qt-menubar", 0 );
-    config_PutInt( "qt-titlebar", 0 );
-    p_intf->p_mi->setPinVideoControls( 0 );
-
-    if( p_intf->p_mi->getMediaLibrary() )
-        p_intf->p_mi->getMediaLibrary()->reload();
-
-    config_SaveConfigFile( p_intf );
-    p_intf->p_mi->reloadPrefs();
-    p_intf->p_mi->controlbarProfileModel()->save();
-
-    done( QDialog::Rejected );
-}
-
-/**
- * Adds the default folders to the media library
- */
-void FirstRunWizard::addDefaults()
-{
-    // Return if we already set the defaults or something is null
-    if( mlDefaults || !mlFoldersEditor || mlFoldersEditor->rowCount() )
-        return;
-
-    for( auto&& target : { VLC_VIDEOS_DIR, VLC_MUSIC_DIR } )
-    {
-        auto folder = vlc::wrap_cptr( config_GetUserDir( target ) );
-        if( folder == nullptr )
-            continue;
-        auto folderMrl = vlc::wrap_cptr( vlc_path2uri( folder.get(), nullptr ) );
-        if ( !mlFoldersEditor->contains( QUrl( folderMrl.get() ) ) )
-            mlFoldersEditor->add( QUrl( folderMrl.get() ) );
-    }
-
-    mlDefaults = true;
+    if (!m_ctx) return false;
+    RedesignPreferences preferences;
+    preferences.setCtx(m_ctx);
+    // Closing setup keeps the existing network choice and theme unchanged.
+    preferences.stage(QStringLiteral("qt-privacy-ask"), false);
+    if (!preferences.save()) return fail(preferences.errorMessage());
+    if (auto* library = m_ctx->getMediaLibrary()) library->reload();
+    m_error.clear(); emit errorChanged(); return true;
 }

@@ -74,7 +74,6 @@ class QSignalMapper;
 class VLCMenuBar;
 
 class OpenDialog;
-class FirstRunWizard;
 class ExtendedDialog;
 class MessagesDialog;
 class GotoTimeDialog;
@@ -173,7 +172,7 @@ private:
     QPointer<PrefsDialog> m_prefsDialog;
 
     std::unique_ptr<OpenDialog> m_openDialog;
-    std::unique_ptr<FirstRunWizard> m_firstRunDialog;
+    bool m_firstRunDialogVisible = false;
     std::unique_ptr<ExtendedDialog> m_extendedDialog;
     std::unique_ptr<MessagesDialog> m_messagesDialog;
     std::unique_ptr<GotoTimeDialog> m_gotoTimeDialog;
@@ -217,6 +216,7 @@ public slots:
                                               const QMessageBox::Icon icon = QMessageBox::NoIcon);
     void prefsDialog();
     void firstRunDialog();
+    Q_INVOKABLE void dismissFirstRunDialog();
     void extendedDialog();
     void synchroDialog();
     void messagesDialog( int page = 0 );

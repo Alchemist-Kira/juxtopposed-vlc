@@ -1,66 +1,40 @@
-/*****************************************************************************
- * Copyright (C) 2021 VLC authors and VideoLAN
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * ( at your option ) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
- *****************************************************************************/
-
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2021-2026 VLC authors and VideoLAN
 #ifndef VLC_FIRSTRUNWIZARD_H
 #define VLC_FIRSTRUNWIZARD_H
 
-#include "ui_firstrunwizard.h"
+#include <QObject>
+#include <QVariantList>
+#include "maininterface/mainctx.hpp"
 
-#include <QWizard>
-
-class MLFoldersEditor;
-class MLFoldersModel;
-
-class FirstRunWizard : public QWizard
+/** Native operations for the three-page first-run view. */
+class FirstRunWizard : public QObject
 {
     Q_OBJECT
-
+    Q_PROPERTY(MainCtx* ctx READ ctx WRITE setCtx NOTIFY ctxChanged FINAL)
+    Q_PROPERTY(QString defaultFolder READ defaultFolder NOTIFY ctxChanged FINAL)
+    Q_PROPERTY(bool hasMediaLibrary READ hasMediaLibrary NOTIFY ctxChanged FINAL)
+    Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY ctxChanged FINAL)
+    Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorChanged FINAL)
 public:
-    explicit FirstRunWizard ( qt_intf_t*, QWidget* parent = nullptr );
-    enum { WELCOME_PAGE, FOLDER_PAGE, COLOR_SCHEME_PAGE, LAYOUT_PAGE };
-    enum { MODERN, CLASSIC };
-
-    void addDefaults();
-
-    int nextId() const;
-    void initializePage( int id );
-    void reject();
-
+    explicit FirstRunWizard(QObject* parent = nullptr);
+    MainCtx* ctx() const { return m_ctx; }
+    void setCtx(MainCtx* ctx);
+    QString defaultFolder() const;
+    bool hasMediaLibrary() const;
+    QVariantList shortcuts() const;
+    QString errorMessage() const { return m_error; }
+    Q_INVOKABLE bool validateFolder(const QString& folder);
+    Q_INVOKABLE QString browseFolder(const QString& initial);
+    Q_INVOKABLE bool finish(const QString& folder, int scheme, const QString& accent, bool onlineMetadata);
+    Q_INVOKABLE bool skip();
+signals:
+    void ctxChanged();
+    void errorChanged();
 private:
-    Ui::firstrun ui;
-
-    MLFoldersEditor *mlFoldersEditor = nullptr;
-    MLFoldersModel *mlFoldersModel = nullptr;
-
-    qt_intf_t* p_intf;
-    bool mlDefaults = false;
-
-    QButtonGroup* colorSchemeGroup = nullptr;
-    QButtonGroup* colorSchemeImages = nullptr;
-    QButtonGroup* layoutImages = nullptr;
-
-private slots:
-    void finish();
-    void MLaddNewFolder();
-    void updateColorLabel( QAbstractButton* );
-    void updateLayoutLabel (QAbstractButton* );
-    void imageColorSchemeClick ( QAbstractButton* );
-    void imageLayoutClick( QAbstractButton* );
+    bool fail(const QString& error);
+    static QString folderPath(const QString& folder);
+    MainCtx* m_ctx = nullptr;
+    QString m_error;
 };
-
-#endif // VLC_FIRSTRUNWIZARD_H
+#endif

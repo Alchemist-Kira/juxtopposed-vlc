@@ -487,6 +487,9 @@ vlc_module_begin ()
 
     add_string( "qt-accent-color", "default", ACCENT_COLOR_TEXT, ACCENT_COLOR_LONGTEXT )
 
+    // An interface shortcut; there is no corresponding core/global action.
+    add_string_inner( CONFIG_ITEM_KEY, "key-toggle-library", N_("Show or hide the file browser"), nullptr, "Ctrl+Shift+L" )
+
     // Keep named player presets in the same atomic transaction as their options.
     add_string( "qt-player-presets", "", "Player settings presets", nullptr )
         change_private()

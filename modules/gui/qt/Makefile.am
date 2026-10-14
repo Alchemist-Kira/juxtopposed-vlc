@@ -549,7 +549,6 @@ nodist_libqt_plugin_la_SOURCES += \
 	dialogs/extended/ui_equalizer.h \
 	dialogs/extended/ui_video_effects.h \
 	dialogs/fingerprint/ui_fingerprintdialog.h \
-	dialogs/firstrun/ui_firstrunwizard.h \
 	dialogs/help/ui_about.h \
 	dialogs/help/ui_update.h \
 	dialogs/messages/ui_messages_panel.h \
@@ -764,7 +763,6 @@ libqt_plugin_la_UI = \
 	dialogs/extended/equalizer.ui \
 	dialogs/extended/video_effects.ui \
 	dialogs/fingerprint/fingerprintdialog.ui \
-	dialogs/firstrun/firstrunwizard.ui \
 	dialogs/help/about.ui \
 	dialogs/help/update.ui \
 	dialogs/messages/messages_panel.ui \
@@ -1193,6 +1191,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignSubtitleSettings.qml \
 	player/qml/redesign/RedesignVideoSettings.qml \
 	player/qml/redesign/RedesignOnboardingView.qml \
+	player/qml/redesign/RedesignOnboardingWindow.qml \
 	player/qml/redesign/RedesignFilterSection.qml \
 	player/qml/redesign/RedesignSwitchRow.qml \
 	player/qml/redesign/RedesignStatistics.qml \

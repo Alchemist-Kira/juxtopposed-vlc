@@ -23,6 +23,12 @@ FocusScope {
     }
     RedesignSleepTimer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
     RedesignPreferences { id: playerPreferences; ctx: MainCtx; autoSave: true; editPlayerPreset: true }
+    Shortcut {
+        sequences: { playerPreferences.revision; return String(playerPreferences.value("key-toggle-library") || "").split("\t").filter(sequence => sequence.length > 0) }
+        context: Qt.WindowShortcut
+        enabled: MainCtx.useGlobalShortcuts
+        onActivated: { view.libraryOpen = !view.libraryOpen; view.libraryExpanded = false }
+    }
     Binding {
         target: MainCtx
         property: "preferHotkeys"

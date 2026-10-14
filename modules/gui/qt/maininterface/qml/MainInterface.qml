@@ -47,6 +47,7 @@ Item {
     AccessibleCompat.id: "mainInterface"
 
     RedesignPreferencesWindow { }
+    RedesignOnboardingWindow { }
 
     property bool _extendedFrameVisible: MainCtx.windowSuportExtendedFrame
                                       && MainCtx.clientSideDecoration

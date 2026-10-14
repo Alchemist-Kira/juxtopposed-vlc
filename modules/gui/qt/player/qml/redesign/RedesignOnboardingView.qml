@@ -104,8 +104,11 @@ FocusScope {
                 id: policy; objectName: "onboardingPrivacyPolicy"
                 parent: scene; x: 248; y: 450; width: 594; padding: 18
                 modal: true; closePolicy: C.Popup.CloseOnEscape | C.Popup.CloseOnPressOutside
+                onOpened: contentItem.forceActiveFocus()
                 background: Rectangle { color: "#191919"; radius: 8; border.color: "#292929" }
                 contentItem: Label {
+                    focus: true
+                    Keys.onEscapePressed: policy.close()
                     text: qsTr("VLC does not collect personal data. If you allow online media information, VLC can request cover art and track details from online services. These requests can identify your media to those services. Clear the option to keep these requests off.")
                     lineHeight: 1.4
                 }
@@ -117,9 +120,10 @@ FocusScope {
             RedesignPlayerView {
                 id: preview; objectName: "onboardingPlayerPreview"
                 x: 17; y: 20; width: 1056; height: 594
-                scaleFactor: width / 1920; enabled: false
+                scaleFactor: width / 1920; presentationOnly: true
                 accentColor: root.accentColor; lightTheme: root.previewLight
-                hasVideo: true; started: true; seekable: true
+                hasVideo: true; started: true; seekable: true; hasPrevious: true; hasNext: true
+                videoContent: Component { Rectangle { color: root.previewLight ? "#dedede" : "#090909" } }
                 mediaTitle: ""; locationTitle: ""; volume: .3; position: .08
                 timeText: "00:02:10"; lengthText: "00:25:40"
             }
@@ -147,7 +151,7 @@ FocusScope {
                             Rectangle { x: 12; y: 12; width: 100; height: 100; radius: 12; color: schemeButton.modelData.scheme === 1 ? "#afafaf" : "#222222" }
                             RedesignSvg {
                                 x: 12; y: 12; width: 100; height: 100; visible: schemeButton.modelData.scheme === 0
-                                svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><clipPath id="card"><rect width="100" height="100" rx="12"/></clipPath></defs><path d="M15 0H100V100H76Z" fill="#afafaf" clip-path="url(#card)"/></svg>'
+                                svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M15 0H88Q100 0 100 12V88Q100 100 88 100H76Z" fill="#afafaf"/></svg>'
                             }
                             Label { y: 142; width: parent.width; text: schemeButton.modelData.label; horizontalAlignment: Text.AlignHCenter }
                         }
@@ -193,7 +197,7 @@ FocusScope {
                     width: 446; height: 42
                     Label { width: 241; anchors.verticalCenter: parent.verticalCenter; text: parent.modelData.title; font.pixelSize: 16 }
                     Flow {
-                        width: 205; spacing: 6
+                        width: 235; spacing: 6
                         Repeater {
                             model: parent.parent.modelData.keys
                             Row {

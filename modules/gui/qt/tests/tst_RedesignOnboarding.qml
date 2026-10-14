@@ -25,12 +25,13 @@ TestCase {
     }
     RedesignOnboardingView { id: onboarding; anchors.fill: parent; backend: setup }
     SignalSpy { id: finished; target: onboarding; signalName: "finished" }
+    SignalSpy { id: dismissed; target: onboarding; signalName: "dismissRequested" }
     function item(name) { return findChild(onboarding, name) }
     function init() {
         onboarding.page = 0; onboarding.folder = "~/Videos"; onboarding.scheme = 2
         onboarding.accentColor = "#d37918"; onboarding.onlineMetadata = true
         setup.hasMediaLibrary = true; setup.errorMessage = ""; setup.saveFails = false; setup.saved = ({})
-        finished.clear(); onboarding.width = 1090; onboarding.height = 759
+        finished.clear(); dismissed.clear(); onboarding.width = 1090; onboarding.height = 759
     }
     function test_navigationUsesThreePagesAndRetainsEdits() {
         onboarding.folder = "/media/Music"; onboarding.next(); compare(onboarding.page, 1)
@@ -77,6 +78,8 @@ TestCase {
     }
     function test_privacyExplanationCanOpenAndClose() {
         mouseClick(item("onboardingPrivacyInfo")); verify(item("onboardingPrivacyPolicy").opened)
-        item("onboardingPrivacyPolicy").close()
+        keyClick(Qt.Key_Escape)
+        tryCompare(item("onboardingPrivacyPolicy"), "visible", false)
+        compare(dismissed.count, 0)
     }
 }

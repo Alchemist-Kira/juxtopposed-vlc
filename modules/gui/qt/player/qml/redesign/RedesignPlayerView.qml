@@ -8,6 +8,7 @@ FocusScope {
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
+    property bool presentationOnly: false
     property bool playing: false
     property bool started: false
     property bool hasVideo: false
@@ -75,6 +76,14 @@ FocusScope {
     signal fullLibraryRequested()
     signal resumeRequested(bool resume)
     signal keyPressed(var event)
+
+    // Preview the chrome without making its controls dim or focusable.
+    MouseArea {
+        anchors.fill: parent; z: 100
+        enabled: root.presentationOnly; visible: enabled
+        acceptedButtons: Qt.AllButtons
+        onWheel: wheel => wheel.accepted = true
+    }
 
     function revealControls() { revealTimer.restart() }
     function toggleSettings(page: string) {
@@ -152,6 +161,7 @@ FocusScope {
                 font.pixelSize: theme.dp(18)
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "openFileButton"
                 anchors.horizontalCenter: parent.horizontalCenter
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -228,11 +238,13 @@ FocusScope {
                     wrapMode: Text.WordWrap
                 }
                 RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     caption: qsTr("Continue"); text: caption; accent: true
                     onClicked: root.resumeRequested(true)
                 }
                 RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     iconName: "close"; text: qsTr("Start from the beginning")
                     onClicked: root.resumeRequested(false)
@@ -310,30 +322,36 @@ FocusScope {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 0
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(50)
                 iconName: "cone"; text: qsTr("Open file"); foreground: theme.accent
                 onClicked: root.openRequested()
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 implicitWidth: theme.dp(30)
                 objectName: "mainMenuButton"
+                visible: !root.presentationOnly
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "more"; text: qsTr("Menu")
                 onClicked: root.menuRequested(this)
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 implicitWidth: theme.dp(46)
                 objectName: "libraryToggleButton"
+                visible: !root.presentationOnly
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "sidebar"; text: root.libraryOpen ? qsTr("Hide library") : qsTr("Show library")
                 iconReveal: library.reveal
                 Accessible.checkable: true; Accessible.checked: root.libraryOpen
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
-            Rectangle { Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
+            Rectangle { visible: !root.presentationOnly; Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
             RedesignButton {
-                visible: root.width > theme.dp(700)
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
+                visible: !root.presentationOnly && root.width > theme.dp(700)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; caption: root.locationTitle; text: qsTr("Browse library")
                 onClicked: root.libraryOpen = !root.libraryOpen
@@ -352,24 +370,28 @@ FocusScope {
             anchors.right: parent.right; anchors.rightMargin: theme.dp(6)
             anchors.verticalCenter: parent.verticalCenter
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 visible: root.showWindowButtons
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "minimize"; text: qsTr("Minimize")
                 onClicked: root.minimizeRequested()
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 visible: root.showWindowButtons
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "maximize"; text: root.maximized ? qsTr("Restore window") : qsTr("Maximize")
                 onClicked: root.maximizeRequested()
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "fullscreenButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "fullscreen"; text: root.fullscreen ? qsTr("Exit fullscreen") : qsTr("Fullscreen")
                 onClicked: root.fullscreenRequested()
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 visible: root.showWindowButtons
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "close"; text: qsTr("Close")
@@ -389,6 +411,7 @@ FocusScope {
             anchors.leftMargin: theme.dp(18); anchors.rightMargin: theme.dp(18)
             spacing: theme.dp(10)
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "previousButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
@@ -396,6 +419,7 @@ FocusScope {
                 onClicked: root.previous()
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "playButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(54); implicitHeight: theme.dp(28)
@@ -405,6 +429,7 @@ FocusScope {
                 onClicked: root.togglePlayback()
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "nextButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
@@ -419,6 +444,7 @@ FocusScope {
                 color: theme.foreground; font.pixelSize: theme.dp(14)
             }
             RedesignSeekBar {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 id: seek
                 objectName: "seekBar"
                 Layout.fillWidth: true
@@ -437,6 +463,7 @@ FocusScope {
                 color: theme.foreground; font.pixelSize: theme.dp(14)
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "muteButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(28)
@@ -445,6 +472,7 @@ FocusScope {
                 onClicked: root.muteRequested()
             }
             RedesignVolume {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 id: volumeSlider
                 objectName: "volumeSlider"
                 visible: root.width > theme.dp(750)
@@ -454,6 +482,7 @@ FocusScope {
                 onMoved: root.volumeRequested(value)
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "audioButton"
                 visible: root.width > theme.dp(900)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -462,6 +491,7 @@ FocusScope {
                 onClicked: root.audioTracksRequested(this)
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "subtitleButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "subtitles"; text: qsTr("Subtitle tracks")
@@ -469,6 +499,7 @@ FocusScope {
                 onClicked: root.subtitleTracksRequested(this)
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "playbackSettingsButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "settings"; text: qsTr("Playback settings")
@@ -476,6 +507,7 @@ FocusScope {
                 onClicked: root.toggleSettings("playback")
             }
             RedesignButton {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 objectName: "queueButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "queue"; text: qsTr("Play queue"); selected: root.queueOpen

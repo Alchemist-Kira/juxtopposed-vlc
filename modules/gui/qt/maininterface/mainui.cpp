@@ -61,6 +61,7 @@
 #include "dialogs/help/aboutmodel.hpp"
 #include "dialogs/dialogs_provider.hpp"
 #include "dialogs/preferences/redesign_preferences.hpp"
+#include "dialogs/firstrun/firstrunwizard.hpp"
 #include "util/redesign_folder_model.hpp"
 #include <QQmlContext>
 #include "dialogs/dialogs/dialogmodel.hpp"
@@ -277,6 +278,7 @@ void MainUI::registerQMLTypes()
 
         // @uri VLC.Dialogs
         qmlRegisterType<RedesignPreferences>(uri, versionMajor, versionMinor, "RedesignPreferences");
+        qmlRegisterType<FirstRunWizard>(uri, versionMajor, versionMinor, "RedesignFirstRunSetup");
         qmlRegisterType<RedesignFolderModel>(uri, versionMajor, versionMinor, "RedesignFolderModel");
         qmlRegisterType<VLCDialog>( uri, versionMajor, versionMinor, "VLCDialog" );
         assert(VLCDialogModel::getInstance<false>());

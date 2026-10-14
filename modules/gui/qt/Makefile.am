@@ -1226,6 +1226,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignButton.qml \
 	player/qml/redesign/RedesignIcon.qml \
 	player/qml/redesign/RedesignSvg.qml \
+	player/qml/redesign/RedesignActionMenu.qml \
 	player/qml/redesign/RedesignLibraryView.qml \
 	player/qml/redesign/RedesignMenu.qml \
 	player/qml/redesign/RedesignRecentMenuModel.qml \
@@ -1836,6 +1837,17 @@ QT_QTEST_COMMON_cppflags = $(libqt_plugin_la_CPPFLAGS) -I$(builddir)/tests -DTOP
 QT_QTEST_COMMON_cxxflags = $(AM_CXXFLAGS) $(QT_CFLAGS) $(QT_QTEST_CFLAGS) -fPIC $(CXXFLAGS_qt)
 QT_QTEST_COMMON_ldadd = $(QT_LIBS) $(LIBS_qt) $(QT_QTEST_LIBS) $(LIBVLCCORE) $(LIBVLC)
 QT_QTEST_COMMON_ldflags = $(AM_LDFLAGS) $(QT_LDFLAGS) $(QT_QTEST_LDFLAGS)
+
+test_redesign_folder_model_SOURCES = tests/test_redesign_folder_model.cpp util/redesign_folder_model.cpp util/redesign_folder_model.hpp
+nodist_test_redesign_folder_model_SOURCES = tests/test_redesign_folder_model.moc util/redesign_folder_model.moc.cpp
+BUILT_SOURCES += tests/test_redesign_folder_model.moc
+CLEANFILES += tests/test_redesign_folder_model.moc
+test_redesign_folder_model_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_redesign_folder_model_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_redesign_folder_model_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_redesign_folder_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_redesign_folder_model
+TESTS += test_redesign_folder_model
 
 test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.cpp util/seek_preview_image_provider.hpp
 nodist_test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.moc

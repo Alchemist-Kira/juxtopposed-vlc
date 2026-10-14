@@ -26,6 +26,8 @@ class RedesignFolderModel : public QAbstractListModel
     Q_PROPERTY(QStringList nameFilters READ nameFilters WRITE setNameFilters NOTIFY nameFiltersChanged FINAL)
     Q_PROPERTY(bool sortReversed READ sortReversed WRITE setSortReversed NOTIFY sortReversedChanged FINAL)
     Q_PROPERTY(int count READ count NOTIFY countChanged FINAL)
+    Q_PROPERTY(int directoryCount READ directoryCount NOTIFY countChanged FINAL)
+    Q_PROPERTY(QString searchPattern READ searchPattern WRITE setSearchPattern NOTIFY searchPatternChanged FINAL)
 public:
     enum Role { FileName = Qt::UserRole + 1, FileUrl, FileIsDir };
     explicit RedesignFolderModel(QObject* parent = nullptr);
@@ -36,6 +38,9 @@ public:
     bool sortReversed() const { return m_sortReversed; }
     void setSortReversed(bool reversed);
     int count() const { return m_entries.size(); }
+    int directoryCount() const;
+    QString searchPattern() const { return m_searchPattern; }
+    void setSearchPattern(const QString& pattern);
     int rowCount(const QModelIndex& parent = {}) const override;
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
@@ -45,6 +50,7 @@ signals:
     void nameFiltersChanged();
     void sortReversedChanged();
     void countChanged();
+    void searchPatternChanged();
 private:
     void scheduleRefresh();
     void scan();
@@ -53,6 +59,7 @@ private:
     std::shared_ptr<RedesignFolderScanResult> m_results;
     QStringList m_nameFilters;
     QUrl m_folder;
+    QString m_searchPattern;
     QFileInfoList m_entries;
     quint64 m_serial = 0;
     bool m_sortReversed = false;

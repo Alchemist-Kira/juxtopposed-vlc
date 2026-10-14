@@ -12,25 +12,32 @@ RedesignLibraryView {
     property var selectedPlaylist
     property var selectedCollection
     property string currentFolder: ""
+    property var folderTrail: []
     property string musicSection: ""
     property string selectedName: ""
     property var backStack: []
     property var forwardStack: []
     readonly property var activeModel: currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : music) : category === 3 ? streams : category === 0 || category === 5 ? recent : libraryFolders
     mediaModel: activeModel
-    heading: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category] + (musicSection ? " › " + qsTr(musicSection) : "") + (selectedName ? " › " + selectedName : "")
+    heading: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category] + (musicSection ? " › " + qsTr(musicSection) : "") + (currentFolder ? " › " + folderTrail.map(url => nameFromUrl(url)).join(" › ") : selectedName ? " › " + selectedName : "")
     canGoBack: backStack.length > 0
     canGoForward: forwardStack.length > 0
     showingFolders: category === 1 && !currentFolder
+    showAddRow: category > 0 && category < 5 && !selectedPlaylist && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
     canEnqueue: !(category === 2 && musicSection === "")
     emptyText: category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
-    function snapshot() { return { category: category, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, musicSection: musicSection, name: selectedName, search: searchText } }
+    function snapshot() { return { category: category, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, folderTrail: folderTrail.slice(), musicSection: musicSection, name: selectedName, search: searchText } }
     function remember() { backStack = [...backStack, snapshot()]; forwardStack = [] }
-    function restore(state) { category = state.category; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; musicSection = state.musicSection; selectedName = state.name; searchText = state.search }
-    function folderName(url) { return decodeURIComponent(url.toString().replace(/\/$/, "").split("/").pop()) }
-    function openFolder(url) { remember(); currentFolder = url.toString(); selectedName = folderName(url); searchText = "" }
-    onCategoryRequested: newCategory => { remember(); selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
+    function restore(state) { category = state.category; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; folderTrail = state.folderTrail || []; musicSection = state.musicSection; selectedName = state.name; searchText = state.search }
+    function openFolder(url) {
+        remember()
+        folderTrail = currentFolder ? [...folderTrail, url.toString()] : [url.toString()]
+        currentFolder = url.toString()
+        selectedName = nameFromUrl(url)
+        searchText = ""
+    }
+    onCategoryRequested: newCategory => { remember(); selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; folderTrail = []; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
     onBackRequested: { const stack = backStack.slice(); const state = stack.pop(); forwardStack = [...forwardStack, snapshot()]; backStack = stack; restore(state) }
     onForwardRequested: { const stack = forwardStack.slice(); const state = stack.pop(); backStack = [...backStack, snapshot()]; forwardStack = stack; restore(state) }
     onActivated: index => {
@@ -58,6 +65,7 @@ RedesignLibraryView {
         if (category === 3) networkDialog.open()
         else { const folder = DialogsProvider.selectLibraryFolder(); if (folder.toString().length > 0) libraryFolders.add(folder) }
     }
+    onPreferencesRequested: DialogsProvider.prefsPageDialog("library")
     onNewPlaylistRequested: { playlistName.text = ""; createPlaylist.open(); playlistName.forceActiveFocus() }
 
     Loader {
@@ -67,6 +75,7 @@ RedesignLibraryView {
             folder: root.currentFolder
             nameFilters: DialogsProvider.mediaNameFilters(root.category === 2)
             sortReversed: root.descending
+            searchPattern: root.searchText
         }
     }
     ListModel {

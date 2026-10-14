@@ -80,6 +80,14 @@ Window {
     Connections {
         target: DialogsProvider
         function onShowRedesignPreferences() { if (!root.visible) root.begin(); else { root.raise(); root.requestActivate() } }
+        function onShowRedesignPreferencesPage(page) {
+            if (!specification.pageTitles[page]) return
+            root.begin()
+            root.category = page
+            root.advanced = false
+            root.expert = false
+            scroll.contentItem.contentY = 0
+        }
     }
     Item {
         id: content

@@ -304,6 +304,14 @@ void DialogsProvider::prefsDialog()
     }
 }
 
+void DialogsProvider::prefsPageDialog(const QString& page)
+{
+    if (p_intf->p_mi)
+        emit showRedesignPreferencesPage(page);
+    else
+        prefsDialog();
+}
+
 void DialogsProvider::firstRunDialog()
 {
     if (m_firstRunDialogVisible) return;

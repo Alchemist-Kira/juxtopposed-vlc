@@ -215,6 +215,7 @@ public slots:
                                               const QMessageBox::StandardButton defaultButton = QMessageBox::NoButton,
                                               const QMessageBox::Icon icon = QMessageBox::NoIcon);
     void prefsDialog();
+    void prefsPageDialog(const QString& page);
     void firstRunDialog();
     Q_INVOKABLE void dismissFirstRunDialog();
     void extendedDialog();
@@ -309,6 +310,7 @@ signals:
     void egpDialogVisibleChanged();
     void prefsDialogVisibleChanged();
     void showRedesignPreferences();
+    void showRedesignPreferencesPage(const QString& page);
 #ifdef UPDATE_CHECK
     void updateDialogVisibleChanged();
 #endif

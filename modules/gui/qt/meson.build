@@ -774,6 +774,7 @@ qml_modules += {
        'player/qml/redesign/RedesignButton.qml',
        'player/qml/redesign/RedesignIcon.qml',
        'player/qml/redesign/RedesignSvg.qml',
+       'player/qml/redesign/RedesignActionMenu.qml',
        'player/qml/redesign/RedesignLibraryView.qml',
        'player/qml/redesign/RedesignMenu.qml',
        'player/qml/redesign/RedesignRecentMenuModel.qml',
@@ -1373,6 +1374,15 @@ if qt6_dep.found()
 
     qtest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['Test'], required: false)
     if qtest_qt6_dep.found()
+        vlc_tests += {
+            'name': 'test_qt_redesign_folder_model',
+            'sources': files('tests/test_redesign_folder_model.cpp', 'util/redesign_folder_model.cpp'),
+            'moc_sources': files('tests/test_redesign_folder_model.cpp'),
+            'moc_headers': files('util/redesign_folder_model.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
         vlc_tests += {
             'name': 'test_qt_seek_preview_image_provider',
             'sources': files('tests/test_seek_preview_image_provider.cpp'),

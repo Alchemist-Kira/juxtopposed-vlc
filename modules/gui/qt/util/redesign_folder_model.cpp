@@ -3,6 +3,7 @@
 #include <QTimer>
 #include <QDir>
 #include <QThreadPool>
+#include <algorithm>
 
 RedesignFolderModel::RedesignFolderModel(QObject* parent)
     : QAbstractListModel(parent)
@@ -21,14 +22,29 @@ RedesignFolderModel::RedesignFolderModel(QObject* parent)
 
 void RedesignFolderModel::setFolder(const QUrl& folder)
 {
-    if (m_folder == folder)
+    QUrl normalized = folder;
+    if (folder.scheme().isEmpty()) {
+        QString path = folder.path();
+        if (!folder.host().isEmpty())
+            path.prepend("//" + folder.host());
+        if (QDir::isAbsolutePath(path))
+            normalized = QUrl::fromLocalFile(path);
+    }
+#ifdef Q_OS_WIN
+    else if (folder.scheme().size() == 1) {
+        const QString path = folder.scheme() + ":" + folder.path();
+        if (QDir::isAbsolutePath(path))
+            normalized = QUrl::fromLocalFile(path);
+    }
+#endif
+    if (m_folder == normalized)
         return;
-    m_folder = folder;
+    m_folder = normalized;
     const auto watched = m_watcher.directories();
     if (!watched.isEmpty())
         m_watcher.removePaths(watched);
-    if (folder.isLocalFile() && QFileInfo(folder.toLocalFile()).isDir())
-        m_watcher.addPath(folder.toLocalFile());
+    if (m_folder.isLocalFile() && QFileInfo(m_folder.toLocalFile()).isDir())
+        m_watcher.addPath(m_folder.toLocalFile());
     replaceEntries({});
     scheduleRefresh();
     emit folderChanged();
@@ -50,6 +66,21 @@ void RedesignFolderModel::setSortReversed(bool reversed)
     m_sortReversed = reversed;
     scheduleRefresh();
     emit sortReversedChanged();
+}
+
+int RedesignFolderModel::directoryCount() const
+{
+    return std::count_if(m_entries.cbegin(), m_entries.cend(),
+                         [](const QFileInfo& file) { return file.isDir(); });
+}
+
+void RedesignFolderModel::setSearchPattern(const QString& pattern)
+{
+    if (m_searchPattern == pattern)
+        return;
+    m_searchPattern = pattern;
+    scheduleRefresh();
+    emit searchPatternChanged();
 }
 
 int RedesignFolderModel::rowCount(const QModelIndex& parent) const
@@ -104,7 +135,8 @@ void RedesignFolderModel::scan()
     const auto filters = m_nameFilters;
     const auto serial = m_serial;
     const auto reversed = m_sortReversed;
-    QThreadPool::globalInstance()->start([results, folder, filters, serial, reversed] {
+    const auto search = m_searchPattern;
+    QThreadPool::globalInstance()->start([results, folder, filters, serial, reversed, search] {
         QFileInfoList entries;
         if (folder.isLocalFile()) {
             QDir directory(folder.toLocalFile());
@@ -112,6 +144,10 @@ void RedesignFolderModel::scan()
                 QDir::AllEntries | QDir::AllDirs | QDir::Readable | QDir::NoDotAndDotDot,
                 QDir::Name | QDir::DirsFirst | QDir::IgnoreCase | (reversed ? QDir::Reversed : QDir::SortFlag(0)));
         }
+        if (!search.isEmpty())
+            entries.erase(std::remove_if(entries.begin(), entries.end(), [&search](const QFileInfo& file) {
+                return !file.fileName().contains(search, Qt::CaseInsensitive);
+            }), entries.end());
         emit results->ready(serial, entries);
     });
 }
@@ -119,9 +155,10 @@ void RedesignFolderModel::scan()
 void RedesignFolderModel::replaceEntries(const QFileInfoList& entries)
 {
     const int oldCount = count();
+    const int oldDirectoryCount = directoryCount();
     beginResetModel();
     m_entries = entries;
     endResetModel();
-    if (oldCount != count())
+    if (oldCount != count() || oldDirectoryCount != directoryCount())
         emit countChanged();
 }

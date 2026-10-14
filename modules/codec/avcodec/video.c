@@ -216,7 +216,9 @@ static struct frame_info_s * FrameInfoAdd( decoder_sys_t *p_sys, AVPacket *pkt )
 #else
     VLC_UNUSED(pkt);
     AVCodecContext *p_context = p_sys->p_context;
-    return &p_sys->frame_info[p_context->reordered_opaque++ % FRAME_INFO_DEPTH];
+    /* The decoder copies the context value when the packet is submitted.
+     * Store its flags in that same slot, rather than the preceding one. */
+    return &p_sys->frame_info[++p_context->reordered_opaque % FRAME_INFO_DEPTH];
 #endif
 }
 

@@ -25,6 +25,9 @@
 #include <vlc_preparser.h>
 #include <vlc_input_item.h>
 #include <vlc_picture.h>
+#include <vlc_modules.h>
+#include <vlc_url.h>
+#include <vlc_fs.h>
 
 #include <errno.h>
 
@@ -51,6 +54,8 @@ const struct
       VLC_TICK_INVALID, true },
     /* Seek by position test */
     { 1, 0, VLC_TICK_INVALID, 0, .3f, true, true, true, VLC_TICK_INVALID, true },
+    /* Precise position seek, before the first frame is decoded. */
+    { 1, 0, VLC_TICK_INVALID, 0, .3f, true, false, true, VLC_TICK_INVALID, true },
     /* Seek at a negative position */
     { 1, 0, VLC_TICK_INVALID, -12345, .0f, false, true, true, VLC_TICK_INVALID, true },
     /* Take a thumbnail of a file without video, which should timeout. */
@@ -81,8 +86,6 @@ static void thumbnailer_callback( vlc_preparser_req *req, int status,
         assert( thumbnail->format.i_chroma == VLC_CODEC_ARGB );
         assert( status == VLC_SUCCESS );
 
-        /* TODO: Enable this once the new clock is merged */
-#if 0
         vlc_tick_t expected_date;
         /* Don't rely on the expected date if it was purposely invalid */
         if ( test_params[p_ctx->test_idx].b_use_pos == true )
@@ -92,12 +95,13 @@ static void thumbnailer_callback( vlc_preparser_req *req, int status,
         else
         {
             if ( test_params[p_ctx->test_idx].i_time < 0 )
-                expected_date = VLC_TICK_0;
+                expected_date = 0;
             else
                 expected_date = test_params[p_ctx->test_idx].i_time;
         }
-        assert( thumbnail->date == expected_date && "Unexpected picture date");
-#endif
+        /* The mock source runs at 25 fps. Allow rounding to one frame. */
+        assert( llabs(thumbnail->date - (VLC_TICK_0 + expected_date)) <=
+                VLC_TICK_FROM_MS(40) && "Unexpected picture date" );
     }
     else
     {
@@ -239,6 +243,103 @@ static void test_cancel_thumbnail( libvlc_instance_t* p_vlc, bool external )
     vlc_preparser_Delete( p_thumbnailer );
 }
 
+struct still_thumbnail_ctx
+{
+    vlc_sem_t completed;
+    vlc_tick_t expected_date;
+};
+
+static void still_thumbnail_ended(vlc_preparser_req *req, int status,
+                                  picture_t *picture, void *data)
+{
+    (void)req;
+    struct still_thumbnail_ctx *ctx = data;
+    assert(status == VLC_SUCCESS);
+    assert(picture != NULL);
+    assert(picture->date == ctx->expected_date);
+    vlc_sem_post(&ctx->completed);
+}
+
+static void test_still_thumbnail(libvlc_instance_t *vlc)
+{
+    bool have_jpeg_decoder = module_exists("avcodec") && module_exists("avformat");
+    bool have_image = module_exists("image");
+
+    const struct vlc_preparser_cfg cfg = {
+        .types = VLC_PREPARSER_TYPE_THUMBNAIL,
+        .timeout = VLC_TICK_FROM_SEC(2),
+    };
+    vlc_preparser_t *parser = vlc_preparser_New(VLC_OBJECT(vlc->p_libvlc_int), &cfg);
+    assert(parser != NULL);
+    char *uri = vlc_path2uri(TOP_SRCDIR "/test/samples/image.jpg", NULL);
+    assert(uri != NULL);
+    char *image_path = NULL;
+    char *image_uri = NULL;
+    if (have_image)
+    {
+        const char *tmpdir = getenv("TMPDIR");
+        if (tmpdir == NULL) tmpdir = getenv("TEMP");
+        if (tmpdir == NULL) tmpdir = "/tmp";
+        assert(asprintf(&image_path, "%s/vlc-thumbnail-XXXXXX", tmpdir) >= 0);
+        int fd = vlc_mkstemp(image_path);
+        assert(fd != -1);
+        /* A one-pixel Farbfeld image needs only the mandatory raw decoder. */
+        const unsigned char image[] = {
+            'f', 'a', 'r', 'b', 'f', 'e', 'l', 'd',
+            0, 0, 0, 1, 0, 0, 0, 1,
+            255, 255, 0, 0, 0, 0, 255, 255,
+        };
+        assert(write(fd, image, sizeof(image)) == sizeof(image));
+        close(fd);
+        image_uri = vlc_path2uri(image_path, NULL);
+        assert(image_uri != NULL);
+    }
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        bool seek = i % 2;
+        if ((seek && !have_image) || (!seek && !have_jpeg_decoder))
+            continue;
+        input_item_t *item = input_item_New(seek ? image_uri : uri, "thumbnail timing fixture");
+        assert(item != NULL);
+        if (seek)
+        {
+            input_item_AddOption(item, "demux=image", VLC_INPUT_OPTION_TRUSTED);
+            input_item_AddOption(item, "image-duration=10", VLC_INPUT_OPTION_TRUSTED);
+            input_item_AddOption(item, "image-fps=25/1", VLC_INPUT_OPTION_TRUSTED);
+            input_item_AddOption(item, "image-decode=0", VLC_INPUT_OPTION_TRUSTED);
+        }
+        else
+        {
+            input_item_AddOption(item, "demux=avformat", VLC_INPUT_OPTION_TRUSTED);
+            input_item_AddOption(item, "codec=avcodec", VLC_INPUT_OPTION_TRUSTED);
+        }
+        /* A paused playback start must not stop thumbnail decoding. */
+        if (i >= 2)
+            input_item_AddOption(item, "start-paused", VLC_INPUT_OPTION_TRUSTED);
+
+        struct still_thumbnail_ctx ctx = {
+            .expected_date = VLC_TICK_0 + (seek ? VLC_TICK_FROM_MS(520) : 0),
+        };
+        vlc_sem_init(&ctx.completed, 0);
+        struct vlc_thumbnailer_arg arg = {0};
+        arg.seek.type = VLC_THUMBNAILER_SEEK_TIME;
+        arg.seek.time = seek ? VLC_TICK_FROM_MS(520) : 0;
+        arg.seek.speed = VLC_THUMBNAILER_SEEK_PRECISE;
+        const struct vlc_thumbnailer_cbs cbs = {.on_ended = still_thumbnail_ended};
+        vlc_preparser_req *req = vlc_preparser_req_NewThumbnail(parser, item, &arg, &cbs, &ctx);
+        assert(req != NULL);
+        assert(vlc_preparser_Submit(parser, req) == VLC_SUCCESS);
+        vlc_sem_wait(&ctx.completed);
+        vlc_preparser_req_Release(req);
+        input_item_Release(item);
+    }
+    free(uri);
+    if (image_path != NULL) vlc_unlink(image_path);
+    free(image_path);
+    free(image_uri);
+    vlc_preparser_Delete(parser);
+}
+
 int main( void )
 {
     test_init();
@@ -253,6 +354,7 @@ int main( void )
     fprintf(stderr, "Run with internal preparser...\n");
     test_thumbnails( vlc, false );
     test_cancel_thumbnail( vlc, false );
+    test_still_thumbnail(vlc);
 
 #if !defined(HAVE_VLC_PROCESS_SPAWN)
     fprintf(stderr, "Run with external preparser...\n");

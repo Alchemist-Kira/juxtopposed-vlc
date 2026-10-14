@@ -653,7 +653,16 @@ static void MainLoop( input_thread_t *p_input, bool b_interactive )
         VLC_TICK_FROM_MS(var_InheritInteger( p_input, "stats-min-report-interval" ));
     vlc_tick_t i_last_seek_mdate = 0;
 
-    if( b_interactive && var_InheritBool( p_input, "start-paused" ) )
+    if (input_priv(p_input)->type == INPUT_TYPE_THUMBNAILING)
+    {
+        /* A thumbnail input stops at its first decoded picture. Apply its
+         * queued seek before demuxing, so that picture is from the target. */
+        int type;
+        input_control_param_t param;
+        while (ControlPop(p_input, &type, &param, vlc_tick_now(), false) == VLC_SUCCESS)
+            Control(p_input, type, param);
+    }
+    else if( b_interactive && var_InheritBool( p_input, "start-paused" ) )
         ControlPause(p_input, vlc_tick_now(), true);
 
     bool eof_signaled = false;

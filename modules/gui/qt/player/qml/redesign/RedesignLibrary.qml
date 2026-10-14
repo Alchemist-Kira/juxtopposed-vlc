@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import QtQuick
 import QtQuick.Controls.Basic as C
-import Qt.labs.folderlistmodel as Folders
 import VLC.MainInterface
 import VLC.MediaLibrary
 import VLC.Player
@@ -64,13 +63,9 @@ RedesignLibraryView {
     Loader {
         id: folderLoader
         active: root.currentFolder.length > 0
-        sourceComponent: Folders.FolderListModel {
+        sourceComponent: RedesignFolderModel {
             folder: root.currentFolder
-            showDirsFirst: true
-            showDotAndDotDot: false
-            showOnlyReadable: true
             nameFilters: DialogsProvider.mediaNameFilters(root.category === 2)
-            sortField: Folders.FolderListModel.Name
             sortReversed: root.descending
         }
     }

@@ -310,6 +310,7 @@ libqt_plugin_la_SOURCES = \
 	util/accessible_compat_attached.cpp util/accessible_compat_attached.hpp \
 	util/audio_device_model.cpp  \
 	util/audio_device_model.hpp \
+	util/redesign_folder_model.cpp util/redesign_folder_model.hpp \
 	util/workerthreadset.hpp util/workerthreadset.cpp \
 	util/base_model.hpp util/base_model_p.hpp util/base_model.cpp \
 	util/color_scheme_model.cpp util/color_scheme_model.hpp \
@@ -504,6 +505,7 @@ nodist_libqt_plugin_la_SOURCES = \
 	util/asynctask.moc.cpp \
 	util/accessible_compat_attached.moc.cpp \
 	util/audio_device_model.moc.cpp \
+	util/redesign_folder_model.moc.cpp \
 	util/workerthreadset.moc.cpp \
 	util/base_model.moc.cpp \
 	util/color_scheme_model.moc.cpp \

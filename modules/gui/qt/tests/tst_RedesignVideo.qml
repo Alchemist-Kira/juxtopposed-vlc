@@ -137,6 +137,18 @@ TestCase {
         compare(item("videoBanding").from, 4); compare(item("videoBanding").to, 32)
         compare(item("videoGrain").to, 10)
     }
+    function test_gradientModifiersShowAppliedStateAndCanEnableTheEffect() {
+        const cartoon = item("videoGradientFlag_gradient-cartoon")
+        const color = item("videoGradientFlag_gradient-color")
+        verify(!findChild(cartoon, "settingSwitch").checked)
+        cartoon.toggled(true)
+        verify(video.enabledFilter("gradient")); verify(findChild(cartoon, "settingSwitch").checked)
+        color.toggled(true); verify(findChild(color, "settingSwitch").checked)
+        video.effect("gradient", false)
+        verify(!findChild(cartoon, "settingSwitch").checked)
+        verify(!findChild(color, "settingSwitch").checked)
+        compare(store.values["gradient-cartoon"], true); compare(store.values["gradient-color"], true)
+    }
     function test_colorEditsPreserveSwitchStateAndRejectInvalidHex() {
         const field = item("videoColor_extract")
         field.text = "#123456"; field.editingFinished()

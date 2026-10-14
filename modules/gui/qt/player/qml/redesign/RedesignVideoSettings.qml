@@ -318,8 +318,11 @@ ColumnLayout {
                     required property var modelData
                     Layout.fillWidth: true
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    label: modelData.label; checked: !!root.current(modelData.option)
-                    onToggled: checked => root.backend.stage(modelData.option, checked)
+                    objectName: "videoGradientFlag_" + modelData.option
+                    label: modelData.label; checked: root.enabledFilter("gradient") && !!root.current(modelData.option)
+                    onToggled: checked => {
+                        if (root.backend.stage(modelData.option, checked) && checked) root.effect("gradient", true)
+                    }
                 }
             }
             FilterSlider { objectName: "videoSepia"; Layout.topMargin: theme.dp(20); label: qsTr("Sepia Intensity"); optionName: "sepia-intensity"; from: 0; to: 255; stepSize: 1; ticks: [0, 85, 170, 255] }

@@ -146,8 +146,8 @@ ColumnLayout {
     }
     Choice {
         label: qsTr("Resolution"); optionName: "preferred-resolution"
-        choices: root.backend.describe(optionName).choices || []
-        help: qsTr("Set the preferred quality for the next video.")
+        choices: (root.backend.describe(optionName).choices || []).map(row => Object.assign({}, row, {label: row.value === -1 ? qsTr("Best Available") : row.label}))
+        help: qsTr("Set the maximum resolution for the next video.")
     }
     Choice { label: qsTr("Aspect Ratio"); optionName: "aspect-ratio"; choices: root.options(optionName, ["", "1:1", "4:3", "5:4", "16:9", "16:10", "2.21:1", "2.35:1", "2.39:1"].map(value => ({label: value || qsTr("Default"), value: value}))) }
     Choice { label: qsTr("Crop"); optionName: "crop"; choices: root.options(optionName, ["", "16:10", "16:9", "1.85:1", "2.21:1", "2.35:1", "2.39:1", "5:3", "4:3", "5:4", "1:1"].map(value => ({label: value || qsTr("Default"), value: value}))) }

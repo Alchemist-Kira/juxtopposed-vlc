@@ -48,6 +48,7 @@
 #include "util/color_svg_image_provider.hpp"
 #include "util/effects_image_provider.hpp"
 #include "util/vlcaccess_image_provider.hpp"
+#include "util/seek_preview_image_provider.hpp"
 #include "util/csdbuttonmodel.hpp"
 #include "util/vlctick.hpp"
 #include "util/list_selection_model.hpp"
@@ -168,6 +169,7 @@ bool MainUI::setup(QQmlEngine* engine)
     engine->addImageProvider(QStringLiteral("svgcolor"), new SVGColorImageImageProvider());
     engine->rootContext()->setContextProperty(QStringLiteral("redesignSvgImages"), true);
     engine->addImageProvider(QStringLiteral("vlcaccess"), new VLCAccessImageProvider());
+    engine->addImageProvider(QStringLiteral("seekpreview"), new SeekPreviewImageProvider());
 
     m_component  = new QQmlComponent(engine, QStringLiteral("qrc:/qt/qml/VLC/MainInterface/MainInterface.qml"), QQmlComponent::PreferSynchronous, engine);
     if (m_component->isLoading())

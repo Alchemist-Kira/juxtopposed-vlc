@@ -25,6 +25,7 @@
 #include "player_controller_p.hpp"
 #include "subtitle_timeline_scanner.hpp"
 #include "util/shared_input_item.hpp"
+#include "util/seek_preview_image_provider.hpp"
 
 #include <vlc_actions.h>           /* ACTION_ID */
 #include <vlc_url.h>            /* vlc_uri_decode */
@@ -1619,7 +1620,7 @@ void PlayerController::requestSeekPreview(double position)
                         QBuffer buffer(&png);
                         buffer.open(QIODevice::WriteOnly);
                         if (image.save(&buffer, "PNG"))
-                            imageUrl = QUrl(QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.toBase64()));
+                            imageUrl = SeekPreviewImageProvider::url(png);
                     }
                     block_Release(pixels);
                 }

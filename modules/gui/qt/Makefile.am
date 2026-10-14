@@ -292,6 +292,7 @@ libqt_plugin_la_SOURCES = \
 	player/delay_estimator.cpp \
 	player/delay_estimator.hpp \
 	player/player_controller.cpp player/player_controller.hpp player/player_controller_p.hpp \
+	util/seek_preview_image_provider.hpp \
 	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
 	player/control_list_model.cpp player/control_list_model.hpp \
@@ -1819,6 +1820,17 @@ QT_QTEST_COMMON_cppflags = $(libqt_plugin_la_CPPFLAGS) -I$(builddir)/tests -DTOP
 QT_QTEST_COMMON_cxxflags = $(AM_CXXFLAGS) $(QT_CFLAGS) $(QT_QTEST_CFLAGS) -fPIC $(CXXFLAGS_qt)
 QT_QTEST_COMMON_ldadd = $(QT_LIBS) $(LIBS_qt) $(QT_QTEST_LIBS) $(LIBVLCCORE) $(LIBVLC)
 QT_QTEST_COMMON_ldflags = $(AM_LDFLAGS) $(QT_LDFLAGS) $(QT_QTEST_LDFLAGS)
+
+test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.cpp util/seek_preview_image_provider.hpp
+nodist_test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.moc
+BUILT_SOURCES += tests/test_seek_preview_image_provider.moc
+CLEANFILES += tests/test_seek_preview_image_provider.moc
+test_seek_preview_image_provider_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_seek_preview_image_provider_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_seek_preview_image_provider_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_seek_preview_image_provider_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_seek_preview_image_provider
+TESTS += test_seek_preview_image_provider
 
 test_subtitle_timeline_scanner_SOURCES = \
 	tests/test_subtitle_timeline_scanner.cpp \

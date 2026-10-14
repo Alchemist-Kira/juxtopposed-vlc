@@ -62,6 +62,38 @@ bool subtitleStyleOption(const QString& name)
     return name.startsWith(QLatin1String("freetype-")) || name.startsWith(QLatin1String("sub-text-"));
 }
 
+const QStringList& videoOutputOptions()
+{
+    // Output variables own the current presentation. Hotkeys and the native
+    // choice models can change these without changing saved preferences.
+    // Set the chain last so newly loaded filters inherit their saved values.
+    static const QStringList names{
+        QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"),
+        QStringLiteral("deinterlace-mode"), QStringLiteral("deinterlace"),
+        QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
+        QStringLiteral("saturation"), QStringLiteral("gamma"),
+        QStringLiteral("transform-type"), QStringLiteral("rotate-angle"), QStringLiteral("video-filter")
+    };
+    return names;
+}
+
+QVariant outputValue(vout_thread_t* output, const QString& name)
+{
+    const auto bytes = name.toUtf8();
+    switch (var_Type(output, bytes.constData()) & VLC_VAR_CLASS) {
+    case VLC_VAR_BOOL: return var_GetBool(output, bytes.constData());
+    case VLC_VAR_INTEGER: return QVariant::fromValue<qlonglong>(var_GetInteger(output, bytes.constData()));
+    case VLC_VAR_FLOAT: return var_GetFloat(output, bytes.constData());
+    case VLC_VAR_STRING: {
+        char* text = var_GetString(output, bytes.constData());
+        const auto result = qfu(text ? text : "");
+        free(text);
+        return result;
+    }
+    default: return {};
+    }
+}
+
 bool validPresetName(const QString& name, const QVariantList& presets, const QString& except = {})
 {
     if (name.isEmpty() || name.size() > 80 || name.compare(qtr("Default Preset"), Qt::CaseInsensitive) == 0
@@ -255,6 +287,7 @@ QVariantMap RedesignPreferences::playerPresetOptions() const
     if (m_ctx) {
         auto* player = m_ctx->getIntf()->p_player;
         vlc_player_Lock(player);
+        const bool hasVideo = vlc_player_IsStarted(player) && vlc_player_GetSelectedTrack(player, VIDEO_ES);
         if (vlc_player_IsStarted(player)) {
             // Shortcuts can change timing without writing the defaults. Capture
             // the values the viewer is using, while preserving staged edits.
@@ -274,6 +307,16 @@ QVariantMap RedesignPreferences::playerPresetOptions() const
                 options.insert(QStringLiteral("sub-text-size-pixels"), vlc_player_GetSubtitleTextPixelSize(player));
         }
         vlc_player_Unlock(player);
+        // Hold() can return the placeholder output when no video is selected.
+        // Its cached defaults must not replace the current saved preferences.
+        auto* output = hasVideo ? vlc_player_vout_Hold(player) : nullptr;
+        if (output) {
+            for (const auto& name : videoOutputOptions()) {
+                const auto current = outputValue(output, name);
+                if (!isStaged(name) && current.isValid()) options.insert(name, current);
+            }
+            vout_Release(output);
+        }
     }
     return options;
 }
@@ -832,8 +875,10 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         const auto parts = name.split(QLatin1Char(':'));
         if (parts.size() != 3 || !module_exists(parts[2].toUtf8().constData())) return false;
         auto filters = value(parts[1]).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
-        filters.removeAll(parts[2]);
-        if (proposed.toBool()) filters.append(parts[2]);
+        // Editing an enabled effect must preserve its position. Moving an
+        // adjust filter after transform can discard the transform orientation.
+        if (!proposed.toBool()) filters.removeAll(parts[2]);
+        else if (!filters.contains(parts[2])) filters.append(parts[2]);
         return stage(parts[1], filters.join(QLatin1Char(':')));
     }
 
@@ -888,6 +933,14 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         else
             applyToPlayer = normalized.toUInt() != vlc_player_GetSubtitleTextPixelSize(player);
         vlc_player_Unlock(player);
+    }
+    if (m_ctx && videoOutputOptions().contains(name)) {
+        auto* output = vlc_player_vout_Hold(m_ctx->getIntf()->p_player);
+        if (output) {
+            const auto current = outputValue(output, name);
+            applyToPlayer = current.isValid() && normalized != current;
+            vout_Release(output);
+        }
     }
     // A shortcut can change the current size without changing saved defaults.
     if (normalized == read(name.toUtf8()) && !applyToPlayer) m_edits.remove(name);
@@ -995,6 +1048,32 @@ bool RedesignPreferences::save()
         }
     }
     vlc_player_Unlock(player);
+    if (std::any_of(videoOutputOptions().cbegin(), videoOutputOptions().cend(),
+                    [&](const auto& name) { return previous.contains(name); })) {
+        size_t count = 0;
+        auto** outputs = vlc_player_vout_HoldAll(player, &count);
+        for (size_t i = 0; i < count; ++i) {
+            for (const auto& name : videoOutputOptions()) {
+                if (!previous.contains(name)) continue;
+                const auto bytes = name.toUtf8();
+                const int type = config_GetType(bytes.constData()) & VLC_VAR_CLASS;
+                if (var_Type(outputs[i], bytes.constData()) == 0)
+                    // Filter proxy callbacks use ISCOMMAND to find and remove
+                    // mappings when the chain changes. Keep that contract even
+                    // if the settings editor creates the mapping first.
+                    var_Create(outputs[i], bytes.constData(), type | VLC_VAR_ISCOMMAND);
+                const auto current = value(name);
+                switch (type) {
+                case VLC_VAR_BOOL: var_SetBool(outputs[i], bytes.constData(), current.toBool()); break;
+                case VLC_VAR_INTEGER: var_SetInteger(outputs[i], bytes.constData(), current.toLongLong()); break;
+                case VLC_VAR_FLOAT: var_SetFloat(outputs[i], bytes.constData(), current.toFloat()); break;
+                case VLC_VAR_STRING: var_SetString(outputs[i], bytes.constData(), current.toString().toUtf8().constData()); break;
+                }
+            }
+            vout_Release(outputs[i]);
+        }
+        free(outputs);
+    }
     if (previous.contains(QStringLiteral("sub-margin")) || previous.contains(QStringLiteral("subsdelay-factor"))
         || previous.contains(QStringLiteral("subsdelay-mode")) || previous.contains(QStringLiteral("sub-filter"))) {
         size_t count = 0;

@@ -762,12 +762,21 @@ static void
 ResetCurrentIndex( demux_t *p_demux )
 {
     demux_sys_t *p_sys = p_demux->p_sys;
+    p_sys->subtitles.i_current = 0;
     for( size_t i = 0; i < p_sys->subtitles.i_count; i++ )
     {
         if( p_sys->subtitles.p_array[i].i_start * p_sys->f_rate >
             p_sys->i_next_demux_date && i > 0 )
             break;
         p_sys->subtitles.i_current = i;
+        /* A later, short cue can overlap an earlier, long cue. Seeking to
+         * only the last start time loses the cue that is still visible. */
+        vlc_tick_t stop = p_sys->subtitles.p_array[i].i_stop;
+        if( stop == VLC_TICK_INVALID )
+            stop = i + 1 < p_sys->subtitles.i_count
+                 ? p_sys->subtitles.p_array[i + 1].i_start : VLC_TICK_MAX;
+        if( stop * p_sys->f_rate > p_sys->i_next_demux_date )
+            break;
     }
 }
 

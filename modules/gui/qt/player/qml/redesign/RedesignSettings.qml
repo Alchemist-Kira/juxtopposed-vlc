@@ -138,7 +138,6 @@ C.Pane {
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     onTrackRequested: index => root.select(Player.videoTracks, index, true)
                     onDeinterlaceRequested: index => root.select(Player.deinterlace, index, true)
-                    onMoreFiltersRequested: DialogsProvider.extendedDialog()
                 }
                 Item { height: theme.dp(20) }
             }

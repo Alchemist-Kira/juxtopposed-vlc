@@ -17,11 +17,13 @@ ColumnLayout {
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal trackRequested(int index)
     signal deinterlaceRequested(int index)
-    signal moreFiltersRequested()
     spacing: 0
 
     function current(name) { backend.revision; liveRevision; return backend.videoValue(name) }
-    function enabledFilter(name, chain = "video-filter") { return String(current(chain) || "").split(":").includes(name) }
+    function enabledFilter(name, chain = "video-filter") {
+        return String(current(chain) || "").split(":").includes(name)
+            || (chain === "sub-source" && String(current("sub-filter") || "").split(":").includes(name))
+    }
     function effect(name, enabled, chain = "video-filter") { return backend.stage("filter:" + chain + ":" + name, enabled) }
     function options(name, rows) {
         const result = rows.slice()
@@ -106,6 +108,55 @@ ColumnLayout {
         visible: root.backend.describe("filter:video-filter:" + filterName).kind !== undefined
         checked: root.enabledFilter(filterName)
         onToggled: checked => root.effect(filterName, checked)
+    }
+
+    QtObject {
+        id: videoStore
+        property int revision: root.backend.revision + root.liveRevision
+        function value(name) {
+            if (name.startsWith("filter:")) { const parts = name.split(":"); return root.enabledFilter(parts[2], parts[1]) }
+            return root.current(name)
+        }
+        function describe(name) { return root.backend.describe(name) }
+        function stage(name, value) { return root.backend.stage(name, value) }
+        function reset(name) { root.backend.reset(name) }
+        function choosePath(name) { return root.backend.choosePath(name) }
+        function chooseColor(initial) { return root.backend.chooseColor(initial) }
+        function refresh() { root.backend.refresh() }
+    }
+    component Option: RedesignPreferenceRow {
+        Layout.fillWidth: true
+        backend: videoStore
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        presentation: ({compact: true})
+    }
+    component NumberOption: RedesignSettingSlider {
+        required property string optionName
+        Layout.fillWidth: true
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        visible: root.backend.describe(optionName).kind !== undefined
+        currentValue: Number(root.current(optionName) || 0)
+        sliderVisible: false; decimals: 0; stepSize: 1
+        from: 0; to: 2147483647
+        onMoved: value => root.backend.stage(optionName, value)
+    }
+    component ParameterSlider: RedesignSettingSlider {
+        required property string optionName
+        property real valueFactor: 1
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(10); Layout.bottomMargin: theme.dp(10)
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        visible: root.backend.describe(optionName).kind !== undefined
+        currentValue: Number(root.current(optionName) || 0) * valueFactor
+        scaleLabelsVisible: false; sliderTopMargin: 6
+        onMoved: value => root.backend.stage(optionName, root.backend.describe(optionName).kind === "integer" ? Math.round(value / valueFactor) : value / valueFactor)
+    }
+    component OverlaySwitch: RedesignSwitchRow {
+        required property string sourceName
+        Layout.fillWidth: true
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        visible: root.backend.describe("filter:sub-source:" + sourceName).kind !== undefined
+        checked: root.enabledFilter(sourceName, "sub-source")
+        onToggled: checked => root.effect(sourceName, checked, "sub-source")
     }
 
     Text { Layout.topMargin: theme.dp(12); Layout.bottomMargin: theme.dp(26); text: qsTr("Defaults"); color: theme.foreground; font.pixelSize: theme.dp(16) }
@@ -333,18 +384,80 @@ ColumnLayout {
         Layout.fillWidth: true; label: qsTr("Geometry")
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         settings: ColumnLayout {
-            FilterSwitch { label: qsTr("Interactive Zoom"); filterName: "magnify" }
-            FilterSwitch { label: qsTr("Puzzle"); filterName: "puzzle" }
+            spacing: theme.dp(8)
+            FilterSwitch { objectName: "videoInteractiveZoom"; label: qsTr("Interactive Zoom"); filterName: "magnify" }
+            FilterSwitch { objectName: "videoPuzzle"; label: qsTr("Puzzle"); filterName: "puzzle" }
+            ColumnLayout {
+                objectName: "videoPuzzleOptions"
+                Layout.fillWidth: true; visible: root.enabledFilter("puzzle"); spacing: theme.dp(12)
+                NumberOption { objectName: "videoPuzzleRows"; label: qsTr("Rows"); optionName: "puzzle-rows"; from: 2; to: 42 }
+                NumberOption { objectName: "videoPuzzleColumns"; label: qsTr("Columns"); optionName: "puzzle-cols"; from: 2; to: 42 }
+                Option { optionName: "puzzle-mode"; label: qsTr("Game Mode") }
+                Option { optionName: "puzzle-rotation"; label: qsTr("Piece Rotation") }
+                NumberOption { label: qsTr("Border"); optionName: "puzzle-border"; suffix: " %"; to: 40 }
+                Option { objectName: "videoPuzzlePreview"; optionName: "puzzle-preview"; label: qsTr("Preview") }
+                ParameterSlider { label: qsTr("Preview Size"); optionName: "puzzle-preview-size"; from: 0; to: 100; suffix: " %"; stepSize: 1; enabled: !!root.current("puzzle-preview"); opacity: enabled ? 1 : .5 }
+                ParameterSlider { label: qsTr("Piece Size"); optionName: "puzzle-shape-size"; from: 0; to: 100; suffix: " %"; stepSize: 1 }
+                NumberOption { label: qsTr("Auto Shuffle"); optionName: "puzzle-auto-shuffle"; to: 30000 }
+                NumberOption { label: qsTr("Auto Solve"); optionName: "puzzle-auto-solve"; to: 30000 }
+            }
         }
     }
     RedesignFilterSection {
         objectName: "videoOverlaySection"
         Layout.fillWidth: true; label: qsTr("Overlay")
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-        settings: RedesignButton {
-            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            caption: qsTr("Text and Image Overlays"); text: caption
-            onClicked: root.moreFiltersRequested()
+        settings: ColumnLayout {
+            spacing: theme.dp(8)
+            OverlaySwitch { objectName: "videoTextOverlay"; label: qsTr("Text Overlay"); sourceName: "marq" }
+            Option { objectName: "videoOverlayText"; optionName: "marq-marquee"; label: qsTr("Text"); presentation: ({compact: true, fullWidth: true}) }
+            ColumnLayout {
+                objectName: "videoTextOverlayOptions"
+                Layout.fillWidth: true; visible: root.enabledFilter("marq", "sub-source"); spacing: theme.dp(10)
+                Option { optionName: "marq-position"; label: qsTr("Position"); presentation: ({compact: true, choices: [{label: qsTr("Custom"), value: -1}].concat(root.backend.describe(optionName).choices || [])}) }
+                NumberOption { label: qsTr("X Offset"); optionName: "marq-x"; suffix: " px" }
+                NumberOption { label: qsTr("Y Offset"); optionName: "marq-y"; suffix: " px" }
+                NumberOption { label: qsTr("Font Size"); optionName: "marq-size"; to: 4096; minimumValueText: qsTr("Auto"); suffix: " px" }
+                Option { optionName: "marq-color"; label: qsTr("Text Color") }
+                ParameterSlider {
+                    objectName: "videoTextOpacity"
+                    label: qsTr("Opacity"); optionName: "marq-opacity"; suffix: " %"
+                    from: 0; to: 100; stepSize: 1
+                    currentValue: Math.round(Number(root.current(optionName)) * 100 / 255)
+                    valueFactor: 100 / 255
+                }
+                Option { objectName: "videoOverlayTextFile"; optionName: "marq-file"; label: qsTr("Text File"); presentation: ({compact: true, fullWidth: true}) }
+                Text { Layout.fillWidth: true; text: qsTr("Keep the file path empty to use the text above."); color: theme.foreground; font.pixelSize: theme.dp(12); wrapMode: Text.WordWrap }
+                NumberOption { label: qsTr("Timeout"); optionName: "marq-timeout"; suffix: " ms"; minimumValueText: qsTr("None") }
+                NumberOption { label: qsTr("Refresh Interval"); optionName: "marq-refresh"; suffix: " ms" }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: theme.dp(12); Layout.bottomMargin: theme.dp(12); height: theme.dp(1); color: theme.border }
+            OverlaySwitch { objectName: "videoImageOverlay"; label: qsTr("Image Overlay"); sourceName: "logo" }
+            Option { objectName: "videoOverlayImageFile"; optionName: "logo-file"; label: qsTr("Image File"); presentation: ({compact: true, fullWidth: true}) }
+            ColumnLayout {
+                objectName: "videoImageOverlayOptions"
+                Layout.fillWidth: true; visible: root.enabledFilter("logo", "sub-source"); spacing: theme.dp(10)
+                Option { optionName: "logo-position"; label: qsTr("Position"); presentation: ({compact: true, choices: [{label: qsTr("Custom"), value: -1}].concat(root.backend.describe(optionName).choices || [])}) }
+                NumberOption { label: qsTr("X Offset"); optionName: "logo-x"; from: -1; minimumValueText: qsTr("Auto"); suffix: " px" }
+                NumberOption { label: qsTr("Y Offset"); optionName: "logo-y"; from: -1; minimumValueText: qsTr("Auto"); suffix: " px" }
+                ParameterSlider {
+                    objectName: "videoImageOpacity"
+                    label: qsTr("Opacity"); optionName: "logo-opacity"; suffix: " %"
+                    from: 0; to: 100; stepSize: 1
+                    currentValue: Math.round(Number(root.current(optionName)) * 100 / 255)
+                    valueFactor: 100 / 255
+                }
+                NumberOption { label: qsTr("Image Delay"); optionName: "logo-delay"; suffix: " ms" }
+                NumberOption { label: qsTr("Repeat"); optionName: "logo-repeat"; from: -1; minimumValueText: qsTr("Always") }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: theme.dp(12); Layout.bottomMargin: theme.dp(12); height: theme.dp(1); color: theme.border }
+            FilterSwitch { objectName: "videoErase"; label: qsTr("Logo Erase"); filterName: "erase" }
+            ColumnLayout {
+                Layout.fillWidth: true; visible: root.enabledFilter("erase"); spacing: theme.dp(10)
+                Option { optionName: "erase-mask"; label: qsTr("Mask File"); presentation: ({compact: true, fullWidth: true}) }
+                NumberOption { label: qsTr("X Offset"); optionName: "erase-x"; suffix: " px" }
+                NumberOption { label: qsTr("Y Offset"); optionName: "erase-y"; suffix: " px" }
+            }
         }
     }
     RedesignFilterSection {
@@ -352,14 +465,40 @@ ColumnLayout {
         Layout.fillWidth: true; label: qsTr("Advanced")
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         settings: ColumnLayout {
+            spacing: theme.dp(8)
             RedesignModelChoice { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; label: qsTr("Video Track"); choiceModel: root.videoTracksModel; onSelectionRequested: index => root.trackRequested(index) }
             RedesignModelChoice { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; label: qsTr("Deinterlace"); choiceModel: root.deinterlaceModel; onSelectionRequested: index => root.deinterlaceRequested(index) }
+            RedesignSwitchRow {
+                Layout.fillWidth: true
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                label: qsTr("Brightness Threshold"); checked: root.enabledFilter("adjust") && !!root.current("brightness-threshold")
+                onToggled: checked => { if (root.backend.stage("brightness-threshold", checked) && checked) root.effect("adjust", true) }
+            }
             FilterSwitch { label: qsTr("Motion Detect"); filterName: "motiondetect" }
-            FilterSwitch { label: qsTr("Motion Blur"); filterName: "motionblur" }
+            FilterSwitch { objectName: "videoMotionBlur"; label: qsTr("Motion Blur"); filterName: "motionblur" }
+            ParameterSlider { objectName: "videoMotionBlurFactor"; label: qsTr("Blur Factor"); optionName: "blur-factor"; from: 1; to: 127; stepSize: 1; visible: root.enabledFilter("motionblur") }
+            FilterSwitch { objectName: "videoGaussianBlur"; label: qsTr("Gaussian Blur"); filterName: "gaussianblur" }
+            ParameterSlider { objectName: "videoGaussianSigma"; label: qsTr("Sigma"); optionName: "gaussianblur-sigma"; from: .01; to: 8; inputTo: 4096; stepSize: .01; decimals: 2; visible: root.enabledFilter("gaussianblur") }
+            FilterSwitch { label: qsTr("Antiflicker"); filterName: "antiflicker" }
+            ColumnLayout {
+                Layout.fillWidth: true; visible: root.enabledFilter("antiflicker")
+                ParameterSlider { label: qsTr("Window Size"); optionName: "antiflicker-window-size"; from: 0; to: 100; stepSize: 1 }
+                ParameterSlider { label: qsTr("Softening Size"); optionName: "antiflicker-softening-size"; from: 0; to: 31; stepSize: 1 }
+            }
+            FilterSwitch { objectName: "videoDenoise"; label: qsTr("Denoise"); filterName: "hqdn3d" }
+            ColumnLayout {
+                Layout.fillWidth: true; visible: root.enabledFilter("hqdn3d")
+                Repeater {
+                    model: [{label: qsTr("Luma Spatial"), option: "hqdn3d-luma-spat"}, {label: qsTr("Chroma Spatial"), option: "hqdn3d-chroma-spat"}, {label: qsTr("Luma Temporal"), option: "hqdn3d-luma-temp"}, {label: qsTr("Chroma Temporal"), option: "hqdn3d-chroma-temp"}]
+                    ParameterSlider { required property var modelData; label: modelData.label; optionName: modelData.option; from: 0; to: 10; inputTo: 254; stepSize: .1; decimals: 1 }
+                }
+            }
+            FilterSwitch { label: qsTr("Mirror"); filterName: "mirror" }
             FilterSwitch { label: qsTr("Wave"); filterName: "wave" }
             FilterSwitch { label: qsTr("Ripple"); filterName: "ripple" }
             FilterSwitch { label: qsTr("Psychedelic"); filterName: "psychedelic" }
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("More Video Filters"); text: caption; onClicked: root.moreFiltersRequested() }
+            FilterSwitch { label: qsTr("Anaglyph 3D"); filterName: "anaglyph" }
+            Option { optionName: "anaglyph-scheme"; label: qsTr("Color Scheme"); visible: root.enabledFilter("anaglyph") }
         }
     }
 }

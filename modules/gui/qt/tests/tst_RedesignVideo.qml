@@ -18,6 +18,9 @@ TestCase {
         function videoValue(name) { return live[name] === undefined ? values[name] : live[name] }
         function describe(name) {
             if (name === "d3d11-hdr-mode") return {}
+            if (["marq-opacity", "logo-opacity", "puzzle-rows", "puzzle-cols"].includes(name)) return {kind: "integer", minimum: 0, maximum: 255}
+            if (["puzzle-preview", "brightness-threshold"].includes(name)) return {kind: "bool"}
+            if (["marq-marquee", "marq-file", "logo-file", "erase-mask"].includes(name)) return {kind: "string", editor: name.endsWith("file") || name.endsWith("mask") ? "file" : ""}
             if (name === "preferred-resolution") return {kind: "integer", choices: [{label: "Best Available", value: -1}, {label: "720p", value: 720}]}
             if (name === "gradient-mode") return {kind: "string", choices: [{label: "Gradient", value: "gradient"}, {label: "Edge", value: "edge"}]}
             return {kind: "float"}
@@ -35,6 +38,9 @@ TestCase {
             return true
         }
         function chooseColor(initial) { return "#123456" }
+        function choosePath(name) { return "/tmp/overlay.png" }
+        function refresh() { revision++ }
+        function reset(name) { stage(name, describe(name).defaultValue) }
     }
     RedesignVideoSettings { id: video; x: 24; width: 356; backend: store }
     function item(name) { return findChild(video, name) }
@@ -44,7 +50,18 @@ TestCase {
             "saturation": 1, "gamma": 1, "sharpen-sigma": .05, "gradfun-radius": 16, "grain-variance": 2,
             "extract-component": 16711680, "colorthres-color": 16711680, "colorthres-saturationthres": 20,
             "colorthres-similaritythres": 15, "gradient-mode": "gradient", "gradient-color": false,
-            "gradient-cartoon": true, "sepia-intensity": 120}
+            "gradient-cartoon": true, "sepia-intensity": 120,
+            "sub-source": "", "sub-filter": "subsdelay", "marq-marquee": "VLC", "marq-file": "",
+            "marq-opacity": 255, "marq-color": 16777215, "marq-position": -1, "marq-x": 0, "marq-y": 0,
+            "marq-size": 0, "marq-timeout": 0, "marq-refresh": 1000,
+            "logo-file": "", "logo-opacity": 255, "logo-position": -1, "logo-x": -1, "logo-y": -1,
+            "logo-delay": 1000, "logo-repeat": -1,
+            "puzzle-rows": 4, "puzzle-cols": 4, "puzzle-mode": 0, "puzzle-rotation": 0, "puzzle-border": 3,
+            "puzzle-preview": false, "puzzle-preview-size": 15, "puzzle-shape-size": 90,
+            "puzzle-auto-shuffle": 0, "puzzle-auto-solve": 0, "blur-factor": 80, "gaussianblur-sigma": 2,
+            "antiflicker-window-size": 10, "antiflicker-softening-size": 10,
+            "hqdn3d-luma-spat": 4, "hqdn3d-luma-temp": 6, "hqdn3d-chroma-spat": 3, "hqdn3d-chroma-temp": 4.5,
+            "erase-mask": "", "erase-x": 0, "erase-y": 0, "anaglyph-scheme": "red-cyan"}
         store.live = {}; store.revision++; store.lastOption = ""
         video.width = 356
         for (const name of ["Essential", "Crop", "Colors", "Geometry", "Overlay", "Advanced"]) item("video" + name + "Section").expanded = false
@@ -136,6 +153,49 @@ TestCase {
         compare(item("videoHue").from, -180); compare(item("videoHue").to, 180)
         compare(item("videoBanding").from, 4); compare(item("videoBanding").to, 32)
         compare(item("videoGrain").to, 10)
+    }
+    function test_overlaySourcesKeepSubtitleFiltersAndVideoEffects() {
+        store.stage("video-filter", "adjust:transform")
+        item("videoTextOverlay").toggled(true)
+        compare(store.values["sub-source"], "marq"); verify(item("videoTextOverlayOptions").visible === false)
+        item("videoOverlaySection").expanded = true
+        verify(item("videoTextOverlayOptions").visible)
+        item("videoImageOverlay").toggled(true)
+        compare(store.values["sub-source"], "marq:logo")
+        item("videoTextOverlay").toggled(false)
+        compare(store.values["sub-source"], "logo")
+        compare(store.values["sub-filter"], "subsdelay"); compare(store.values["video-filter"], "adjust:transform")
+    }
+    function test_overlayOpacityUsesNativeAlphaAndTracksLiveChanges() {
+        item("videoTextOpacity").moved(50)
+        compare(store.values["marq-opacity"], 128)
+        item("videoImageOpacity").moved(0); compare(store.values["logo-opacity"], 0)
+        item("videoImageOpacity").moved(100); compare(store.values["logo-opacity"], 255)
+        store.live = {"logo-opacity": 128}; store.revision++
+        compare(item("videoImageOpacity").currentValue, 50)
+    }
+    function test_overlayTextCanBeEditedAcrossLiveRefresh() {
+        item("videoOverlaySection").expanded = true
+        const field = findChild(item("videoOverlayText"), "preferenceTextEditor")
+        field.forceActiveFocus(); compare(field.text, "VLC")
+        field.text = "A title"; store.revision++; wait(500); compare(field.text, "A title")
+        field.editingFinished(); compare(store.values["marq-marquee"], "A title")
+        video.forceActiveFocus(); store.live = {"marq-marquee": "New title"}; store.revision++
+        compare(field.text, "New title")
+    }
+    function test_puzzleControlsUseNativeLimitsAndStayWithTheirEffect() {
+        item("videoGeometrySection").expanded = true
+        verify(!item("videoPuzzleOptions").visible)
+        item("videoPuzzle").toggled(true); verify(item("videoPuzzleOptions").visible)
+        item("videoPuzzleRows").moved(8); compare(store.values["puzzle-rows"], 8)
+        compare(item("videoPuzzleColumns").from, 2); compare(item("videoPuzzleColumns").to, 42)
+        item("videoPuzzle").toggled(false); verify(!item("videoPuzzleOptions").visible)
+        compare(store.values["puzzle-rows"], 8)
+    }
+    function test_advancedParametersKeepFullNativeNumericInput() {
+        compare(item("videoGaussianSigma").to, 8); compare(item("videoGaussianSigma").inputTo, 4096)
+        item("videoGaussianSigma").moved(16); compare(store.values["gaussianblur-sigma"], 16)
+        item("videoMotionBlurFactor").moved(99); compare(store.values["blur-factor"], 99)
     }
     function test_gradientModifiersShowAppliedStateAndCanEnableTheEffect() {
         const cartoon = item("videoGradientFlag_gradient-cartoon")

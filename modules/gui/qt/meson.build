@@ -756,6 +756,8 @@ qml_modules += {
        'player/qml/redesign/RedesignTrackDefaults.qml',
        'player/qml/redesign/RedesignAudioSettings.qml',
        'player/qml/redesign/RedesignSubtitleSettings.qml',
+       'player/qml/redesign/RedesignVideoSettings.qml',
+       'player/qml/redesign/RedesignFilterSection.qml',
        'player/qml/redesign/RedesignSwitchRow.qml',
        'player/qml/redesign/RedesignStatistics.qml',
        'player/qml/redesign/RedesignSettings.qml',
@@ -998,6 +1000,7 @@ qml_tests = {
     'tst_RedesignPreferences': files('tests/tst_RedesignPreferences.qml'),
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
     'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
+    'tst_RedesignVideo': files('tests/tst_RedesignVideo.qml'),
     'tst_RedesignPlayerPreset': files('tests/tst_RedesignPlayerPreset.qml'),
     'tst_RedesignSubtitles': files('tests/tst_RedesignSubtitles.qml'),
 }

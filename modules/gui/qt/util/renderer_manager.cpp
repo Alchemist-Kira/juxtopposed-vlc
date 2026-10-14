@@ -319,6 +319,7 @@ QHash<int,QByteArray> RendererManager::roleNames() const
 {
     return {
         { NAME, QByteArrayLiteral("name") },
+        { SELECTED, QByteArrayLiteral("selected") },
         { TYPE, QByteArrayLiteral("type") },
         { DEMUX_FILTER, QByteArrayLiteral("demuxFilter") },
         { SOUT, QByteArrayLiteral("sour") },

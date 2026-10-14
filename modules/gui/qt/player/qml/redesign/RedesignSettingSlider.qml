@@ -28,6 +28,8 @@ ColumnLayout {
     property real sliderLeftMargin: 0
     property bool scaleLabelsVisible: true
     property bool displayValueAsText: false
+    property bool valueFieldVisible: true
+    property bool sliderVisible: true
     property string valueLabel
     property var valueToPosition: null
     property var positionToValue: null
@@ -43,7 +45,7 @@ ColumnLayout {
             objectName: "settingValueField"
             property real factor: Math.pow(10, root.decimals)
             Layout.preferredWidth: theme.dp(138)
-            visible: !root.displayValueAsText
+            visible: root.valueFieldVisible && !root.displayValueAsText
             implicitHeight: theme.dp(34)
             leftPadding: theme.dp(14); rightPadding: theme.dp(10)
             font.pixelSize: theme.dp(14)
@@ -88,7 +90,7 @@ ColumnLayout {
             onValueModified: root.moved(value / factor)
         }
         Text {
-            visible: root.displayValueAsText
+            visible: root.valueFieldVisible && root.displayValueAsText
             Layout.preferredWidth: theme.dp(138)
             horizontalAlignment: Text.AlignRight
             text: root.valueLabel; color: theme.foreground; font.pixelSize: theme.dp(14)
@@ -96,6 +98,7 @@ ColumnLayout {
     }
     C.Slider {
         id: slider
+        visible: root.sliderVisible
         objectName: "settingSlider"
         Layout.fillWidth: true
         Layout.leftMargin: theme.dp(root.sliderLeftMargin)
@@ -118,6 +121,10 @@ ColumnLayout {
             event.accepted = true
         }
         Accessible.name: root.label
+        hoverEnabled: true
+        C.ToolTip.text: Number(root.currentValue).toLocaleString(Qt.locale(), 'f', root.decimals) + root.suffix
+        C.ToolTip.visible: hovered || pressed
+        C.ToolTip.delay: 500
         background: Rectangle {
             x: slider.leftPadding; y: slider.topPadding + slider.availableHeight / 2 - height / 2
             width: slider.availableWidth; height: theme.dp(14); radius: theme.dp(5); color: theme.field
@@ -143,7 +150,7 @@ ColumnLayout {
     }
     RowLayout {
         Layout.fillWidth: true
-        visible: root.scaleLabelsVisible && root.ticks.length === 0
+        visible: root.sliderVisible && root.scaleLabelsVisible && root.ticks.length === 0
         Text { text: root.from + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
         Item { Layout.fillWidth: true }
         RedesignButton { objectName: "settingResetButton"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.resetValue) }
@@ -153,7 +160,7 @@ ColumnLayout {
     Item {
         Layout.fillWidth: true
         implicitHeight: theme.dp(16)
-        visible: root.scaleLabelsVisible && root.ticks.length > 0
+        visible: root.sliderVisible && root.scaleLabelsVisible && root.ticks.length > 0
         Repeater {
             model: root.ticks
             Text {

@@ -9,6 +9,7 @@ RowLayout {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property string label
+    property string accessibleName: label
     property bool checked: false
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal toggled(bool checked)
@@ -17,6 +18,7 @@ RowLayout {
     opacity: enabled ? 1 : 0.5
     Text {
         Layout.fillWidth: true
+        visible: root.label.length > 0
         text: root.label; color: theme.foreground
         font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap
     }
@@ -26,7 +28,7 @@ RowLayout {
         Layout.preferredWidth: theme.dp(64); Layout.preferredHeight: theme.dp(30)
         checkable: true; checked: root.checked
         hoverEnabled: true; focusPolicy: Qt.StrongFocus
-        Accessible.name: root.label
+        Accessible.name: root.accessibleName
         Accessible.role: Accessible.CheckBox
         Accessible.checkable: true; Accessible.checked: checked
         onClicked: root.toggled(checked)

@@ -129,22 +129,16 @@ C.Pane {
                     onDelayRequested: value => root.preferenceStore.stage("redesign-subtitle-delay", Math.round(value * 1000))
                     onFpsRequested: value => root.preferenceStore.stage("sub-fps", value)
                 }
-                ColumnLayout {
-                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
-                    spacing: theme.dp(22)
+                RedesignVideoSettings {
+                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(20)
                     visible: root.page === "video"
-                    Repeater {
-                        model: [{label: qsTr("Video tracks"), choices: Player.videoTracks}, {label: qsTr("Zoom"), choices: Player.zoom}, {label: qsTr("Aspect ratio"), choices: Player.aspectRatio}, {label: qsTr("Crop"), choices: Player.crop}, {label: qsTr("Deinterlace"), choices: Player.deinterlace}]
-                        RedesignTracks {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                            heading: modelData.label; trackModel: modelData.choices
-                            onSelectionRequested: (index, selected) => root.select(trackModel, index, selected)
-                        }
-                    }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Snapshot"); text: caption; enabled: Player.hasVideoOutput; onClicked: Player.snapshot() }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Video effects and filters"); text: caption; onClicked: DialogsProvider.extendedDialog() }
+                    backend: root.preferenceStore
+                    rendererModel: Player.rendererManager
+                    videoTracksModel: Player.videoTracks; deinterlaceModel: Player.deinterlace
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    onTrackRequested: index => root.select(Player.videoTracks, index, true)
+                    onDeinterlaceRequested: index => root.select(Player.deinterlace, index, true)
+                    onMoreFiltersRequested: DialogsProvider.extendedDialog()
                 }
                 Item { height: theme.dp(20) }
             }

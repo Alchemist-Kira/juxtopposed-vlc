@@ -86,6 +86,8 @@ private slots:
 
     void testEmpty() {
         QVERIFY(rd() == nullptr);
+        QCOMPARE(m_model->roleNames().value(RendererManager::SELECTED), QByteArrayLiteral("selected"));
+        QVERIFY(m_model->metaObject()->indexOfMethod("disableRenderer()") >= 0);
         //model is empty before scan
         QCOMPARE(m_model->rowCount(), 0);
         m_model->StartScan();

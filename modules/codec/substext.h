@@ -283,7 +283,9 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
         r->b_in_window = update_region->b_in_window;
         r->i_align = update_region->align;
         r->text_flags |= update_region->inner_align & SUBPICTURE_ALIGN_MASK;
-        if (use_embedded_style && (update_region->flags & UPDT_REGION_IGNORE_BACKGROUND))
+        /* Manual styles draw their own background under each text segment.
+         * Do not blend a second region background over the same pixels. */
+        if (!use_embedded_style || (update_region->flags & UPDT_REGION_IGNORE_BACKGROUND))
             r->text_flags |= VLC_SUBPIC_TEXT_FLAG_NO_REGION_BG;
         if (pixel_size)
             r->text_flags |= VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE;

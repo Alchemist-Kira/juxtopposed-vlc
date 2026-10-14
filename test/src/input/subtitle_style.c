@@ -67,6 +67,7 @@ int main(void)
     assert(region->p_text->style->i_font_color == 0x123456);
     assert(region->p_text->style->i_outline_color == 0x654321);
     assert(region->p_text->style->i_background_alpha == 128);
+    assert(region->text_flags & VLC_SUBPIC_TEXT_FLAG_NO_REGION_BG);
     assert(strcmp(region->p_text->style->psz_fontname, "User Font") == 0);
     assert(!(region->p_text->style->i_style_flags & STYLE_ITALIC));
 

@@ -6,7 +6,7 @@
 // This file's implementation code is GPL-2.0-or-later.
 import QtQuick
 
-Image {
+RedesignSvg {
     id: root
     property string name
     property color color: "#8f8f8f"
@@ -62,9 +62,9 @@ Image {
     "shuffle": "<path d=\"M3 6h3l12 12h3m-3-3 3 3-3 3M3 18h3L18 6h3m-3-3 3 3-3 3\" fill=\"none\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/>"
 }
 
-    source: "data:image/svg+xml;utf8," + encodeURIComponent(
+    svg:
         '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">'
-        + (paths[name] || "").split("COLOR").join(color.toString()) + "</svg>")
+        + (paths[name] || "").split("COLOR").join(color.toString()) + "</svg>"
     // The icon fill follows the exact same reveal value as the sidebar.
     Rectangle {
         visible: root.name === "sidebar"

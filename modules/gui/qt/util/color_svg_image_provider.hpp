@@ -25,6 +25,7 @@
 #include <QUrlQuery>
 
 #define PATH_KEY "_res_PATH"
+#define INLINE_SVG_KEY "_res_SVG"
 #define BACKGROUND_KEY "_res_BG"
 #define COLOR1_KEY "_res_C1"
 #define COLOR2_KEY "_res_C2"

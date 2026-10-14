@@ -21,17 +21,17 @@ T.Slider {
     padding: 0
     handle: Item { width: 0; height: 0 }
     background: Item {
-        Image {
+        RedesignSvg {
             id: cone
             anchors.fill: parent
             opacity: root.muted ? 0.3 : 1
             sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
-            source: {
+            svg: {
                 if (width <= 0 || height <= 0) return ""
                 const path = "M2 " + (height * 0.35) + " L" + (width - 2) + " 1 Q" + width + " 1 " + width + " 4"
                     + " L" + width + " " + (height - 4) + " Q" + width + " " + (height - 1) + " " + (width - 2) + " " + (height - 1)
                     + " L2 " + (height * 0.65) + " Q0 " + (height * 0.65) + " 0 " + (height * 0.5) + " Z"
-                return "data:image/svg+xml;utf8," + encodeURIComponent(
+                return (
                     '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
                     + '<defs><clipPath id="cone"><path d="' + path + '"/></clipPath>'
                     + '<linearGradient id="volume" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="' + width + '" y2="0">'

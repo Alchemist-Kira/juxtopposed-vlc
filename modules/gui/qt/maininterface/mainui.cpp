@@ -62,6 +62,7 @@
 #include "dialogs/dialogs_provider.hpp"
 #include "dialogs/preferences/redesign_preferences.hpp"
 #include "util/redesign_folder_model.hpp"
+#include <QQmlContext>
 #include "dialogs/dialogs/dialogmodel.hpp"
 #ifdef UPDATE_CHECK
 #include "dialogs/help/help.hpp" // UpdateModel
@@ -164,6 +165,7 @@ bool MainUI::setup(QQmlEngine* engine)
     if (!EffectsImageProvider::instance(engine, engine))
         new EffectsImageProvider(engine);
     engine->addImageProvider(QStringLiteral("svgcolor"), new SVGColorImageImageProvider());
+    engine->rootContext()->setContextProperty(QStringLiteral("redesignSvgImages"), true);
     engine->addImageProvider(QStringLiteral("vlcaccess"), new VLCAccessImageProvider());
 
     m_component  = new QQmlComponent(engine, QStringLiteral("qrc:/qt/qml/VLC/MainInterface/MainInterface.qml"), QQmlComponent::PreferSynchronous, engine);

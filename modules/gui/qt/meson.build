@@ -763,6 +763,7 @@ qml_modules += {
        'player/qml/redesign/RedesignTracks.qml',
        'player/qml/redesign/RedesignButton.qml',
        'player/qml/redesign/RedesignIcon.qml',
+       'player/qml/redesign/RedesignSvg.qml',
        'player/qml/redesign/RedesignLibraryView.qml',
        'player/qml/redesign/RedesignMenu.qml',
        'player/qml/redesign/RedesignPlayerView.qml',

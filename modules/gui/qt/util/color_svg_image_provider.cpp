@@ -38,22 +38,29 @@ static const QMap<QString, QString> predefinedSubst = {
 
 QPair<QByteArray, QColor> colorizeSvg(const QString &filename, const QList<QPair<QString, QString> > &replacements)
 {
-    QFile file(filename);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        qWarning() << "SVGColorizer: can not open file " << filename << " for read.";
-        return {};
-    }
-
-    QByteArray data = file.readAll();
     //we pass by QString because we want to perform case incensite replacements
-    QString dataStr = QString::fromUtf8(data);
+    QString dataStr;
+    bool inlineSvg = false;
+    for (const auto& argument : replacements)
+        if (argument.first == INLINE_SVG_KEY) {
+            dataStr = argument.second;
+            inlineSvg = true;
+            break;
+        }
+    if (!inlineSvg) {
+        QFile file(filename);
+        if (!file.open(QIODevice::ReadOnly)) {
+            qWarning() << "SVGColorizer: can not open file " << filename << " for read.";
+            return {};
+        }
+        dataStr = QString::fromUtf8(file.readAll());
+    }
 
     QColor backgroundColor;
 
     for (const auto& replacePair: replacements)
     {
-        if (replacePair.first == PATH_KEY)
+        if (replacePair.first == PATH_KEY || replacePair.first == INLINE_SVG_KEY)
             continue;
         else if (replacePair.first == BACKGROUND_KEY)
         {
@@ -240,6 +247,8 @@ QQuickImageResponse* SVGColorImageImageProvider::requestImageResponse(const QStr
 {
     QUrl url {id};
     QUrlQuery query {url};
+    if (query.hasQueryItem(INLINE_SVG_KEY))
+        return new SVGColorImageResponse(QString(), query.queryItems(QUrl::FullyDecoded), requestedSize);
     if (!query.hasQueryItem(PATH_KEY))
         return nullptr;
 

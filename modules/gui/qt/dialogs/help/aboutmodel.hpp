@@ -19,6 +19,7 @@
 #define ABOUTMODEL_HPP
 
 #include <QObject>
+#include <QFile>
 #include <QtQml>
 
 #include <vlc_about.h>
@@ -49,7 +50,11 @@ public:
 
     static QString getLicense()
     {
-        return QString::fromUtf8(psz_license);
+        QString license = QString::fromUtf8(psz_license);
+        QFile fontLicense(QStringLiteral(":/fonts/Inter-LICENSE.txt"));
+        if (fontLicense.open(QIODevice::ReadOnly))
+            license += QStringLiteral("\n\nInter interface font\n\n") + QString::fromUtf8(fontLicense.readAll());
+        return license;
     }
 
     static QString getAuthors()
@@ -67,7 +72,10 @@ public:
         return tr("<p>Interface design adapted from <a href=\"https://www.figma.com/community/file/1691465999134370980/vlc-redesign\">VLC Redesign</a> "
                   "by <a href=\"https://www.juxtopposed.com/\">Juxtopposed</a>, licensed under "
                   "<a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>. "
-                  "Modified for VLC's native interface, responsive layouts, controls, and settings.</p>");
+                  "Modified for VLC's native interface, responsive layouts, controls, and settings.</p>"
+                  "<p>Interface font: <a href=\"https://rsms.me/inter/\">Inter</a> by Rasmus Andersson and contributors. "
+                  "Licensed under the <a href=\"https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt\">SIL Open Font License 1.1</a>. "
+                  "The full font license is in the License tab.</p>");
     }
 
     static QString getVersion()

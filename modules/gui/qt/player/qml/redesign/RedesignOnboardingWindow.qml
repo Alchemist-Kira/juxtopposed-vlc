@@ -24,6 +24,7 @@ Window {
     RedesignOnboardingView {
         id: view
         anchors.fill: parent; anchors.margins: 12 * VLCStyle.scale
+        anchors.topMargin: 8 * VLCStyle.scale; anchors.bottomMargin: 16 * VLCStyle.scale
         backend: setup
         systemLight: !VLCStyle.palette.isDark
         onFinished: DialogsProvider.dismissFirstRunDialog()

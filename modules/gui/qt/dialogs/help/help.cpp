@@ -107,7 +107,7 @@ AboutDialog::AboutDialog( qt_intf_t *_p_intf)
     ui.update->hide();
 
     /* GPL License */
-    ui.licensePage->setText( qfu( psz_license ) );
+    ui.licensePage->setText( AboutModel::getLicense() );
 
     /* People who helped */
     ui.creditPage->setText( qfu( psz_thanks ) );

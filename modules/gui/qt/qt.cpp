@@ -52,6 +52,7 @@ extern "C" char **environ;
 #endif
 
 #include <QApplication>
+#include <QFontDatabase>
 #include <QDate>
 #include <QMutex>
 #include <QtQuickControls2/QQuickStyle>
@@ -930,6 +931,19 @@ static void *Thread( void *obj )
     /* Start the QApplication here */
     QApplication app( argc, argv );
     app.setProperty("initialStyle", app.style()->name());
+
+    // Use the Figma design's font on every platform, including machines where
+    // Inter is not installed. Preserve system fallback for other scripts.
+    const int interfaceFont = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable.ttf"));
+    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable-Italic.ttf"));
+    const auto families = QFontDatabase::applicationFontFamilies(interfaceFont);
+    if (!families.isEmpty()) {
+        auto font = app.font();
+        font.setFamily(families.first());
+        app.setFont(font);
+    } else {
+        msg_Warn(p_intf, "Cannot load the bundled Inter interface font");
+    }
 
     {
         // Install custom translator:

@@ -50,6 +50,9 @@ with VLC's playback and media library features. The design credit and CC BY 4.0
 notice apply to the original design; VLC's software licenses remain as described
 above.
 
+The interface uses [Inter](https://rsms.me/inter/) by Rasmus Andersson and contributors.
+The bundled fonts use the [SIL Open Font License 1.1](modules/gui/qt/fonts/LICENSE.txt).
+
 # Platforms
 
 VLC is available for the following platforms:

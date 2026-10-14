@@ -793,7 +793,12 @@ ui_%.h: %.ui
 
 # Resources
 
+EXTRA_DIST += fonts/README.md
+
 libqt_plugin_la_RES = \
+	fonts/InterVariable.ttf \
+	fonts/InterVariable-Italic.ttf \
+	fonts/LICENSE.txt \
 	pixmaps/VLCIcons.ttf \
 	pixmaps/addons/addon_default.svg \
 	pixmaps/addons/addon_broken.svg \

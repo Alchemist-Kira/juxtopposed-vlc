@@ -787,6 +787,20 @@ static void on_player_associated_subs_fps_changed(vlc_player_t *, float subs_fps
     });
 }
 
+static void on_player_subtitle_text_size_changed(vlc_player_t *, unsigned scale,
+    enum vlc_player_subtitle_size_mode mode, unsigned pixels, void *data)
+{
+    auto *that = static_cast<PlayerControllerPrivate *>(data);
+    that->callAsync([that, scale, mode, pixels] {
+        that->m_subtitleTextScale = scale;
+        that->m_subtitleTextSizeMode = mode;
+        that->m_subtitleTextPixelSize = pixels;
+        emit that->q_func()->subtitleTextScaleChanged(scale);
+        emit that->q_func()->subtitleTextSizeModeChanged(mode);
+        emit that->q_func()->subtitleTextPixelSizeChanged(pixels);
+    });
+}
+
 void on_player_renderer_changed(vlc_player_t *, vlc_renderer_item_t *new_item, void *data)
 {
     VLC_UNUSED(new_item);
@@ -1140,6 +1154,7 @@ static const struct vlc_player_cbs player_cbs = [] {
     cbs.on_teletext_transparency_changed = on_player_teletext_transparency_changed;
     cbs.on_category_delay_changed = on_player_category_delay_changed;
     cbs.on_associated_subs_fps_changed = on_player_associated_subs_fps_changed;
+    cbs.on_subtitle_text_size_changed = on_player_subtitle_text_size_changed;
     cbs.on_renderer_changed = on_player_renderer_changed;
     cbs.on_recording_changed = on_player_record_changed;
     cbs.on_signal_changed = on_player_signal_changed;
@@ -1222,6 +1237,9 @@ PlayerControllerPrivate::PlayerControllerPrivate(PlayerController *playercontrol
         m_player_vout_listener = vlc_player_vout_AddListener( m_player, &player_vout_cbs, this );
         m_player_timer = vlc_player_AddTimer( m_player, VLC_TICK_FROM_MS(500), &player_timer_cbs, this );
         m_subtitleFPS = vlc_player_GetAssociatedSubsFPS(m_player);
+        m_subtitleTextScale = vlc_player_GetSubtitleTextScale(m_player);
+        m_subtitleTextSizeMode = vlc_player_GetSubtitleTextSizeMode(m_player);
+        m_subtitleTextPixelSize = vlc_player_GetSubtitleTextPixelSize(m_player);
     }
 
     QObject::connect( &m_autoscale, &QVLCBool::valueChanged, q_ptr, &PlayerController::autoscaleChanged );
@@ -2307,6 +2325,9 @@ PRIMITIVETYPE_GETTER(bool, isPausable, m_capabilities & VLC_PLAYER_CAP_PAUSE)
 PRIMITIVETYPE_GETTER(bool, isRateChangable, m_capabilities & VLC_PLAYER_CAP_CHANGE_RATE)
 PRIMITIVETYPE_GETTER(bool, canRestorePlayback, m_canRestorePlayback);
 PRIMITIVETYPE_GETTER(float, getSubtitleFPS, m_subtitleFPS)
+PRIMITIVETYPE_GETTER(int, getSubtitleTextScale, m_subtitleTextScale)
+PRIMITIVETYPE_GETTER(int, getSubtitleTextSizeMode, m_subtitleTextSizeMode)
+PRIMITIVETYPE_GETTER(int, getSubtitleTextPixelSize, m_subtitleTextPixelSize)
 PRIMITIVETYPE_GETTER(bool, hasVideoOutput, m_hasVideo)
 PRIMITIVETYPE_GETTER(float, getBuffering, m_buffering)
 PRIMITIVETYPE_GETTER(float, getVolume, m_volume)

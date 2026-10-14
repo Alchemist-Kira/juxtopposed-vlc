@@ -415,6 +415,15 @@ static void region_FixFmt(subpicture_region_t *region)
         region->p_picture->format.color_range = COLOR_RANGE_FULL;
 }
 
+static struct vlc_subtitle_text_size SpuTextSize(spu_t *spu)
+{
+    return (struct vlc_subtitle_text_size) {
+        .scale = var_InheritInteger(spu, "sub-text-scale"),
+        .pixels = var_InheritInteger(spu, "sub-text-size-mode") == 1,
+        .pixel_size = var_InheritInteger(spu, "sub-text-size-pixels"),
+    };
+}
+
 static subpicture_region_t *SpuRenderText(spu_t *spu,
                           const subpicture_region_t *region,
                           unsigned output_width,
@@ -1850,9 +1859,10 @@ static void * spu_PrerenderThread(void *priv)
         subpicture_t *p_subpic = sys->prerender.p_processed;
 
 
-        subpicture_Update(p_subpic, &fmtsrc, &fmtdst,
+        const struct vlc_subtitle_text_size text_size = SpuTextSize(spu);
+        subpicture_UpdateWithTextSize(p_subpic, &fmtsrc, &fmtdst,
                           display_width, display_height,
-                          p_subpic->b_subtitle ? p_subpic->i_start : vlc_tick_now());
+                          p_subpic->b_subtitle ? p_subpic->i_start : vlc_tick_now(), &text_size);
 
         spu_UpdateOriginalSize(spu, p_subpic, &fmtsrc);
 
@@ -2365,9 +2375,10 @@ vlc_render_subpicture *spu_Render(spu_t *spu,
             display_height = fmt_dst->i_visible_height;
         }
 
-        subpicture_Update(subpic,
+        const struct vlc_subtitle_text_size text_size = SpuTextSize(spu);
+        subpicture_UpdateWithTextSize(subpic,
                           fmt_src, &fmtdst, display_width, display_height,
-                          subpic->b_subtitle ? render_subtitle_date : system_now);
+                          subpic->b_subtitle ? render_subtitle_date : system_now, &text_size);
     }
 
     /* Now order the subpicture array

@@ -28,15 +28,20 @@ static subpicture_t *new_subtitle(bool subtitle)
     return subpic;
 }
 
-static subpicture_region_t *update(subpicture_t *subpic)
+static subpicture_region_t *update_size(subpicture_t *subpic, const struct vlc_subtitle_text_size *size)
 {
     video_format_t fmt;
     video_format_Init(&fmt, VLC_CODEC_RGBA);
     fmt.i_width = fmt.i_visible_width = 1280;
     fmt.i_height = fmt.i_visible_height = 720;
     fmt.i_sar_num = fmt.i_sar_den = 1;
-    subpicture_Update(subpic, &fmt, &fmt, 1280, 720, 0);
+    subpicture_UpdateWithTextSize(subpic, &fmt, &fmt, 1280, 720, 0, size);
     return vlc_spu_regions_first_or_null(&subpic->regions);
+}
+
+static subpicture_region_t *update(subpicture_t *subpic)
+{
+    return update_size(subpic, NULL);
 }
 
 int main(void)
@@ -59,6 +64,23 @@ int main(void)
     subpicture_region_t *region = update(subtitle);
     assert(region != NULL && region->p_text->style->i_font_color == 0xff0000);
     assert(strcmp(region->p_text->style->psz_fontname, "Authored Font") == 0);
+    // Runtime shortcuts can change output sizing without saving new defaults.
+    struct vlc_subtitle_text_size size = {.scale = 100, .pixels = true, .pixel_size = 42};
+    region = update_size(subtitle, &size);
+    assert(region->text_flags & VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE);
+    assert(region->p_text->style->i_font_size == 42);
+    assert(config_GetInt("sub-text-size-mode") == 0);
+    size.pixel_size = 43;
+    region = update_size(subtitle, &size);
+    assert(region->p_text->style->i_font_size == 43);
+    size.pixels = false;
+    region = update_size(subtitle, &size);
+    assert(!(region->text_flags & VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE));
+    // A scale change must discard a cached region even with unchanged geometry.
+    region->p_text->style->i_font_color = 0;
+    size.scale = 150;
+    region = update_size(subtitle, &size);
+    assert(region->p_text->style->i_font_color == 0xff0000);
 
     // Same cue and geometry: changing appearance must bypass its render cache.
     config_PutInt("sub-text-use-embedded-style", false);
@@ -92,7 +114,8 @@ int main(void)
     config_PutInt("sub-text-use-embedded-style", false);
     config_PutInt("sub-text-size-mode", 1);
     subpicture_t *osd = new_subtitle(false);
-    region = update(osd);
+    size.pixels = true;
+    region = update_size(osd, &size);
     assert(!(region->text_flags & VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE));
     assert(region->p_text->style->i_font_color == 0xff0000);
     assert(strcmp(region->p_text->style->psz_fontname, "Authored Font") == 0);

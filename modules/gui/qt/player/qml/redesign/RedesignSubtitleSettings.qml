@@ -7,13 +7,16 @@ ColumnLayout {
     required property var backend
     property real subtitleDelaySeconds: 0
     property real subtitleFPS: 0
+    property int liveSizeMode: -1
+    property var liveTextScale: undefined
+    property var livePixelSize: undefined
     property real scaleFactor: 1
     property bool lightTheme: false
     property color accentColor: "#d37918"
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
-    readonly property bool pixels: { backend.revision; return Number(backend.value("sub-text-size-mode")) === 1 }
+    readonly property bool pixels: { backend.revision; return (liveSizeMode >= 0 ? liveSizeMode : Number(backend.value("sub-text-size-mode"))) === 1 }
     readonly property bool manualStyle: { backend.revision; return !backend.value("sub-text-use-embedded-style") }
-    readonly property real fontSize: { backend.revision; return Number(backend.value(root.pixels ? "sub-text-size-pixels" : "sub-text-scale")) }
+    readonly property real fontSize: { backend.revision; const live = root.pixels ? livePixelSize : liveTextScale; return live === undefined ? Number(backend.value(root.pixels ? "sub-text-size-pixels" : "sub-text-scale")) : Number(live) }
     signal delayRequested(real seconds)
     signal fpsRequested(real fps)
     spacing: 0

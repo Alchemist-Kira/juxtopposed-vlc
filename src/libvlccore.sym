@@ -420,6 +420,7 @@ subpicture_Delete
 subpicture_New
 subpicture_NewFromPicture
 subpicture_Update
+subpicture_UpdateWithTextSize
 vlc_subpicture_InvalidateTextStyle
 vlc_subpicture_GetTextStyleRevision
 vlc_spu_regions_Clear
@@ -891,6 +892,8 @@ vlc_player_GetSignal
 vlc_player_GetState
 vlc_player_GetStatistics
 vlc_player_GetSubtitleTextScale
+vlc_player_GetSubtitleTextSizeMode
+vlc_player_GetSubtitleTextPixelSize
 vlc_player_GetTeletextPage
 vlc_player_GetTime
 vlc_player_GetTitleList
@@ -952,6 +955,8 @@ vlc_player_SetStartPaused
 vlc_player_SetPlayAndPause
 vlc_player_SetRepeatCount
 vlc_player_SetSubtitleTextScale
+vlc_player_SetSubtitleTextSizeMode
+vlc_player_SetSubtitleTextPixelSize
 vlc_player_SetTeletextEnabled
 vlc_player_SetTeletextTransparency
 vlc_player_SetTrackCategoryEnabled

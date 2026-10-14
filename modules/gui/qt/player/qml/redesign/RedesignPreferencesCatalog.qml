@@ -114,7 +114,7 @@ QtObject {
             { title: qsTr("Tracks & Languages"), rows: [ ["spu", qsTr("Enable subtitles")], ["redesign-sub-language", qsTr("Preferred language")], ["subsdec-encoding", qsTr("Text encoding")] ] },
             { title: qsTr("Loading Subtitles"), rows: [ ["sub-autodetect-file", qsTr("Load subtitle files automatically")], ["sub-autodetect-fuzzy", qsTr("File name matching")] ] },
             { title: qsTr("Appearance"), rows: [ ["freetype-font", qsTr("Font")],
-                ["sub-text-scale", qsTr("Font size"), {choices: [{label: qsTr("Automatic"), value: 100}, {label: qsTr("Very small"), value: 50}, {label: qsTr("Small"), value: 75}, {label: qsTr("Large"), value: 150}, {label: qsTr("Very large"), value: 200}]}],
+                ["redesign-subtitle-relative-size", qsTr("Font size"), {choices: [{label: qsTr("Automatic"), value: 100}, {label: qsTr("Very small"), value: 50}, {label: qsTr("Small"), value: 75}, {label: qsTr("Large"), value: 150}, {label: qsTr("Very large"), value: 200}]}],
                 ["freetype-bold", qsTr("Bold")], ["freetype-color", qsTr("Text color")],
                 ["freetype-opacity", qsTr("Text opacity"), {editor: "slider", from: 0, to: 100, factor: 100/255, suffix: "%"}],
                 ["freetype-outline-thickness", qsTr("Outline thickness"), {choices: [{label: qsTr("None"), value: 0}, {label: qsTr("Thin"), value: 1}, {label: qsTr("Normal"), value: 4}, {label: qsTr("Thick"), value: 8}]}], ["freetype-outline-color", qsTr("Outline color")],

@@ -135,6 +135,9 @@ public:
     VLCDuration  m_subtitleDelay;
     VLCDuration  m_secondarySubtitleDelay;
     float        m_subtitleFPS = 0.f;
+    int m_subtitleTextScale = 100;
+    int m_subtitleTextSizeMode = 0;
+    int m_subtitleTextPixelSize = 30;
 
     //timer
     vlc_player_timer_id* m_player_timer = nullptr;

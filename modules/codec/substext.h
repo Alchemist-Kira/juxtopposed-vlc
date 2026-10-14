@@ -77,6 +77,7 @@ typedef struct
     bool use_embedded_style;
     bool pixel_size;
     unsigned pixel_size_value;
+    struct vlc_subtitle_text_size rendered_size;
 } subtext_updater_sys_t;
 
 static int64_t SubtitleStyleInteger(vlc_object_t *owner, const char *name, int64_t fallback)
@@ -181,7 +182,10 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
     if (subpic->b_subtitle && (!sys->style_initialized || sys->style_revision != style_revision))
         SubtitleStyleSnapshot(sys, NULL);
     const bool use_embedded_style = !subpic->b_subtitle || sys->use_embedded_style;
-    const bool pixel_size = subpic->b_subtitle && sys->pixel_size;
+    const struct vlc_subtitle_text_size size = subpic->b_subtitle && cfg->text_size != NULL
+        ? *cfg->text_size : (struct vlc_subtitle_text_size){.scale = 100,
+            .pixels = subpic->b_subtitle && sys->pixel_size, .pixel_size = sys->pixel_size_value};
+    const bool pixel_size = size.pixels;
 
     if (p_updtregion->b_in_window)
     {
@@ -202,11 +206,15 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
         video_format_IsSimilar(cfg->previous.video_dst, fmt_dst) &&
         sys->scaling_modes_flags == scaling_modes_flags &&
         sys->style_revision == style_revision &&
+        sys->rendered_size.scale == size.scale &&
+        sys->rendered_size.pixels == size.pixels &&
+        sys->rendered_size.pixel_size == size.pixel_size &&
         (sys->i_next_update == VLC_TICK_INVALID || sys->i_next_update > cfg->pts))
         return;
 
     sys->scaling_modes_flags = scaling_modes_flags;
     sys->style_revision = style_revision;
+    sys->rendered_size = size;
 
     if (!(p_updtregion->flags & UPDT_REGION_FIXED_DONE) &&
         p_updtregion->b_absolute && !vlc_spu_regions_is_empty(&subpic->regions) &&
@@ -367,7 +375,7 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
             if( p_segment->style )
             {
                 if (pixel_size) {
-                    p_segment->style->i_font_size = sys->pixel_size_value;
+                    p_segment->style->i_font_size = size.pixel_size;
                     p_segment->style->f_font_relsize = 0;
                 }
                 /* Update all segments font sizes in video source %,

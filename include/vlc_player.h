@@ -1962,6 +1962,20 @@ vlc_player_SetSubtitleTextScale(vlc_player_t *player, unsigned scale);
 VLC_API unsigned
 vlc_player_GetSubtitleTextScale(vlc_player_t *player);
 
+enum vlc_player_subtitle_size_mode {
+    VLC_PLAYER_SUBTITLE_SIZE_RELATIVE,
+    VLC_PLAYER_SUBTITLE_SIZE_PIXELS,
+};
+
+/** Set the font-size unit. The player must be locked. */
+VLC_API void vlc_player_SetSubtitleTextSizeMode(vlc_player_t *, enum vlc_player_subtitle_size_mode);
+/** Get the font-size unit. The player must be locked. */
+VLC_API enum vlc_player_subtitle_size_mode vlc_player_GetSubtitleTextSizeMode(vlc_player_t *);
+/** Set the subtitle font size in rendering pixels, from 1 to 500. The player must be locked. */
+VLC_API void vlc_player_SetSubtitleTextPixelSize(vlc_player_t *, unsigned);
+/** Get the subtitle font size in rendering pixels. The player must be locked. */
+VLC_API unsigned vlc_player_GetSubtitleTextPixelSize(vlc_player_t *);
+
 /** @} vlc_player__tracks */
 
 /**
@@ -3147,6 +3161,10 @@ struct vlc_player_cbs
      */
     void (*on_associated_subs_fps_changed)(vlc_player_t *player,
         float subs_fps, void *data);
+
+    /** Called with the live subtitle sizing. The player is locked. */
+    void (*on_subtitle_text_size_changed)(vlc_player_t *player, unsigned scale,
+        enum vlc_player_subtitle_size_mode mode, unsigned pixels, void *data);
 
     /**
      * Called when a new renderer item is set

@@ -42,6 +42,7 @@ TestCase {
     function slider(name) { return findChild(item(name), "settingSlider") }
     function field(name) { return findChild(item(name), "settingValueField") }
     function init() {
+        subtitles.liveSizeMode = -1; subtitles.liveTextScale = undefined; subtitles.livePixelSize = undefined
         store.values = {"redesign-sub-track": 1, "redesign-sub-language": "English", "redesign-subtitle-delay": -4000,
             "sub-fps": 1, "redesign-subtitle-duration": 0, "sub-text-use-embedded-style": false,
             "freetype-font": "Inter", "freetype-color": 0xb8b8b8, "freetype-outline-color": 0x0c0c0c,
@@ -112,5 +113,15 @@ TestCase {
         verify(!item("subtitleBackgroundOpacitySetting").enabled)
         verify(item("subtitleAppearance_sub-margin").editorEnabled)
         verify(item("subtitleFontSizeSetting").enabled)
+    }
+    function test_liveSizingShowsShortcutValuesWithoutChangingSavedDefaults() {
+        subtitles.liveTextScale = 130
+        compare(item("subtitleFontSizeSetting").valueLabel, "130 %")
+        compare(store.value("sub-text-scale"), 100)
+        subtitles.liveSizeMode = 1; subtitles.livePixelSize = 47
+        compare(item("subtitleFontSizeSetting").valueLabel, "47 px")
+        compare(store.value("sub-text-size-pixels"), 30)
+        subtitles.liveSizeMode = -1; subtitles.liveTextScale = undefined
+        compare(item("subtitleFontSizeSetting").valueLabel, "Auto")
     }
 }

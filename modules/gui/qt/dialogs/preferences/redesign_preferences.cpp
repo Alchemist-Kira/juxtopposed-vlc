@@ -266,6 +266,12 @@ QVariantMap RedesignPreferences::playerPresetOptions() const
             }
             if (!isStaged(QStringLiteral("sub-fps")))
                 options.insert(QStringLiteral("sub-fps"), vlc_player_GetAssociatedSubsFPS(player));
+            if (!isStaged(QStringLiteral("sub-text-scale")))
+                options.insert(QStringLiteral("sub-text-scale"), vlc_player_GetSubtitleTextScale(player));
+            if (!isStaged(QStringLiteral("sub-text-size-mode")))
+                options.insert(QStringLiteral("sub-text-size-mode"), int(vlc_player_GetSubtitleTextSizeMode(player)));
+            if (!isStaged(QStringLiteral("sub-text-size-pixels")))
+                options.insert(QStringLiteral("sub-text-size-pixels"), vlc_player_GetSubtitleTextPixelSize(player));
         }
         vlc_player_Unlock(player);
     }
@@ -475,6 +481,8 @@ bool RedesignPreferences::deletePlayerPreset(const QString& id)
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-relative-size"))
+        return value(QStringLiteral("sub-text-scale"));
     if (name == QLatin1String("redesign-subtitle-manual-style"))
         return !value(QStringLiteral("sub-text-use-embedded-style")).toBool();
     if (name == QLatin1String("redesign-subtitle-duration"))
@@ -540,6 +548,8 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 bool RedesignPreferences::isStaged(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-relative-size"))
+        return m_edits.contains(QStringLiteral("sub-text-scale")) || m_edits.contains(QStringLiteral("sub-text-size-mode"));
     if (name == QLatin1String("redesign-subtitle-delay"))
         return m_edits.contains(QStringLiteral("sub-delay")) || m_edits.contains(QStringLiteral("sub-delay-ms"));
     return m_edits.contains(name);
@@ -547,6 +557,12 @@ bool RedesignPreferences::isStaged(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-relative-size")) {
+        auto description = describe(QStringLiteral("sub-text-scale"));
+        description.insert(QStringLiteral("value"), value(name));
+        description.insert(QStringLiteral("help"), qtr("Set the relative subtitle font size. This setting uses relative values."));
+        return description;
+    }
     if (name == QLatin1String("redesign-subtitle-duration")) {
         if (!module_exists("subsdelay")) return {};
         auto description = describe(QStringLiteral("subsdelay-factor"));
@@ -705,6 +721,10 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-subtitle-relative-size")) {
+        if (!stage(QStringLiteral("sub-text-scale"), proposed)) return false;
+        return stage(QStringLiteral("sub-text-size-mode"), 0);
+    }
     if (name == QLatin1String("redesign-subtitle-duration")) {
         if (!module_exists("subsdelay") || !stage(QStringLiteral("subsdelay-factor"), proposed)) return false;
         if (proposed.toDouble() > 0) stage(QStringLiteral("subsdelay-mode"), 1);
@@ -856,7 +876,21 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     if (QStringList{QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"), QStringLiteral("saturation"), QStringLiteral("gamma")}.contains(name))
         stage(QStringLiteral("filter:video-filter:adjust"), true);
 
-    if (normalized == read(name.toUtf8())) m_edits.remove(name);
+    bool applyToPlayer = false;
+    if (m_ctx && (name == QLatin1String("sub-text-scale") || name == QLatin1String("sub-text-size-mode")
+        || name == QLatin1String("sub-text-size-pixels"))) {
+        auto *player = m_ctx->getIntf()->p_player;
+        vlc_player_Lock(player);
+        if (name == QLatin1String("sub-text-scale"))
+            applyToPlayer = normalized.toUInt() != vlc_player_GetSubtitleTextScale(player);
+        else if (name == QLatin1String("sub-text-size-mode"))
+            applyToPlayer = normalized.toInt() != vlc_player_GetSubtitleTextSizeMode(player);
+        else
+            applyToPlayer = normalized.toUInt() != vlc_player_GetSubtitleTextPixelSize(player);
+        vlc_player_Unlock(player);
+    }
+    // A shortcut can change the current size without changing saved defaults.
+    if (normalized == read(name.toUtf8()) && !applyToPlayer) m_edits.remove(name);
     else m_edits.insert(name, normalized);
     if (m_invalid.isEmpty())
         m_error.clear();
@@ -949,6 +983,10 @@ bool RedesignPreferences::save()
         vlc_player_SetAssociatedSubsFPS(player, value(QStringLiteral("sub-fps")).toFloat());
     if (previous.contains(QStringLiteral("sub-text-scale")))
         vlc_player_SetSubtitleTextScale(player, value(QStringLiteral("sub-text-scale")).toUInt());
+    if (previous.contains(QStringLiteral("sub-text-size-mode")))
+        vlc_player_SetSubtitleTextSizeMode(player, static_cast<vlc_player_subtitle_size_mode>(value(QStringLiteral("sub-text-size-mode")).toInt()));
+    if (previous.contains(QStringLiteral("sub-text-size-pixels")))
+        vlc_player_SetSubtitleTextPixelSize(player, value(QStringLiteral("sub-text-size-pixels")).toUInt());
     for (const auto category : {AUDIO_ES, SPU_ES}) {
         const QString option = category == AUDIO_ES ? QStringLiteral("audio-language") : QStringLiteral("sub-language");
         if (previous.contains(option)) {
@@ -1106,6 +1144,11 @@ bool RedesignPreferences::resetAll()
 #endif
     intf->preferencesResetPending = true;
     vlc_subpicture_InvalidateTextStyle();
+    vlc_player_Lock(intf->p_player);
+    vlc_player_SetSubtitleTextScale(intf->p_player, config_GetInt("sub-text-scale"));
+    vlc_player_SetSubtitleTextSizeMode(intf->p_player, static_cast<vlc_player_subtitle_size_mode>(config_GetInt("sub-text-size-mode")));
+    vlc_player_SetSubtitleTextPixelSize(intf->p_player, config_GetInt("sub-text-size-pixels"));
+    vlc_player_Unlock(intf->p_player);
     m_ctx->reloadPrefs();
     m_ctx->reloadFromSettings();
     discard();

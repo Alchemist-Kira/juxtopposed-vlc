@@ -564,14 +564,17 @@ static void SubpictureUpdate( subpicture_t *p_subpic,
         return;
     }
 
-    double scale = p_sys->text_scale / 100.0;
-    if (p_sys->pixel_size && p_fmt_dst->i_visible_height > 0) {
+    const struct vlc_subtitle_text_size size = cfg->text_size != NULL ? *cfg->text_size
+        : (struct vlc_subtitle_text_size){.scale = p_sys->text_scale,
+            .pixels = p_sys->pixel_size, .pixel_size = p_sys->pixel_size_value};
+    double scale = size.scale / 100.0;
+    if (size.pixels && p_fmt_dst->i_visible_height > 0) {
         const ASS_Track *track = p_sys->p_track;
         const double script_height = track->PlayResY > 0 ? track->PlayResY : 288;
         const double authored_size = track->default_style >= 0 && track->default_style < track->n_styles
             ? track->styles[track->default_style].FontSize : 0;
-        const double size = authored_size > 0 ? authored_size : script_height * STYLE_DEFAULT_REL_FONT_SIZE / 100;
-        scale = p_sys->pixel_size_value * script_height / (size * p_fmt_dst->i_visible_height);
+        const double font_size = authored_size > 0 ? authored_size : script_height * STYLE_DEFAULT_REL_FONT_SIZE / 100;
+        scale = size.pixel_size * script_height / (font_size * p_fmt_dst->i_visible_height);
     }
     ass_set_font_scale(p_sys->p_renderer, scale);
 

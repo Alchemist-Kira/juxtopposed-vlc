@@ -902,6 +902,17 @@ VOUT_ACTION_HANDLER(SubtitleDisplay)
         {
             // FIXME all vouts
             vlc_player_t *player = vlc_playlist_GetPlayer(sys->playlist);
+            vlc_player_Lock(player);
+            if (vlc_player_GetSubtitleTextSizeMode(player) == VLC_PLAYER_SUBTITLE_SIZE_PIXELS) {
+                int pixels = vlc_player_GetSubtitleTextPixelSize(player);
+                if (action_id == ACTIONID_SUBTITLE_TEXT_SCALE_NORMAL)
+                    pixels = 30;
+                else
+                    pixels += action_id == ACTIONID_SUBTITLE_TEXT_SCALE_DOWN ? -1 : 1;
+                vlc_player_SetSubtitleTextPixelSize(player, VLC_CLIP(pixels, 1, 500));
+                vlc_player_Unlock(player);
+                break;
+            }
             int scale;
             if (action_id == ACTIONID_SUBTITLE_TEXT_SCALE_NORMAL)
                 scale = 100;
@@ -917,6 +928,7 @@ VOUT_ACTION_HANDLER(SubtitleDisplay)
                 scale = VLC_CLIP(scale, 25, 500);
             }
             vlc_player_SetSubtitleTextScale(player, scale);
+            vlc_player_Unlock(player);
             break;
         }
     }

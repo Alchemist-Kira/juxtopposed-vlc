@@ -1938,17 +1938,52 @@ vlc_player_IsTrackCategoryEnabled(vlc_player_t *player,
     return var_GetBool(player, cat2vars[cat].var);
 }
 
+static void SubtitleTextSizeChanged(vlc_player_t *player)
+{
+    vlc_player_SendEvent(player, on_subtitle_text_size_changed,
+        vlc_player_GetSubtitleTextScale(player), vlc_player_GetSubtitleTextSizeMode(player),
+        vlc_player_GetSubtitleTextPixelSize(player));
+}
+
 void
 vlc_player_SetSubtitleTextScale(vlc_player_t *player, unsigned scale)
 {
     assert(scale >= 10 && scale <= 500);
+    if (vlc_player_GetSubtitleTextScale(player) == scale) return;
     var_SetInteger(player, "sub-text-scale", scale);
+    SubtitleTextSizeChanged(player);
 }
 
 unsigned
 vlc_player_GetSubtitleTextScale(vlc_player_t *player)
 {
     return var_GetInteger(player, "sub-text-scale");
+}
+
+void vlc_player_SetSubtitleTextSizeMode(vlc_player_t *player, enum vlc_player_subtitle_size_mode mode)
+{
+    assert(mode == VLC_PLAYER_SUBTITLE_SIZE_RELATIVE || mode == VLC_PLAYER_SUBTITLE_SIZE_PIXELS);
+    if (vlc_player_GetSubtitleTextSizeMode(player) == mode) return;
+    var_SetInteger(player, "sub-text-size-mode", mode);
+    SubtitleTextSizeChanged(player);
+}
+
+enum vlc_player_subtitle_size_mode vlc_player_GetSubtitleTextSizeMode(vlc_player_t *player)
+{
+    return var_GetInteger(player, "sub-text-size-mode");
+}
+
+void vlc_player_SetSubtitleTextPixelSize(vlc_player_t *player, unsigned pixels)
+{
+    assert(pixels >= 1 && pixels <= 500);
+    if (vlc_player_GetSubtitleTextPixelSize(player) == pixels) return;
+    var_SetInteger(player, "sub-text-size-pixels", pixels);
+    SubtitleTextSizeChanged(player);
+}
+
+unsigned vlc_player_GetSubtitleTextPixelSize(vlc_player_t *player)
+{
+    return var_GetInteger(player, "sub-text-size-pixels");
 }
 
 int
@@ -2140,6 +2175,8 @@ vlc_player_New(vlc_object_t *parent, enum vlc_player_lock_type lock_type)
     VAR_CREATE("rate", VLC_VAR_FLOAT | VLC_VAR_DOINHERIT);
     VAR_CREATE("sub-fps", VLC_VAR_FLOAT | VLC_VAR_DOINHERIT);
     VAR_CREATE("sub-text-scale", VLC_VAR_INTEGER | VLC_VAR_DOINHERIT);
+    VAR_CREATE("sub-text-size-mode", VLC_VAR_INTEGER | VLC_VAR_DOINHERIT);
+    VAR_CREATE("sub-text-size-pixels", VLC_VAR_INTEGER | VLC_VAR_DOINHERIT);
     VAR_CREATE("demux-filter", VLC_VAR_STRING | VLC_VAR_DOINHERIT);
 
     /* aout variables */

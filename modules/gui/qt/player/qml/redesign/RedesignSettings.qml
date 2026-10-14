@@ -106,6 +106,18 @@ C.Pane {
                     Layout.topMargin: theme.dp(11)
                     backend: root.preferenceStore
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    liveSizeMode: {
+                        root.preferenceStore.revision
+                        return Player.isStarted && !root.preferenceStore.isStaged("sub-text-size-mode") ? Player.subtitleTextSizeMode : -1
+                    }
+                    liveTextScale: {
+                        root.preferenceStore.revision
+                        return Player.isStarted && !root.preferenceStore.isStaged("sub-text-scale") ? Player.subtitleTextScale : undefined
+                    }
+                    livePixelSize: {
+                        root.preferenceStore.revision
+                        return Player.isStarted && !root.preferenceStore.isStaged("sub-text-size-pixels") ? Player.subtitleTextPixelSize : undefined
+                    }
                     subtitleDelaySeconds: {
                         root.preferenceStore.revision
                         return Player.isStarted && !root.preferenceStore.isStaged("redesign-subtitle-delay") ? Player.subtitleDelayMS / 1000 : Number(root.preferenceStore.value("redesign-subtitle-delay")) / 1000

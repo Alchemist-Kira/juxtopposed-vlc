@@ -172,6 +172,9 @@ public:
     Q_PROPERTY(int subtitleDelayMS READ getSubtitleDelayMS WRITE setSubtitleDelayMS NOTIFY subtitleDelayChanged FINAL)
     Q_PROPERTY(int secondarySubtitleDelayMS READ getSecondarySubtitleDelayMS WRITE setSecondarySubtitleDelayMS NOTIFY secondarySubtitleDelayChanged FINAL)
     Q_PROPERTY(float subtitleFPS READ getSubtitleFPS WRITE setSubtitleFPS NOTIFY subtitleFPSChanged FINAL)
+    Q_PROPERTY(int subtitleTextScale READ getSubtitleTextScale NOTIFY subtitleTextScaleChanged FINAL)
+    Q_PROPERTY(int subtitleTextSizeMode READ getSubtitleTextSizeMode NOTIFY subtitleTextSizeModeChanged FINAL)
+    Q_PROPERTY(int subtitleTextPixelSize READ getSubtitleTextPixelSize NOTIFY subtitleTextPixelSizeChanged FINAL)
     Q_PROPERTY(TimedText currentLyric READ getCurrentLyric NOTIFY currentLyricChanged FINAL)
     Q_PROPERTY(bool hasLyrics READ hasLyrics NOTIFY hasLyricsChanged FINAL)
     Q_PROPERTY(QList<TimedText> syltLyrics READ getSyltLyrics NOTIFY syltLyricsChanged FINAL)
@@ -359,6 +362,9 @@ public slots:
     int getSecondarySubtitleDelayMS() const;
     void setSecondarySubtitleDelayMS( int );
     float getSubtitleFPS( ) const;
+    int getSubtitleTextScale() const;
+    int getSubtitleTextSizeMode() const;
+    int getSubtitleTextPixelSize() const;
     void setSubtitleFPS( float );
     QVariantMap getPlaybackStatistics() const;
 
@@ -469,6 +475,9 @@ signals:
     void subtitleDelayChanged(VLCDuration);
     void secondarySubtitleDelayChanged(VLCDuration);
     void subtitleFPSChanged(float);
+    void subtitleTextScaleChanged(int);
+    void subtitleTextSizeModeChanged(int);
+    void subtitleTextPixelSizeChanged(int);
 
     //title/chapters/menu
     void hasTitlesChanged( bool );

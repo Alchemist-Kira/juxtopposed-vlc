@@ -7,6 +7,7 @@ import VLC.Playlist
 import VLC.Style
 import VLC.Util
 import VLC.Dialogs
+import VLC.MediaLibrary
 import VLC.Menus as Menus
 import VLC.Widgets as Widgets
 
@@ -36,7 +37,7 @@ FocusScope {
     Binding {
         target: MainCtx
         property: "preferHotkeys"
-        value: !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible
+        value: !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible && !shortcutEditor.visible
         restoreMode: Binding.RestoreBindingOrValue
     }
     Binding { target: Player; property: "subtitleTimelineEnabled"; value: MainCtx.redesignPlayerPreferences.subtitleTimeline }
@@ -231,10 +232,28 @@ FocusScope {
         onPreferencesRequested: page => view.settingsPage = page
     }
 
+    Loader {
+        id: recentMenuModel
+        active: MainCtx.mediaLibraryAvailable && mediaMenu.recentFilesEnabled
+        sourceComponent: MLRecentMediaModel { ml: MediaLib; limit: 10 }
+    }
+    RedesignShortcuts {
+        id: shortcutEditor
+        parent: view
+        scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
+        onSaved: playerPreferences.discard()
+    }
     RedesignMenu {
         id: mediaMenu
         parent: view
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
+        recentModel: recentMenuModel.item
+        recentFilesEnabled: { playerPreferences.revision; return !!playerPreferences.value("save-recentplay") }
+        profiles: { playerPreferences.revision; return playerPreferences.playerPresets }
+        selectedProfile: { playerPreferences.revision; return playerPreferences.selectedPlayerPreset }
+        onRecentRequested: mediaId => MediaLib.addAndPlay(mediaId)
+        onClearRecentRequested: if (recentMenuModel.item) recentMenuModel.item.clearHistory()
+        onProfileRequested: profileId => playerPreferences.selectPlayerPreset(profileId)
         onActionRequested: action => {
             switch (action) {
             case "file": DialogsProvider.simpleOpenDialog(); break
@@ -247,6 +266,7 @@ FocusScope {
             case "stream": DialogsProvider.openAndStreamingDialogs(); break
             case "library": view.libraryOpen = true; view.libraryExpanded = true; break
             case "customize": DialogsProvider.showToolbarEditorDialog(); break
+            case "shortcuts": shortcutEditor.open(); break
             case "settings": DialogsProvider.prefsDialog(); break
             case "advanced": globalMenu.popup(view.mapToGlobal(0, view.theme.dp(40))); break
             case "about": DialogsProvider.aboutDialog(); break

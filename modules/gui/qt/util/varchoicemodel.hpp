@@ -55,6 +55,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     int rowCount(const QModelIndex & = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    // The native value is distinct from the translated display label and row.
+    Q_INVOKABLE QVariant choiceValue(int row) const;
     bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
 
     /**

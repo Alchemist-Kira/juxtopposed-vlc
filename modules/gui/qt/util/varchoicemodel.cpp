@@ -75,6 +75,11 @@ QVariant VLCVarChoiceModel::data(const QModelIndex &index, int role) const
     return {};
 }
 
+QVariant VLCVarChoiceModel::choiceValue(int row) const
+{
+    return row >= 0 && row < rowCount() ? m_values[row] : QVariant();
+}
+
 bool VLCVarChoiceModel::setData(const QModelIndex &index, const QVariant &value, int role)
 {
     if (!m_object->get())
@@ -161,12 +166,31 @@ void VLCVarChoiceModel::onListUpdated(const vlc_object_t* object, int action, QV
 
     switch (action) {
     case VLC_VAR_ADDCHOICE:
+    {
+        QString title = newvalue.toString();
+        size_t count = 0;
+        vlc_value_t* values = nullptr;
+        char** titles = nullptr;
+        if (var_Change(m_object->get(), qtu(m_varname), VLC_VAR_GETCHOICES,
+                       &count, &values, &titles) == VLC_SUCCESS)
+        {
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (vlcValToVariant(values[i]) == newvalue && titles[i])
+                    title = qfu(titles[i]);
+                if ((m_type & VLC_VAR_CLASS) == VLC_VAR_STRING)
+                    free(values[i].psz_string);
+                free(titles[i]);
+            }
+            free(values);
+            free(titles);
+        }
         beginInsertRows( QModelIndex{}, m_values.count(), m_values.count() );
         m_values.append( newvalue );
-        //we should probably rather get the whole choices list to get the associated text
-        m_titles.append( newvalue.toString() );
+        m_titles.append(title);
         endInsertRows();
         break;
+    }
     case VLC_VAR_DELCHOICE:
     {
         int i = 0;

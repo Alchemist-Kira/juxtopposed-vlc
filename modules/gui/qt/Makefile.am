@@ -292,6 +292,7 @@ libqt_plugin_la_SOURCES = \
 	player/delay_estimator.cpp \
 	player/delay_estimator.hpp \
 	player/player_controller.cpp player/player_controller.hpp player/player_controller_p.hpp \
+	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
 	player/control_list_model.cpp player/control_list_model.hpp \
 	player/control_list_filter.cpp \
@@ -1818,6 +1819,19 @@ QT_QTEST_COMMON_cppflags = $(libqt_plugin_la_CPPFLAGS) -I$(builddir)/tests -DTOP
 QT_QTEST_COMMON_cxxflags = $(AM_CXXFLAGS) $(QT_CFLAGS) $(QT_QTEST_CFLAGS) -fPIC $(CXXFLAGS_qt)
 QT_QTEST_COMMON_ldadd = $(QT_LIBS) $(LIBS_qt) $(QT_QTEST_LIBS) $(LIBVLCCORE) $(LIBVLC)
 QT_QTEST_COMMON_ldflags = $(AM_LDFLAGS) $(QT_LDFLAGS) $(QT_QTEST_LDFLAGS)
+
+test_subtitle_timeline_scanner_SOURCES = \
+	tests/test_subtitle_timeline_scanner.cpp \
+	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp
+nodist_test_subtitle_timeline_scanner_SOURCES = tests/test_subtitle_timeline_scanner.moc
+BUILT_SOURCES += tests/test_subtitle_timeline_scanner.moc
+CLEANFILES += tests/test_subtitle_timeline_scanner.moc
+test_subtitle_timeline_scanner_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_subtitle_timeline_scanner_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_subtitle_timeline_scanner_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_subtitle_timeline_scanner_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_subtitle_timeline_scanner
+TESTS += test_subtitle_timeline_scanner
 
 
 # test_ml_model

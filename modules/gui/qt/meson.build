@@ -420,6 +420,8 @@ qt_plugin_sources = files(
     'player/player_controller.cpp',
     'player/player_controller.hpp',
     'player/player_controller_p.hpp',
+    'player/subtitle_timeline_scanner.cpp',
+    'player/subtitle_timeline_scanner.hpp',
     'player/player_controlbar_model.cpp',
     'player/player_controlbar_model.hpp',
     'player/control_list_model.cpp',
@@ -1366,6 +1368,17 @@ if qt6_dep.found()
 
     qtest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['Test'], required: false)
     if qtest_qt6_dep.found()
+        vlc_tests += {
+            'name': 'test_qt_subtitle_timeline_scanner',
+            'sources': files('tests/test_subtitle_timeline_scanner.cpp', 'player/subtitle_timeline_scanner.cpp'),
+            'moc_sources': files('tests/test_subtitle_timeline_scanner.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            'module_depends': ['subtitle', 'subsdec'],
+        }
         if x11_dep.found() and xcb_dep.found() and qt_features_xcb
             vlc_tests += {
                 'name': 'test_qt_x11_surface_size',

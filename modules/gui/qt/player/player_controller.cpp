@@ -1573,7 +1573,7 @@ void PlayerController::requestSeekPreview(double position)
         vlc_preparser_cfg cfg{};
         cfg.types = VLC_PREPARSER_TYPE_THUMBNAIL;
         cfg.max_thumbnailer_threads = 1;
-        cfg.timeout = VLC_TICK_FROM_SEC(3);
+        cfg.timeout = VLC_TICK_FROM_SEC(15);
         cfg.external_process = false;
         d->m_seekPreparser = vlc_preparser_New(VLC_OBJECT(d->p_intf), &cfg);
         if (!d->m_seekPreparser) return;
@@ -1621,12 +1621,16 @@ void PlayerController::requestSeekPreview(double position)
                     block_Release(pixels);
                 }
             }
+            if (imageUrl.isEmpty())
+                msg_Dbg(owner->p_intf, "Seek preview unavailable: status %d at %" PRId64,
+                        status, request->time);
             owner->callAsync([owner, generation = request->generation, time = request->time, decodedTime,
                               length = request->length, position = request->position, imageUrl] {
                 if (owner->m_seekGeneration != generation) return;
                 vlc_preparser_req_Release(owner->m_seekRequest);
                 owner->m_seekRequest = nullptr;
-                owner->m_seekPreviewCache.insert(time, new PlayerControllerPrivate::SeekPreviewFrame{imageUrl, decodedTime});
+                if (!imageUrl.isEmpty())
+                    owner->m_seekPreviewCache.insert(time, new PlayerControllerPrivate::SeekPreviewFrame{imageUrl, decodedTime});
                 owner->m_seekPreview = imageUrl;
                 owner->m_seekPreviewPosition = double(decodedTime) / length;
                 emit owner->q_func()->seekPreviewChanged();

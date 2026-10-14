@@ -157,12 +157,13 @@ C.Pane {
         }
         Rectangle {
             visible: root.page !== "playback"
-            Layout.fillWidth: true; height: theme.dp(64); color: theme.panel
-            border.color: theme.border
-            RowLayout {
-                anchors.fill: parent; anchors.margins: theme.dp(12)
-                RedesignButton { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "settings"; caption: qsTr("Advanced settings"); text: caption; onClicked: DialogsProvider.prefsDialog() }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "close"; text: qsTr("Close settings"); onClicked: root.closeRequested() }
+            Layout.fillWidth: true; height: theme.dp(125); color: theme.panel
+            Rectangle { anchors.top: parent.top; width: parent.width; height: theme.dp(1); color: theme.border }
+            ColumnLayout {
+                anchors.fill: parent; anchors.leftMargin: theme.dp(20); anchors.rightMargin: theme.dp(20); anchors.topMargin: theme.dp(20); anchors.bottomMargin: theme.dp(12)
+                spacing: theme.dp(14)
+                RedesignPlayerPreset { Layout.fillWidth: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
+                RedesignButton { Layout.alignment: Qt.AlignHCenter; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "settings"; iconSize: theme.dp(20); caption: qsTr("Open Advanced Settings"); text: caption; onClicked: DialogsProvider.prefsDialog() }
             }
         }
     }

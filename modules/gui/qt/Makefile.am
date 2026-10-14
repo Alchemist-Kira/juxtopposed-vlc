@@ -1192,6 +1192,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignSwitchRow.qml \
 	player/qml/redesign/RedesignStatistics.qml \
 	player/qml/redesign/RedesignSettings.qml \
+	player/qml/redesign/RedesignPlayerPreset.qml \
 	player/qml/redesign/RedesignTrackPopup.qml \
 	player/qml/redesign/RedesignShortcutEditor.qml \
 	player/qml/redesign/RedesignShortcuts.qml \

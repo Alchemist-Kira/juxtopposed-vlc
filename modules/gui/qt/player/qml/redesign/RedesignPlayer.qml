@@ -22,7 +22,7 @@ FocusScope {
         return parts.length === 2 ? "00:" + parts.join(":") : parts.join(":")
     }
     RedesignSleepTimer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
-    RedesignPreferences { id: playerPreferences; ctx: MainCtx; autoSave: true }
+    RedesignPreferences { id: playerPreferences; ctx: MainCtx; autoSave: true; editPlayerPreset: true }
     Binding {
         target: MainCtx
         property: "preferHotkeys"

@@ -27,6 +27,7 @@ TestCase {
             return !failSave
         }
         function save() { return record("retry", "", "") }
+        function cancelPlayerPreset() { failSave = false; return record("cancel", "", "") }
         function createPlayerPreset(name) { return record("create", "", name) }
         function selectPlayerPreset(id) { selectedPlayerPreset = id; return record("select", id, "") }
         function renamePlayerPreset(id, name) { return record("rename", id, name) }
@@ -123,5 +124,16 @@ TestCase {
         tryCompare(item("playerPresetDeleteDialog"), "opened", true)
         mouseClick(findChild(item("playerPresetDeleteDialog"), "confirmationAccept"))
         compare(store.lastAction, "delete"); compare(store.lastId, "show")
+    }
+    function test_cancelFailedNamingDiscardsPendingPreset() {
+        selector.namePreset("create", "", "")
+        tryCompare(item("playerPresetNameDialog"), "opened", true)
+        item("playerPresetName").text = "Anime"; store.failSave = true
+        mouseClick(item("playerPresetNameSave"))
+        verify(store.pendingPlayerPreset)
+        keyClick(Qt.Key_Escape)
+        tryCompare(store, "lastAction", "cancel")
+        verify(!store.pendingPlayerPreset)
+        verify(item("playerPresetSelector").enabled)
     }
 }

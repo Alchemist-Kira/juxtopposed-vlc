@@ -308,9 +308,24 @@ bool RedesignPreferences::playerPresetError(const QString& message)
 
 bool RedesignPreferences::storePlayerPresetState(const QVariantMap& state)
 {
+    if (!m_presetTransaction) {
+        m_editsBeforePreset = m_edits;
+        m_presetTransaction = true;
+    }
     m_edits.insert(presetOption, QString::fromUtf8(QJsonDocument::fromVariant(state).toJson(QJsonDocument::Compact)));
     ++m_revision; emit changed();
     return save();
+}
+
+void RedesignPreferences::cancelPlayerPreset()
+{
+    if (!m_presetTransaction) return;
+    m_saveTimer.stop();
+    m_edits = std::move(m_editsBeforePreset);
+    m_presetTransaction = false;
+    if (m_invalid.isEmpty()) m_error.clear();
+    ++m_revision; emit changed();
+    if (m_autoSave && dirty()) m_saveTimer.start();
 }
 
 bool RedesignPreferences::createPlayerPreset(const QString& proposed)
@@ -369,6 +384,10 @@ bool RedesignPreferences::stagePlayerPresetOptions(const QVariantMap& options)
         if (!config_FindConfig(it.key().toUtf8().constData())) continue;
         if (it.value() == read(it.key().toUtf8())) m_edits.remove(it.key());
         else m_edits.insert(it.key(), it.value());
+    }
+    if (!m_presetTransaction) {
+        m_editsBeforePreset = edits;
+        m_presetTransaction = true;
     }
     return true;
 }
@@ -793,6 +812,7 @@ void RedesignPreferences::reset(const QString& name)
 void RedesignPreferences::discard()
 {
     m_saveTimer.stop();
+    m_presetTransaction = false; m_editsBeforePreset.clear();
     m_edits.clear(); m_invalid.clear(); m_error.clear(); ++m_revision; emit changed();
 }
 

@@ -36,7 +36,7 @@ Item {
         else if (nameAction === "duplicate") success = backend.duplicatePlayerPreset(contextId, presetName.text)
         else success = backend.createPlayerPreset(presetName.text)
         retryNameSave = !success && backend.pendingPlayerPreset
-        if (success) nameDialog.close()
+        if (success) { retryNameSave = false; nameDialog.close() }
     }
     function activate(row) {
         if (row.action === "create") namePreset("create", "", "")
@@ -160,6 +160,10 @@ Item {
         closePolicy: C.Popup.CloseOnEscape
         background: Rectangle { color: root.theme.panel; radius: root.theme.dp(12); border.color: root.theme.border }
         onOpened: { presetName.forceActiveFocus(); presetName.selectAll() }
+        onClosed: {
+            if (root.retryNameSave) root.backend.cancelPlayerPreset()
+            root.retryNameSave = false
+        }
         contentItem: ColumnLayout {
             spacing: root.theme.dp(20)
             Text { Layout.fillWidth: true; text: root.nameAction === "rename" ? qsTr("Rename Preset") : root.nameAction === "duplicate" ? qsTr("Duplicate Preset") : qsTr("New Preset"); color: root.theme.bright; font.pixelSize: root.theme.dp(20) }

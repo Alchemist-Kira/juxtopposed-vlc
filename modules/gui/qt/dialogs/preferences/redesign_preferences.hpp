@@ -41,6 +41,7 @@ public:
     Q_INVOKABLE bool renamePlayerPreset(const QString& id, const QString& name);
     Q_INVOKABLE bool duplicatePlayerPreset(const QString& id, const QString& name);
     Q_INVOKABLE bool deletePlayerPreset(const QString& id);
+    Q_INVOKABLE void cancelPlayerPreset();
     Q_INVOKABLE QUrl configurationFolder() const;
     Q_INVOKABLE QVariantList equalizerBands() const;
     Q_INVOKABLE bool setEqualizerBand(int index, double gain);
@@ -81,6 +82,8 @@ private:
     int m_revision = 0;
     bool m_autoSave = false;
     bool m_editPlayerPreset = false;
+    bool m_presetTransaction = false;
+    QVariantMap m_editsBeforePreset;
     QTimer m_saveTimer;
 };
 #endif

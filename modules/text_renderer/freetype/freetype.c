@@ -707,10 +707,38 @@ static inline void RenderAXYZ( filter_t *p_filter,
     }
 }
 
+#ifdef HAVE_GET_FONT_BY_FAMILY_NAME
+static void UpdateDefaultFamily(filter_t *filter, const char *option, char **family,
+                                const char *fallback)
+{
+    char *current = var_InheritString(filter, option);
+    if (current == NULL || *current == '\0') {
+        free(current);
+        current = strdup(fallback);
+    }
+    if (current != NULL && (*family == NULL || strcmp(*family, current) != 0)) {
+        free(*family);
+        *family = current;
+        ((filter_sys_t *)filter->p_sys)->p_faceid = NULL;
+    } else
+        free(current);
+}
+#endif
+
 static void UpdateDefaultLiveStyles( filter_t *p_filter )
 {
     filter_sys_t *p_sys = p_filter->p_sys;
     text_style_t *p_style = p_sys->p_default_style;
+#ifdef HAVE_GET_FONT_BY_FAMILY_NAME
+    UpdateDefaultFamily(p_filter, "freetype-font", &p_style->psz_fontname, DEFAULT_FAMILY);
+    UpdateDefaultFamily(p_filter, "freetype-monofont", &p_style->psz_monofontname, DEFAULT_MONOSPACE_FAMILY);
+#endif
+    p_sys->p_forced_style->i_style_flags &= ~STYLE_BOLD;
+    if (var_InheritBool(p_filter, "freetype-bold")) {
+        p_sys->p_forced_style->i_style_flags |= STYLE_BOLD;
+        p_sys->p_forced_style->i_features |= STYLE_HAS_FLAGS;
+    } else if (p_sys->p_forced_style->i_style_flags == 0)
+        p_sys->p_forced_style->i_features &= ~STYLE_HAS_FLAGS;
 
     p_style->i_font_color = var_InheritInteger( p_filter, "freetype-color" );
 
@@ -1037,7 +1065,8 @@ static subpicture_region_t *Render( filter_t *p_filter,
     filter_sys_t *p_sys = p_filter->p_sys;
     subpicture_region_t *region = NULL;
     bool b_grid = (p_region_in->text_flags & VLC_SUBPIC_TEXT_FLAG_GRID_MODE) != 0;
-    p_sys->i_scale = ( b_grid ) ? 100 : var_InheritInteger( p_filter, "sub-text-scale");
+    p_sys->i_scale = ( b_grid || (p_region_in->text_flags & VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE) )
+        ? 100 : var_InheritInteger( p_filter, "sub-text-scale");
 
     UpdateDefaultLiveStyles( p_filter );
 

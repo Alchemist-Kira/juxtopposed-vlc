@@ -60,6 +60,8 @@ VLC_META_EXPORT_DECL(license, VLC_MODULE_LICENSE)
 
 static const char *const ppsz_snap_formats[] =
 { "png", "jpg", "tiff", "webp" };
+static const int subtitle_size_modes[] = {0, 1};
+static const char *const subtitle_size_mode_names[] = {N_("Relative"), N_("Pixels")};
 
 /*****************************************************************************
  * Configuration options for the core module. Each module will also separately
@@ -1865,6 +1867,13 @@ vlc_module_begin ()
                  SUB_MARGIN_LONGTEXT )
     add_integer_with_range( "sub-text-scale", 100, 10, 500,
                SUB_TEXT_SCALE_TEXT, SUB_TEXT_SCALE_LONGTEXT )
+    add_bool( "sub-text-use-embedded-style", true, N_("Use embedded subtitle formatting"),
+              N_("Use the font and colors from the subtitle file. Switch this setting off to use your subtitle appearance settings.") )
+    add_integer_with_range( "sub-text-size-mode", 0, 0, 1, N_("Subtitle size values"),
+                            N_("Use relative values or pixels for the subtitle font size.") )
+        change_integer_list( subtitle_size_modes, subtitle_size_mode_names )
+    add_integer_with_range( "sub-text-size-pixels", 30, 1, 500, N_("Subtitle font size (px)"),
+                            N_("Set the subtitle font size in pixels.") )
     set_section( N_( "Overlays" ) , NULL )
     add_module_list("sub-source", "sub source", NULL,
                     SUB_SOURCE_TEXT, SUB_SOURCE_LONGTEXT)

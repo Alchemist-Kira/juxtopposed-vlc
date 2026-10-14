@@ -420,6 +420,8 @@ subpicture_Delete
 subpicture_New
 subpicture_NewFromPicture
 subpicture_Update
+vlc_subpicture_InvalidateTextStyle
+vlc_subpicture_GetTextStyleRevision
 vlc_spu_regions_Clear
 vlc_render_subpicture_New
 vlc_render_subpicture_Delete

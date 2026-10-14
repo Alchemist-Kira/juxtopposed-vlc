@@ -24,6 +24,7 @@
 #include <vlc_strings.h>
 #include <vlc_text_style.h>
 #include <vlc_subpicture.h>
+#include <vlc_configuration.h>
 
 #include <stdint.h>
 
@@ -70,7 +71,60 @@ typedef struct
     float margin_ratio;
     vlc_tick_t i_next_update;
     bool b_blink_even;
+    uint64_t style_revision;
+    text_style_t *user_style;
+    bool style_initialized;
+    bool use_embedded_style;
+    bool pixel_size;
+    unsigned pixel_size_value;
 } subtext_updater_sys_t;
+
+static int64_t SubtitleStyleInteger(vlc_object_t *owner, const char *name, int64_t fallback)
+{
+    const int type = config_GetType(name) & VLC_VAR_CLASS;
+    if (type == 0) return fallback;
+    if (owner == NULL) return config_GetInt(name);
+    return type == VLC_VAR_BOOL ? var_InheritBool(owner, name) : var_InheritInteger(owner, name);
+}
+
+static text_style_t *SubtitleManualStyle(vlc_object_t *owner)
+{
+    text_style_t *style = text_style_Create(STYLE_FULLY_SET);
+    if (style == NULL)
+        return NULL;
+    style->i_features = STYLE_FULLY_SET;
+    style->i_font_size = 0;
+    if (config_GetType("freetype-font") != 0)
+        style->psz_fontname = owner != NULL ? var_InheritString(owner, "freetype-font") : config_GetPsz("freetype-font");
+    if (style->psz_fontname != NULL && style->psz_fontname[0] == '\0') {
+        free(style->psz_fontname);
+        style->psz_fontname = NULL;
+    }
+    style->i_font_color = SubtitleStyleInteger(owner, "freetype-color", 0xffffff);
+    style->i_font_alpha = SubtitleStyleInteger(owner, "freetype-opacity", 255);
+    style->i_outline_color = SubtitleStyleInteger(owner, "freetype-outline-color", 0);
+    style->i_outline_alpha = SubtitleStyleInteger(owner, "freetype-outline-opacity", 255);
+    style->i_shadow_color = SubtitleStyleInteger(owner, "freetype-shadow-color", 0);
+    style->i_shadow_alpha = SubtitleStyleInteger(owner, "freetype-shadow-opacity", 128);
+    style->i_background_color = SubtitleStyleInteger(owner, "freetype-background-color", 0);
+    style->i_background_alpha = SubtitleStyleInteger(owner, "freetype-background-opacity", 0);
+    style->i_style_flags = STYLE_OUTLINE | STYLE_SHADOW;
+    if (SubtitleStyleInteger(owner, "freetype-bold", 0))
+        style->i_style_flags |= STYLE_BOLD;
+    if (style->i_background_alpha > 0)
+        style->i_style_flags |= STYLE_BACKGROUND;
+    return style;
+}
+
+static void SubtitleStyleSnapshot(subtext_updater_sys_t *sys, vlc_object_t *owner)
+{
+    text_style_Delete(sys->user_style);
+    sys->user_style = SubtitleManualStyle(owner);
+    sys->use_embedded_style = SubtitleStyleInteger(owner, "sub-text-use-embedded-style", true);
+    sys->pixel_size = SubtitleStyleInteger(owner, "sub-text-size-mode", 0) == 1;
+    sys->pixel_size_value = SubtitleStyleInteger(owner, "sub-text-size-pixels", 30);
+    sys->style_initialized = true;
+}
 
 static inline void SubpictureUpdaterSysRegionClean(substext_updater_region_t *p_updtregion)
 {
@@ -123,6 +177,11 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
     substext_updater_region_t *p_updtregion = &sys->region;
     video_format_t render_fmt = *fmt_dst;
     video_format_t prev_render_fmt = *cfg->previous.video_dst;
+    const uint64_t style_revision = subpic->b_subtitle ? vlc_subpicture_GetTextStyleRevision() : 0;
+    if (subpic->b_subtitle && (!sys->style_initialized || sys->style_revision != style_revision))
+        SubtitleStyleSnapshot(sys, NULL);
+    const bool use_embedded_style = !subpic->b_subtitle || sys->use_embedded_style;
+    const bool pixel_size = subpic->b_subtitle && sys->pixel_size;
 
     if (p_updtregion->b_in_window)
     {
@@ -142,10 +201,12 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
         render_fmt.i_visible_height == prev_render_fmt.i_visible_height &&
         video_format_IsSimilar(cfg->previous.video_dst, fmt_dst) &&
         sys->scaling_modes_flags == scaling_modes_flags &&
+        sys->style_revision == style_revision &&
         (sys->i_next_update == VLC_TICK_INVALID || sys->i_next_update > cfg->pts))
         return;
 
     sys->scaling_modes_flags = scaling_modes_flags;
+    sys->style_revision = style_revision;
 
     if (!(p_updtregion->flags & UPDT_REGION_FIXED_DONE) &&
         p_updtregion->b_absolute && !vlc_spu_regions_is_empty(&subpic->regions) &&
@@ -222,8 +283,10 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
         r->b_in_window = update_region->b_in_window;
         r->i_align = update_region->align;
         r->text_flags |= update_region->inner_align & SUBPICTURE_ALIGN_MASK;
-        if (update_region->flags & UPDT_REGION_IGNORE_BACKGROUND)
+        if (use_embedded_style && (update_region->flags & UPDT_REGION_IGNORE_BACKGROUND))
             r->text_flags |= VLC_SUBPIC_TEXT_FLAG_NO_REGION_BG;
+        if (pixel_size)
+            r->text_flags |= VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE;
         bool b_gridmode = (update_region->flags & UPDT_REGION_USES_GRID_COORDINATES) != 0;
         if (b_gridmode)
             r->text_flags |= VLC_SUBPIC_TEXT_FLAG_GRID_MODE;
@@ -286,16 +349,28 @@ static void SubpictureTextUpdate(subpicture_t *subpic,
         for ( text_segment_t* p_segment = r->p_text; p_segment; p_segment = p_segment->p_next )
         {
             /* Add decoder defaults */
-            if( p_segment->style )
-                text_style_Merge( p_segment->style, sys->p_default_style, false );
-            else
-                p_segment->style = text_style_Duplicate( sys->p_default_style );
+            if (!use_embedded_style) {
+                text_style_Delete(p_segment->style);
+                p_segment->style = sys->user_style != NULL ? text_style_Duplicate(sys->user_style) : NULL;
+            }
+            else {
+                if( p_segment->style )
+                    text_style_Merge( p_segment->style, sys->p_default_style, false );
+                else
+                    p_segment->style = text_style_Duplicate( sys->p_default_style );
+                if (subpic->b_subtitle && p_segment->style != NULL && sys->user_style != NULL)
+                    text_style_Merge(p_segment->style, sys->user_style, false);
+            }
 
             if( p_segment->style )
             {
+                if (pixel_size) {
+                    p_segment->style->i_font_size = sys->pixel_size_value;
+                    p_segment->style->f_font_relsize = 0;
+                }
                 /* Update all segments font sizes in video source %,
                  * so we can handle HiDPI properly and have consistent rendering limits */
-                 if( p_segment->style->i_font_size > 0 && fmt_src->i_visible_height > 0 )
+                 if( !pixel_size && p_segment->style->i_font_size > 0 && fmt_src->i_visible_height > 0 )
                 {
                     p_segment->style->f_font_relsize = 100.0 * p_segment->style->i_font_size / fmt_src->i_visible_height;
                     p_segment->style->i_font_size = 0;
@@ -339,6 +414,7 @@ static void SubpictureTextDestroy(subpicture_t *subpic)
         p_region = p_next;
     }
     text_style_Delete( sys->p_default_style );
+    text_style_Delete(sys->user_style);
     free(sys);
 }
 
@@ -372,6 +448,10 @@ static inline subpicture_t *decoder_NewSubpictureText(decoder_t *decoder)
         free(sys);
         return NULL;
     }
+    // Capture input options while the decoder is alive. Later UI changes use
+    // the global saved preferences without retaining a decoder pointer.
+    SubtitleStyleSnapshot(sys, VLC_OBJECT(decoder));
+    sys->style_revision = vlc_subpicture_GetTextStyleRevision();
     sys->region.b_absolute = true; sys->region.b_in_window = false;
     sys->i_next_update = VLC_TICK_INVALID;
     return subpic;

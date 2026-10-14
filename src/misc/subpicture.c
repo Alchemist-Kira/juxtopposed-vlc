@@ -35,6 +35,19 @@
 #include "subpicture.h"
 
 #include <limits.h>
+#include <stdatomic.h>
+
+static atomic_uint_fast64_t text_style_revision = ATOMIC_VAR_INIT(0);
+
+void vlc_subpicture_InvalidateTextStyle(void)
+{
+    atomic_fetch_add_explicit(&text_style_revision, 1, memory_order_release);
+}
+
+uint64_t vlc_subpicture_GetTextStyleRevision(void)
+{
+    return atomic_load_explicit(&text_style_revision, memory_order_acquire);
+}
 
 struct subpicture_private_t
 {

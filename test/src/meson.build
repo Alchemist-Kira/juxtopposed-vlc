@@ -199,6 +199,14 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_input_subtitle_style',
+    'sources' : files('input/subtitle_style.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['freetype']
+}
+
+vlc_tests += {
     'name' : 'test_src_player_lifecycle',
     'sources' : files(
         'player/common.h',

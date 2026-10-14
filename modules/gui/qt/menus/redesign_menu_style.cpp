@@ -106,6 +106,7 @@ public:
         if (element == PE_PanelMenu) {
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
+            painter->setCompositionMode(QPainter::CompositionMode_Source);
             painter->setPen(Qt::NoPen);
             painter->setBrush(m_background);
             painter->drawRoundedRect(option->rect, dp(10), dp(10));

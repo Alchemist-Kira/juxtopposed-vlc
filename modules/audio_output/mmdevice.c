@@ -849,6 +849,7 @@ static void MMSessionMainloop(audio_output_t *aout, ISimpleAudioVolume *volume)
 
         DWORD wait_ms = INFINITE;
         DWORD ev_count = 1;
+        HANDLE buffer_event = NULL;
         HANDLE events[2] = {
             sys->work_event,
             NULL
@@ -860,11 +861,23 @@ static void MMSessionMainloop(audio_output_t *aout, ISimpleAudioVolume *volume)
 
             /* Don't listen to the stream event if the block fifo is empty */
             if (sys->stream->chain != NULL)
-                events[ev_count++] = sys->stream->buffer_ready_event;
+            {
+                /* Stop can destroy the stream while this thread waits without
+                 * the lock. Keep the event alive until the wait returns. */
+                if (DuplicateHandle(GetCurrentProcess(),
+                                    sys->stream->buffer_ready_event,
+                                    GetCurrentProcess(), &buffer_event, 0,
+                                    FALSE, DUPLICATE_SAME_ACCESS))
+                    events[ev_count++] = buffer_event;
+                else
+                    wait_ms = __MIN(wait_ms, 10);
+            }
         }
 
         vlc_mutex_unlock(&sys->lock);
         WaitForMultipleObjects(ev_count, events, FALSE, wait_ms);
+        if (buffer_event != NULL)
+            CloseHandle(buffer_event);
         vlc_mutex_lock(&sys->lock);
 
         if (sys->stream != NULL)
@@ -1324,14 +1337,15 @@ static void Stop(audio_output_t *aout)
 {
     aout_sys_t *sys = aout->sys;
 
-    assert(sys->stream != NULL);
-
     EnterMTA();
+    vlc_mutex_lock(&sys->lock);
+    assert(sys->stream != NULL);
     aout_stream_owner_Stop(sys->stream);
-    LeaveMTA();
-
     aout_stream_owner_Delete(sys->stream);
     sys->stream = NULL;
+    vlc_mutex_unlock(&sys->lock);
+    LeaveMTA();
+    SetEvent(sys->work_event);
 }
 
 static void Close(vlc_object_t *);

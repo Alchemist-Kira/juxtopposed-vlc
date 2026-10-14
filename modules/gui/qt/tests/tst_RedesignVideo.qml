@@ -45,7 +45,7 @@ TestCase {
     RedesignVideoSettings { id: video; x: 24; width: 356; backend: store }
     function item(name) { return findChild(video, name) }
     function init() {
-        store.values = {"video-filter": "", "transform-type": "90", "rotate-angle": 30, "fit": 1, "zoom": 1,
+        store.values = {"video-filter": "", "transform-type": "90", "rotate-angle": 30, "fit": 1, "autoscale": true, "zoom": 1,
             "preferred-resolution": -1, "aspect-ratio": "", "crop": "", "hue": 0, "brightness": 1, "contrast": 1,
             "saturation": 1, "gamma": 1, "sharpen-sigma": .05, "gradfun-radius": 16, "grain-variance": 2,
             "extract-component": 16711680, "colorthres-color": 16711680, "colorthres-saturationthres": 20,
@@ -78,7 +78,7 @@ TestCase {
             previous = section.y
             compare(section.width, video.width + 4)
         }
-        compare(item("zoomChoice").displayText, "1:1 Original")
+        compare(item("zoomChoice").displayText, "Fit Inside Window")
         compare(item("aspect-ratioChoice").displayText, "Default")
         compare(item("videoRotation").currentValue, 0)
     }
@@ -149,8 +149,27 @@ TestCase {
     function test_zoomSetsPixelFittingWithoutChangingOtherDefaults() {
         const choice = item("zoomChoice")
         choice.currentIndex = 3; choice.activated(3)
-        compare(store.values.fit, 0); compare(store.values.zoom, 2)
+        compare(store.values.fit, 0); compare(store.values.zoom, 2); compare(store.values.autoscale, false)
+        compare(choice.displayText, "2:1 Double")
+        choice.currentIndex = 2; choice.activated(2)
+        compare(store.values.zoom, 1); compare(store.values.autoscale, false)
+        compare(choice.displayText, "1:1 Original")
         compare(store.values.crop, ""); compare(store.values["aspect-ratio"], "")
+    }
+    function test_zoomCanReturnToEachNativeFitMode() {
+        const choice = item("zoomChoice")
+        video.setZoomSelection(.5)
+        for (let mode = 1; mode <= 4; ++mode) {
+            choice.currentIndex = choice.model.findIndex(row => row.value === -mode)
+            choice.activated(choice.currentIndex)
+            compare(store.values.fit, mode); compare(store.values.autoscale, true)
+            compare(store.values.zoom, .5)
+            compare(choice.currentValue, -mode)
+        }
+        store.live = {autoscale: false, fit: 4, zoom: .75}; store.revision++
+        tryCompare(choice, "currentValue", .75)
+        store.live = {autoscale: true, fit: 0, zoom: 1}; store.revision++
+        compare(choice.displayText, "Fit Inside Window")
     }
     function test_cropLinksOnlyTheSelectedPairAndPersistsBorders() {
         video.setBorder(1, 12); compare(store.values.crop, "0+12+0+0")

@@ -32,6 +32,17 @@ ColumnLayout {
             result.push({label: name === "crop" && String(value).includes("+") ? qsTr("Custom") : String(value), value: value})
         return result
     }
+    readonly property real zoomSelection: current("autoscale") ? -Math.max(1, Number(current("fit")) || 1) : Number(current("zoom"))
+    function setZoomSelection(value) {
+        if (value < 0) {
+            backend.stage("fit", -value)
+            backend.stage("autoscale", true)
+        } else {
+            backend.stage("zoom", value)
+            backend.stage("fit", 0)
+            backend.stage("autoscale", false)
+        }
+    }
     readonly property string videoTransform: enabledFilter("transform") ? String(current("transform-type")) : ""
     readonly property real pixelRotation: enabledFilter("rotate") ? Number(current("rotate-angle")) : 0
     readonly property var orientation: {
@@ -88,6 +99,8 @@ ColumnLayout {
         property string label
         property string optionName
         property var choices
+        property bool zoomControl: false
+        property var selectedValue: root.current(optionName)
         property string help
         property string emptyText
         Layout.fillWidth: true; Layout.minimumHeight: theme.dp(68)
@@ -98,12 +111,15 @@ ColumnLayout {
             implicitHeight: theme.dp(46)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: parent.choices; textRole: "label"; valueRole: "value"
-            currentIndex: model.findIndex(row => row.value === root.current(parent.optionName))
+            currentIndex: model.findIndex(row => row.value === parent.selectedValue)
+            // ComboBox resets its index when a custom value changes the model.
+            // Restore the binding after the new model has been installed.
+            onModelChanged: Qt.callLater(() => currentIndex = Qt.binding(() => model.findIndex(row => row.value === parent.selectedValue)))
             displayText: currentIndex < 0 ? parent.emptyText : currentText
             Accessible.name: parent.label
             onActivated: {
-                if (parent.optionName === "zoom") root.backend.stage("fit", 0)
-                root.backend.stage(parent.optionName, currentValue)
+                if (parent.zoomControl) root.setZoomSelection(currentValue)
+                else root.backend.stage(parent.optionName, currentValue)
             }
             C.ToolTip.text: parent.help
             C.ToolTip.visible: hovered && C.ToolTip.text.length > 0
@@ -204,7 +220,14 @@ ColumnLayout {
         sliderVisible: false
         onMoved: value => root.setRotation(value)
     }
-    Choice { label: qsTr("Zoom"); optionName: "zoom"; choices: root.options(optionName, [{label: qsTr("1:4 Quarter"), value: .25}, {label: qsTr("1:2 Half"), value: .5}, {label: qsTr("1:1 Original"), value: 1}, {label: qsTr("2:1 Double"), value: 2}]) }
+    Choice {
+        label: qsTr("Zoom"); optionName: "zoom"; zoomControl: true
+        selectedValue: root.zoomSelection
+        choices: root.options(optionName, [{label: qsTr("1:4 Quarter"), value: .25}, {label: qsTr("1:2 Half"), value: .5}, {label: qsTr("1:1 Original"), value: 1}, {label: qsTr("2:1 Double"), value: 2}]).concat([
+            {label: qsTr("Fit Inside Window"), value: -1}, {label: qsTr("Fill Window"), value: -2},
+            {label: qsTr("Fit Window Width"), value: -3}, {label: qsTr("Fit Window Height"), value: -4}])
+        help: qsTr("Zoom ratios use the video's actual pixel size.")
+    }
     Choice {
         label: qsTr("HDR"); optionName: "d3d11-hdr-mode"
         enabled: root.backend.describe(optionName).kind !== undefined

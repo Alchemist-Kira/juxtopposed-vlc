@@ -81,7 +81,7 @@ const QStringList& presetOptions()
             QStringLiteral("compressor-threshold"), QStringLiteral("compressor-ratio"), QStringLiteral("compressor-knee"), QStringLiteral("compressor-makeup-gain"),
             QStringLiteral("video-filter"), QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
             QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"), QStringLiteral("qt-video-transform-state"),
-            QStringLiteral("fit"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
+            QStringLiteral("fit"), QStringLiteral("autoscale"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
             QStringLiteral("subsdec-formatted"), QStringLiteral("sub-margin"), QStringLiteral("sub-text-scale"),
             QStringLiteral("sub-text-use-embedded-style"), QStringLiteral("sub-text-size-mode"), QStringLiteral("sub-text-size-pixels"),
             QStringLiteral("subsdelay-factor"), QStringLiteral("subsdelay-mode"), QStringLiteral("sub-filter"),
@@ -109,10 +109,11 @@ const QStringList& videoOutputOptions()
 {
     // Output variables own the current presentation. Hotkeys and the native
     // choice models can change these without changing saved preferences.
-    // Set the chain last so newly loaded filters inherit their saved values.
+    // Apply fit before autoscale: disabling automatic scaling must win over
+    // a retained fit mode. Set the chain last so new filters inherit values.
     static const QStringList names = [] {
         QStringList names{
-            QStringLiteral("fit"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"),
+            QStringLiteral("fit"), QStringLiteral("autoscale"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"),
             QStringLiteral("deinterlace-mode"), QStringLiteral("deinterlace"),
             QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
             QStringLiteral("saturation"), QStringLiteral("gamma"),
@@ -379,7 +380,7 @@ QVariantMap RedesignPreferences::playerPresetState() const
     if (text.size() > 1024 * 1024) return {};
     const auto document = QJsonDocument::fromJson(text);
     if (!document.isObject()) return {};
-    const auto state = document.object().toVariantMap();
+    auto state = document.object().toVariantMap();
     if (state.value(QStringLiteral("version")).toInt() != 1
         || state.value(QStringLiteral("default")).metaType().id() != QMetaType::QVariantMap
         || state.value(QStringLiteral("presets")).metaType().id() != QMetaType::QVariantList) return {};
@@ -393,7 +394,7 @@ QVariantMap RedesignPreferences::playerPresetState() const
         return true;
     };
     if (!validOptions(state.value(QStringLiteral("default")))) return {};
-    const auto presets = state.value(QStringLiteral("presets")).toList();
+    auto presets = state.value(QStringLiteral("presets")).toList();
     if (presets.size() > 128) return {};
     QSet<QString> ids;
     for (const auto& row : presets) {
@@ -406,6 +407,20 @@ QVariantMap RedesignPreferences::playerPresetState() const
     }
     const auto selected = state.value(QStringLiteral("selected")).toString();
     if (!selected.isEmpty() && !ids.contains(selected)) return {};
+    // Older presets stored fit=None for pixel zoom but omitted autoscale.
+    // Normalize each snapshot before merging a named preset with defaults.
+    const auto withScaling = [](QVariantMap options) {
+        if (!options.contains(QStringLiteral("autoscale")) && options.contains(QStringLiteral("fit")))
+            options.insert(QStringLiteral("autoscale"), options.value(QStringLiteral("fit")).toInt() != VLC_VIDEO_FIT_NONE);
+        return options;
+    };
+    state.insert(QStringLiteral("default"), withScaling(state.value(QStringLiteral("default")).toMap()));
+    for (auto& row : presets) {
+        auto preset = row.toMap();
+        preset.insert(QStringLiteral("options"), withScaling(preset.value(QStringLiteral("options")).toMap()));
+        row = preset;
+    }
+    state.insert(QStringLiteral("presets"), presets);
     return state;
 }
 

@@ -1,0 +1,80 @@
+Subject: [PATCH] utils: preserve UNC roots when creating Windows storage folders
+
+splitPath() removes the leading separators from a UNC path. Rebuilding those
+components from an empty string creates folders relative to the process working
+directory, then opening mlstorage/ml.lock at the requested UNC path fails.
+
+Keep the server/share root (including extended UNC and drive roots), verify it,
+and create only its child folders. This lets a portable VLC build initialize
+its library when run directly from a WSL network share. Drive and POSIX paths
+keep their existing behavior.
+
+---
+--- a/src/utils/Directory.cpp
++++ b/src/utils/Directory.cpp
+@@ -52,6 +52,7 @@
+ #endif
+ 
+ #include <cassert>
++#include <algorithm>
+ 
+ namespace medialibrary
+ {
+@@ -118,6 +119,57 @@
+ bool mkdir( const std::string& path )
+ {
+     assert( path.empty() == false );
++#ifdef _WIN32
++    // A UNC server and share form a root, not directories to create relative
++    // to the current directory. Preserve that root while making its children.
++    auto uncPath = path;
++    std::replace( uncPath.begin(), uncPath.end(), '/', '\\' );
++    if ( uncPath.compare( 0, 2, "\\\\" ) == 0 )
++    {
++        size_t start = 2;
++        unsigned rootParts = 2; // server and share
++        if ( uncPath.compare( 0, 4, "\\\\?\\" ) == 0 )
++        {
++            start = 4;
++            if ( uncPath.compare( start, 4, "UNC\\" ) == 0 )
++                start += 4;
++            else
++                rootParts = 1; // extended drive root
++        }
++        size_t end = start;
++        for ( unsigned i = 0; i < rootParts; ++i )
++        {
++            end = uncPath.find( '\\', start );
++            if ( end == start || start == uncPath.size() )
++                return false;
++            if ( end == std::string::npos )
++            {
++                if ( i + 1 != rootParts )
++                    return false;
++                end = uncPath.size();
++            }
++            start = end + 1;
++        }
++        auto root = charset::ToWide( uncPath.substr( 0, end ).c_str() );
++        if ( !root )
++            return false;
++        auto attributes = GetFileAttributesW( root.get() );
++        if ( attributes == INVALID_FILE_ATTRIBUTES ||
++             ( attributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 )
++            return false;
++        while ( end < uncPath.size() )
++        {
++            end = uncPath.find( '\\', end + 1 );
++            if ( end == std::string::npos )
++                end = uncPath.size();
++            auto directory = charset::ToWide( uncPath.substr( 0, end ).c_str() );
++            if ( !directory ||
++                 ( _wmkdir( directory.get() ) != 0 && errno != EEXIST ) )
++                return false;
++        }
++        return true;
++    }
++#endif
+     auto paths = utils::file::splitPath( path, true );
+ #ifndef _WIN32
+     assert( path[0] == '/' );

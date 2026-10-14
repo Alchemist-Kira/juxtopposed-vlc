@@ -17,6 +17,7 @@ $(TARBALLS)/medialibrary-$(MEDIALIBRARY_VERSION).tar.bz2:
 
 medialibrary: medialibrary-$(MEDIALIBRARY_VERSION).tar.bz2 .sum-medialibrary
 	$(UNPACK)
+	$(APPLY) $(SRC)/medialibrary/0001-preserve-windows-unc-storage-paths.patch
 	$(MOVE)
 
 .medialibrary: medialibrary crossfile.meson

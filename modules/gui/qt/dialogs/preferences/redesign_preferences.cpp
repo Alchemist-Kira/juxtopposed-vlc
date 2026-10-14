@@ -29,31 +29,48 @@
 namespace {
 const QString presetOption = QStringLiteral("qt-player-presets");
 
+const QStringList& videoFilterOptions()
+{
+    static const QStringList names{
+        QStringLiteral("sharpen-sigma"), QStringLiteral("gradfun-radius"), QStringLiteral("grain-variance"),
+        QStringLiteral("extract-component"), QStringLiteral("colorthres-color"),
+        QStringLiteral("colorthres-saturationthres"), QStringLiteral("colorthres-similaritythres"),
+        QStringLiteral("posterize-level"), QStringLiteral("gradient-mode"), QStringLiteral("gradient-color"),
+        QStringLiteral("gradient-cartoon"), QStringLiteral("sepia-intensity")
+    };
+    return names;
+}
+
 const QStringList& presetOptions()
 {
     // Only media presentation belongs in a show preset. Do not capture devices,
     // file paths, credentials, interface settings or other machine preferences.
-    static const QStringList names{
-        QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
-        QStringLiteral("sub-track"), QStringLiteral("sub-track-id"), QStringLiteral("sub-language"),
-        QStringLiteral("audio-desync"), QStringLiteral("sub-delay"), QStringLiteral("sub-delay-ms"), QStringLiteral("sub-fps"),
-        QStringLiteral("stereo-mode"), QStringLiteral("mix-mode"), QStringLiteral("audio-spatial"), QStringLiteral("audio-spatial-mode"),
-        QStringLiteral("audio-filter"), QStringLiteral("equalizer-preset"), QStringLiteral("equalizer-bands"),
-        QStringLiteral("equalizer-preamp"), QStringLiteral("equalizer-2pass"), QStringLiteral("norm-max-level"),
-        QStringLiteral("compressor-rms-peak"), QStringLiteral("compressor-attack"), QStringLiteral("compressor-release"),
-        QStringLiteral("compressor-threshold"), QStringLiteral("compressor-ratio"), QStringLiteral("compressor-knee"), QStringLiteral("compressor-makeup-gain"),
-        QStringLiteral("video-filter"), QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
-        QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"),
-        QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
-        QStringLiteral("subsdec-formatted"), QStringLiteral("sub-margin"), QStringLiteral("sub-text-scale"),
-        QStringLiteral("sub-text-use-embedded-style"), QStringLiteral("sub-text-size-mode"), QStringLiteral("sub-text-size-pixels"),
-        QStringLiteral("subsdelay-factor"), QStringLiteral("subsdelay-mode"), QStringLiteral("sub-filter"),
-        QStringLiteral("freetype-font"), QStringLiteral("freetype-fontsize"), QStringLiteral("freetype-rel-fontsize"),
-        QStringLiteral("freetype-color"), QStringLiteral("freetype-opacity"), QStringLiteral("freetype-bold"),
-        QStringLiteral("freetype-outline-thickness"), QStringLiteral("freetype-outline-color"), QStringLiteral("freetype-outline-opacity"),
-        QStringLiteral("freetype-shadow-angle"), QStringLiteral("freetype-shadow-distance"), QStringLiteral("freetype-shadow-color"),
-        QStringLiteral("freetype-shadow-opacity"), QStringLiteral("freetype-background-color"), QStringLiteral("freetype-background-opacity")
-    };
+    static const QStringList names = [] {
+        QStringList names{
+            QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
+            QStringLiteral("sub-track"), QStringLiteral("sub-track-id"), QStringLiteral("sub-language"),
+            QStringLiteral("audio-desync"), QStringLiteral("sub-delay"), QStringLiteral("sub-delay-ms"), QStringLiteral("sub-fps"),
+            QStringLiteral("stereo-mode"), QStringLiteral("mix-mode"), QStringLiteral("audio-spatial"), QStringLiteral("audio-spatial-mode"),
+            QStringLiteral("audio-filter"), QStringLiteral("equalizer-preset"), QStringLiteral("equalizer-bands"),
+            QStringLiteral("equalizer-preamp"), QStringLiteral("equalizer-2pass"), QStringLiteral("norm-max-level"),
+            QStringLiteral("compressor-rms-peak"), QStringLiteral("compressor-attack"), QStringLiteral("compressor-release"),
+            QStringLiteral("compressor-threshold"), QStringLiteral("compressor-ratio"), QStringLiteral("compressor-knee"), QStringLiteral("compressor-makeup-gain"),
+            QStringLiteral("video-filter"), QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
+            QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"),
+            QStringLiteral("fit"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
+            QStringLiteral("subsdec-formatted"), QStringLiteral("sub-margin"), QStringLiteral("sub-text-scale"),
+            QStringLiteral("sub-text-use-embedded-style"), QStringLiteral("sub-text-size-mode"), QStringLiteral("sub-text-size-pixels"),
+            QStringLiteral("subsdelay-factor"), QStringLiteral("subsdelay-mode"), QStringLiteral("sub-filter"),
+            QStringLiteral("freetype-font"), QStringLiteral("freetype-fontsize"), QStringLiteral("freetype-rel-fontsize"),
+            QStringLiteral("freetype-color"), QStringLiteral("freetype-opacity"), QStringLiteral("freetype-bold"),
+            QStringLiteral("freetype-outline-thickness"), QStringLiteral("freetype-outline-color"), QStringLiteral("freetype-outline-opacity"),
+            QStringLiteral("freetype-shadow-angle"), QStringLiteral("freetype-shadow-distance"), QStringLiteral("freetype-shadow-color"),
+            QStringLiteral("freetype-shadow-opacity"), QStringLiteral("freetype-background-color"), QStringLiteral("freetype-background-opacity")
+        };
+        names += videoFilterOptions();
+        names += {QStringLiteral("preferred-resolution"), QStringLiteral("d3d11-hdr-mode")};
+        return names;
+    }();
     return names;
 }
 
@@ -67,13 +84,18 @@ const QStringList& videoOutputOptions()
     // Output variables own the current presentation. Hotkeys and the native
     // choice models can change these without changing saved preferences.
     // Set the chain last so newly loaded filters inherit their saved values.
-    static const QStringList names{
-        QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"),
-        QStringLiteral("deinterlace-mode"), QStringLiteral("deinterlace"),
-        QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
-        QStringLiteral("saturation"), QStringLiteral("gamma"),
-        QStringLiteral("transform-type"), QStringLiteral("rotate-angle"), QStringLiteral("video-filter")
-    };
+    static const QStringList names = [] {
+        QStringList names{
+            QStringLiteral("fit"), QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"),
+            QStringLiteral("deinterlace-mode"), QStringLiteral("deinterlace"),
+            QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"),
+            QStringLiteral("saturation"), QStringLiteral("gamma"),
+            QStringLiteral("transform-type"), QStringLiteral("rotate-angle")
+        };
+        names += videoFilterOptions();
+        names.append(QStringLiteral("video-filter"));
+        return names;
+    }();
     return names;
 }
 
@@ -589,6 +611,21 @@ QVariant RedesignPreferences::value(const QString& name) const
     return it == m_edits.cend() ? read(name.toUtf8()) : *it;
 }
 
+QVariant RedesignPreferences::videoValue(const QString& name) const
+{
+    if (!m_ctx || m_edits.contains(name) || !videoOutputOptions().contains(name))
+        return value(name);
+    auto* player = m_ctx->getIntf()->p_player;
+    vlc_player_Lock(player);
+    const bool hasVideo = vlc_player_IsStarted(player) && vlc_player_GetSelectedTrack(player, VIDEO_ES);
+    auto* output = hasVideo ? vlc_player_vout_Hold(player) : nullptr;
+    vlc_player_Unlock(player);
+    if (!output) return value(name);
+    const auto current = outputValue(output, name);
+    vout_Release(output);
+    return current.isValid() ? current : value(name);
+}
+
 bool RedesignPreferences::isStaged(const QString& name) const
 {
     if (name == QLatin1String("redesign-subtitle-relative-size"))
@@ -874,7 +911,7 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     if (name.startsWith(QLatin1String("filter:"))) {
         const auto parts = name.split(QLatin1Char(':'));
         if (parts.size() != 3 || !module_exists(parts[2].toUtf8().constData())) return false;
-        auto filters = value(parts[1]).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        auto filters = (parts[1] == QLatin1String("video-filter") ? videoValue(parts[1]) : value(parts[1])).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
         // Editing an enabled effect must preserve its position. Moving an
         // adjust filter after transform can discard the transform orientation.
         if (!proposed.toBool()) filters.removeAll(parts[2]);
@@ -920,6 +957,13 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     m_invalid.remove(name);
     if (QStringList{QStringLiteral("hue"), QStringLiteral("brightness"), QStringLiteral("contrast"), QStringLiteral("saturation"), QStringLiteral("gamma")}.contains(name))
         stage(QStringLiteral("filter:video-filter:adjust"), true);
+
+    const QString effect = name == QLatin1String("sharpen-sigma") ? QStringLiteral("sharpen")
+        : name == QLatin1String("gradfun-radius") ? QStringLiteral("gradfun")
+        : name == QLatin1String("grain-variance") ? QStringLiteral("grain")
+        : name == QLatin1String("sepia-intensity") ? QStringLiteral("sepia") : QString();
+    if (!effect.isEmpty())
+        stage(QStringLiteral("filter:video-filter:") + effect, true);
 
     bool applyToPlayer = false;
     if (m_ctx && (name == QLatin1String("sub-text-scale") || name == QLatin1String("sub-text-size-mode")

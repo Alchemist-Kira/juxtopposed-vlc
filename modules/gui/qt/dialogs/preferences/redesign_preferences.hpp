@@ -53,6 +53,7 @@ public:
     Q_INVOKABLE QString chooseColor(const QString& initial);
     Q_INVOKABLE QVariantMap describe(const QString& name) const;
     Q_INVOKABLE QVariant value(const QString& name) const;
+    Q_INVOKABLE QVariant videoValue(const QString& name) const;
     Q_INVOKABLE bool isStaged(const QString& name) const;
     Q_INVOKABLE bool stage(const QString& name, const QVariant& value);
     Q_INVOKABLE void reset(const QString& name);

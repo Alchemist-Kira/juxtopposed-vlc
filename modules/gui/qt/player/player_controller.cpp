@@ -359,6 +359,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
     if (!new_media)
     {
         that->callAsync([that] () {
+            that->m_seekDragItem.reset();
             {
                 vlc_player_locker lock{ that->m_player };
                 that->m_currentItem.reset(nullptr);
@@ -380,6 +381,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
     SharedInputItem newMediaPtr = SharedInputItem( new_media );
     that->callAsync([that,newMediaPtr] () {
         PlayerController* q = that->q_func();
+        that->m_seekDragItem.reset();
 
         that->m_syltRaw.reset();
         that->m_syltLyrics.reset();
@@ -433,10 +435,12 @@ static void on_player_state_changed(vlc_player_t *, enum vlc_player_state state,
             msg_Dbg( that->p_intf, "on_player_state_changed VLC_PLAYER_STATE_PAUSED");
             break;
         case VLC_PLAYER_STATE_STOPPING:
+            that->m_seekDragItem.reset();
             msg_Dbg( that->p_intf, "on_player_state_changed VLC_PLAYER_STATE_STOPPING");
             break;
         case VLC_PLAYER_STATE_STOPPED:
         {
+            that->m_seekDragItem.reset();
             msg_Dbg( that->p_intf, "on_player_state_changed VLC_PLAYER_STATE_STOPPED");
 
             that->m_audioStereoMode.resetObject((audio_output_t*)nullptr);
@@ -1820,9 +1824,63 @@ void PlayerController::jumpToPos( double new_pos )
         if( !d->isCurrentItemSynced() )
             return;
         if( vlc_player_IsStarted( d->m_player ) )
-            vlc_player_SetPosition( d->m_player, new_pos );
+        {
+            const auto length = vlc_player_GetLength(d->m_player);
+            if (d->m_seekDragItem && length > 0)
+            {
+                /* Keep a decodable frame before EOF while the pointer is
+                 * held. The full position is committed on release. */
+                vlc_tick_t frame = VLC_TICK_FROM_MS(40);
+                for (size_t i = 0; i < vlc_player_GetTrackCount(d->m_player, VIDEO_ES); ++i)
+                {
+                    const auto* track = vlc_player_GetTrackAt(d->m_player, VIDEO_ES, i);
+                    const auto& format = track->fmt.video;
+                    if (track->selected && format.i_frame_rate && format.i_frame_rate_base)
+                    {
+                        frame = std::max(vlc_tick_t(1),
+                            vlc_tick_from_samples(format.i_frame_rate_base, format.i_frame_rate));
+                        break;
+                    }
+                }
+                const auto lastFrame = std::max(vlc_tick_t(0), length - frame);
+                vlc_player_SetTime(d->m_player,
+                    std::min(vlc_tick_t(length * new_pos), lastFrame));
+            }
+            else
+                vlc_player_SetPosition( d->m_player, new_pos );
+        }
     }
     emit seekRequested( new_pos );
+}
+
+void PlayerController::beginSeekDrag()
+{
+    Q_D(PlayerController);
+    vlc_player_locker lock{d->m_player};
+    if (d->m_seekDragItem || !d->isCurrentItemSynced()
+        || !vlc_player_IsStarted(d->m_player)
+        || !vlc_player_CanSeek(d->m_player) || !vlc_player_CanPause(d->m_player))
+        return;
+    d->m_seekDragItem = d->m_currentItem;
+    d->m_seekDragWasPlaying = !vlc_player_IsPaused(d->m_player);
+    if (d->m_seekDragWasPlaying)
+        vlc_player_Pause(d->m_player);
+}
+
+void PlayerController::finishSeekDrag(double position, bool commit)
+{
+    Q_D(PlayerController);
+    vlc_player_locker lock{d->m_player};
+    if (!d->m_seekDragItem)
+        return;
+    const bool sameItem = d->m_seekDragItem.get() == vlc_player_GetCurrentMedia(d->m_player);
+    d->m_seekDragItem.reset();
+    if (!sameItem || !d->isCurrentItemSynced() || !vlc_player_IsStarted(d->m_player))
+        return;
+    if (commit && std::isfinite(position) && vlc_player_CanSeek(d->m_player))
+        vlc_player_SetPosition(d->m_player, std::clamp(position, 0.0, 1.0));
+    if (d->m_seekDragWasPlaying)
+        vlc_player_Resume(d->m_player);
 }
 
 void PlayerController::frameNext()

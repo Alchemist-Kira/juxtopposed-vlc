@@ -150,6 +150,8 @@ public:
     unsigned m_smpteTimerRequestCount = 0;
 
     SharedInputItem    m_currentItem;
+    SharedInputItem m_seekDragItem;
+    bool m_seekDragWasPlaying = false;
     bool            m_canRestorePlayback = false;
 
     int             m_capabilities = 0;

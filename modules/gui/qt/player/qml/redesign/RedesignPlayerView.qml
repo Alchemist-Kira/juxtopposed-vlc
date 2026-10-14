@@ -73,6 +73,8 @@ FocusScope {
     signal previous()
     signal next()
     signal seekRequested(real value)
+    signal seekDragStarted()
+    signal seekDragFinished(real value, bool commit)
     signal volumeRequested(real value)
     signal muteRequested()
     signal fullscreenRequested()
@@ -87,6 +89,8 @@ FocusScope {
     signal fullLibraryRequested()
     signal resumeRequested(bool resume)
     signal keyPressed(var event)
+
+    Component.onDestruction: if (seek.dragActive) root.seekDragFinished(seek.dragPosition, false)
 
     component ChromeButton: RedesignButton {
         focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
@@ -448,6 +452,38 @@ FocusScope {
                 focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 id: seek
                 objectName: "seekBar"
+                property bool dragActive: false
+                property real dragPosition: 0
+                property bool pointerCancelled: false
+                function beginDrag() {
+                    finishDragTimer.stop()
+                    if (dragActive) return
+                    dragActive = true
+                    dragPosition = value
+                    root.seekDragStarted()
+                }
+                function finishDrag(commit) {
+                    if (!dragActive) return
+                    dragActive = false
+                    root.seekDragFinished(dragPosition, commit && enabled && visible && root.started)
+                }
+                onPressedChanged: {
+                    if (pressed && dragPointer.active) beginDrag()
+                    else if (!pressed && dragActive) finishDragTimer.restart()
+                }
+                // Slider commits a track click after clearing pressed.
+                Timer { id: finishDragTimer; interval: 0; onTriggered: seek.finishDrag(!seek.pointerCancelled) }
+                PointHandler {
+                    id: dragPointer
+                    acceptedButtons: Qt.LeftButton
+                    onActiveChanged: {
+                        if (active) {
+                            seek.pointerCancelled = false
+                            if (seek.pressed) seek.beginDrag()
+                        } else if (!seek.pressed && seek.dragActive) finishDragTimer.restart()
+                    }
+                    onCanceled: { seek.pointerCancelled = true; finishDragTimer.stop(); seek.finishDrag(false) }
+                }
                 Layout.fillWidth: true
                 Layout.minimumWidth: theme.dp(40)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -466,11 +502,11 @@ FocusScope {
                 onPreviewRequested: position => root.seekPreviewRequested(position)
                 onPreviewEnded: root.seekPreviewEnded()
                 Binding on value {
-                    when: !seek.pressed
+                    when: !seek.pressed && !seek.dragActive
                     value: { seek.from; seek.to; return root.position }
                     restoreMode: Binding.RestoreBindingOrValue
                 }
-                onMoved: root.seekRequested(value)
+                onMoved: { dragPosition = value; root.seekRequested(value) }
             }
             Text {
                 visible: root.width > theme.dp(800)

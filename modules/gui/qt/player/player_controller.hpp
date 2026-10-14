@@ -256,6 +256,8 @@ public slots:
     void jumpBwd();
     void jumpTime( VLCTime i_time );
     void jumpToPos( double );
+    void beginSeekDrag();
+    void finishSeekDrag(double position, bool commit);
     void frameNext();
     void framePrev();
 

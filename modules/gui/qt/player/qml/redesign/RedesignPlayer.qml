@@ -95,6 +95,8 @@ FocusScope {
         onPrevious: MainPlaylistController.prevOrReset()
         onNext: MainPlaylistController.next()
         onSeekRequested: value => Player.jumpToPos(value)
+        onSeekDragStarted: Player.beginSeekDrag()
+        onSeekDragFinished: (value, commit) => Player.finishSeekDrag(value, commit)
         onVolumeRequested: value => { Player.muted = false; Player.volume = value }
         onMuteRequested: Player.muted = !Player.muted
         onFullscreenRequested: MainCtx.toggleInterfaceFullScreen()

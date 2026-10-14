@@ -10,6 +10,7 @@ TestCase {
     height: 720
     when: windowShown
     visible: true
+    property var seekEventOrder: []
 
     RedesignPlayerView {
         id: player
@@ -25,7 +26,9 @@ TestCase {
         lengthText: "00:25:40"
         timeForPosition: position => Number(position).toFixed(3)
         onTogglePlayback: playing = !playing
-        onSeekRequested: value => position = value
+        onSeekRequested: value => { testCase.seekEventOrder.push("seek"); position = value }
+        onSeekDragStarted: testCase.seekEventOrder.push("start")
+        onSeekDragFinished: testCase.seekEventOrder.push("finish")
         onVolumeRequested: value => volume = value
         onMuteRequested: muted = !muted
         libraryContent: RedesignLibraryView {
@@ -65,6 +68,8 @@ TestCase {
     SignalSpy { id: trackSelectionSpy; target: trackPicker; signalName: "selectionRequested" }
     SignalSpy { id: trackPreferencesSpy; target: trackPicker; signalName: "preferencesRequested" }
     SignalSpy { id: seekSpy; target: player; signalName: "seekRequested" }
+    SignalSpy { id: seekDragStartSpy; target: player; signalName: "seekDragStarted" }
+    SignalSpy { id: seekDragFinishSpy; target: player; signalName: "seekDragFinished" }
     SignalSpy { id: previewSpy; target: player; signalName: "seekPreviewRequested" }
     SignalSpy { id: previewEndSpy; target: player; signalName: "seekPreviewEnded" }
     SignalSpy { id: audioSpy; target: player; signalName: "audioTracksRequested" }
@@ -125,6 +130,9 @@ TestCase {
         testCase.width = 1280
         testCase.height = 720
         seekSpy.clear()
+        seekEventOrder = []
+        seekDragStartSpy.clear()
+        seekDragFinishSpy.clear()
         previewSpy.clear()
         previewEndSpy.clear()
         audioSpy.clear()
@@ -171,8 +179,59 @@ TestCase {
         player.seekable = false
         tryCompare(seek, "pressed", false)
         verify(!seek.previewActive)
+        compare(seekDragStartSpy.count, 1)
+        tryCompare(seekDragFinishSpy, "count", 1)
+        compare(seekDragFinishSpy.signalArguments[0][1], false)
         mouseRelease(seek, seek.width + 200, seek.height / 2)
         player.seekable = true
+    }
+    function test_dragPastSeekbarEndCommitsOnlyOnRelease() {
+        const seek = findChild(player, "seekBar")
+        player.position = 0.25
+        mousePress(seek, seek.width / 2, seek.height / 2)
+        compare(seekDragStartSpy.count, 1)
+        compare(seekEventOrder[0], "start")
+        mouseMove(seek, seek.width + 200, seek.height / 2, 40)
+        compare(player.position, 1)
+        compare(seekDragFinishSpy.count, 0)
+        wait(100)
+        verify(seek.pressed)
+        mouseRelease(seek, seek.width + 200, seek.height / 2)
+        tryCompare(seekDragFinishSpy, "count", 1)
+        compare(seekDragFinishSpy.signalArguments[0][0], 1)
+        compare(seekDragFinishSpy.signalArguments[0][1], true)
+    }
+    function test_pressAtSeekbarEndStartsHoldBeforeSeeking() {
+        const seek = findChild(player, "seekBar")
+        player.position = 0.25
+        mousePress(seek, seek.width - 2, seek.height / 2)
+        compare(seekEventOrder[0], "start")
+        compare(seekDragStartSpy.count, 1)
+        compare(seekDragFinishSpy.count, 0)
+        mouseRelease(seek, seek.width - 2, seek.height / 2)
+        tryCompare(seekDragFinishSpy, "count", 1)
+        compare(seekDragFinishSpy.signalArguments[0][0], 1)
+        compare(seekDragFinishSpy.signalArguments[0][1], true)
+    }
+    function test_keyboardSeekDoesNotStartPointerDrag() {
+        const seek = findChild(player, "seekBar")
+        player.position = 0.4
+        seek.forceActiveFocus()
+        keyClick(Qt.Key_Right)
+        verify(seekSpy.count > 0)
+        compare(seekDragStartSpy.count, 0)
+        compare(seekDragFinishSpy.count, 0)
+    }
+    function test_subtitleTimelineControlsDoNotStartSeekDrag() {
+        player.showSubtitleTimeline = true
+        player.subtitleTimelineState = "ready"
+        player.subtitleTimelineCues = [{start: 10, stop: 30}]
+        player.durationSeconds = 100
+        mouseClick(findChild(player, "subtitleEarlierButton"))
+        mouseClick(findChild(player, "subtitleZoomInButton"))
+        compare(seekDragStartSpy.count, 0)
+        compare(seekDragFinishSpy.count, 0)
+        compare(seekSpy.count, 0)
     }
     function test_statisticsOverlayUpdatesAndFitsVideo() {
         const overlay = findChild(player, "playbackStatisticsOverlay")

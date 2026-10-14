@@ -41,6 +41,9 @@
 #include <vlc_dialog.h>
 #include <vlc_stream.h>
 #include <vlc_messages.h>
+#include <vlc_memstream.h>
+#include "substext.h"
+#include "libass_plaintext.h"
 
 #include <ass/ass.h>
 
@@ -91,6 +94,11 @@ typedef struct
 
     /* */
     ASS_Track      *p_track;
+    uint64_t       style_revision;
+    bool           use_embedded_style;
+    bool           pixel_size;
+    unsigned       pixel_size_value;
+    unsigned       text_scale;
 } decoder_sys_t;
 static void DecSysRelease( decoder_sys_t *p_sys );
 static void DecSysHold( decoder_sys_t *p_sys );
@@ -103,6 +111,9 @@ typedef struct
 {
     decoder_sys_t *p_dec_sys;
     vlc_tick_t    i_pts;
+    subpicture_t *manual_subtitle;
+    char         *plain_text;
+    bool          manual_active;
 } libass_spu_updater_sys_t;
 
 typedef struct
@@ -150,6 +161,11 @@ static int Create( vlc_object_t *p_this )
     p_sys->p_library  = NULL;
     p_sys->p_renderer = NULL;
     p_sys->p_track    = NULL;
+    p_sys->style_revision = vlc_subpicture_GetTextStyleRevision();
+    p_sys->use_embedded_style = var_InheritBool(p_dec, "sub-text-use-embedded-style");
+    p_sys->pixel_size = var_InheritInteger(p_dec, "sub-text-size-mode") == 1;
+    p_sys->pixel_size_value = var_InheritInteger(p_dec, "sub-text-size-pixels");
+    p_sys->text_scale = var_InheritInteger(p_dec, "sub-text-scale");
 
     /* Create libass library */
     ASS_Library *p_library = p_sys->p_library = ass_library_init();
@@ -362,7 +378,7 @@ static int DecodeBlock( decoder_t *p_dec, block_t *p_block )
 
     if( p_block->i_pts != p_sys->i_last_pts )
     {
-        libass_spu_updater_sys_t *p_spu_sys = malloc( sizeof(*p_spu_sys) );
+        libass_spu_updater_sys_t *p_spu_sys = calloc( 1, sizeof(*p_spu_sys) );
         if( !p_spu_sys )
         {
             block_Release( p_block );
@@ -391,6 +407,29 @@ static int DecodeBlock( decoder_t *p_dec, block_t *p_block )
 
         p_spu_sys->p_dec_sys = p_sys;
         p_spu_sys->i_pts = p_block->i_pts;
+        /* Keep an independent text updater for manual appearance. Its input
+         * preferences are captured while the decoder is still alive. */
+        subtext_updater_sys_t *text_sys = calloc(1, sizeof(*text_sys));
+        if (text_sys != NULL) {
+            SubpictureUpdaterSysRegionInit(&text_sys->region);
+            text_sys->margin_ratio = 0.04f;
+            text_sys->i_next_update = VLC_TICK_INVALID;
+            text_sys->p_default_style = text_style_Create(STYLE_NO_DEFAULTS);
+            SubtitleStyleSnapshot(text_sys, VLC_OBJECT(p_dec));
+            text_sys->style_revision = vlc_subpicture_GetTextStyleRevision();
+            static const struct vlc_spu_updater_ops text_ops = {
+                .update = SubpictureTextUpdate, .destroy = SubpictureTextDestroy,
+            };
+            const subpicture_updater_t text_updater = {.ops = &text_ops, .sys = text_sys};
+            if (text_sys->p_default_style != NULL)
+                p_spu_sys->manual_subtitle = subpicture_New(&text_updater);
+            if (p_spu_sys->manual_subtitle == NULL) {
+                text_style_Delete(text_sys->p_default_style);
+                text_style_Delete(text_sys->user_style);
+                free(text_sys);
+            } else
+                p_spu_sys->manual_subtitle->b_subtitle = true;
+        }
         p_spu->i_start = p_block->i_pts;
         p_spu->i_stop = __MAX( p_sys->i_max_stop, p_block->i_pts + p_block->i_length );
         p_spu->b_ephemer = true;
@@ -421,6 +460,78 @@ static int DecodeBlock( decoder_t *p_dec, block_t *p_block )
 /****************************************************************************
  *
  ****************************************************************************/
+static void MoveRegions(subpicture_t *target, subpicture_t *source)
+{
+    assert(vlc_spu_regions_is_empty(&target->regions));
+    if (!vlc_spu_regions_is_empty(&source->regions))
+        vlc_list_replace(&source->regions, &target->regions);
+    vlc_spu_regions_init(&source->regions);
+}
+
+static void RenderManualSubtitle(subpicture_t *subpic,
+                                 const struct vlc_spu_updater_configuration *cfg,
+                                 vlc_tick_t stream_date, bool mode_changed)
+{
+    libass_spu_updater_sys_t *sys = subpic->updater.sys;
+    subpicture_t *manual = sys->manual_subtitle;
+    if (manual == NULL) {
+        vlc_spu_regions_Clear(&subpic->regions);
+        return;
+    }
+    struct vlc_memstream text;
+    if (vlc_memstream_open(&text) != 0)
+        return;
+    const ASS_Track *track = sys->p_dec_sys->p_track;
+    const long long now = MS_FROM_VLC_TICK(stream_date);
+    bool first = true;
+    for (int i = 0; i < track->n_events; ++i) {
+        const ASS_Event *event = &track->events[i];
+        if (event->Text == NULL || now < event->Start || now - event->Start >= event->Duration)
+            continue;
+        char *plain = AssPlainText(event->Text);
+        if (plain == NULL)
+            continue;
+        if (*plain) {
+            if (!first) vlc_memstream_putc(&text, '\n');
+            vlc_memstream_puts(&text, plain);
+            first = false;
+        }
+        free(plain);
+    }
+    if (vlc_memstream_close(&text) != 0)
+        return;
+    subtext_updater_sys_t *text_sys = manual->updater.sys;
+    const bool changed = sys->plain_text == NULL || strcmp(sys->plain_text, text.ptr) != 0;
+    if (changed) {
+        text_segment_t *segments = *text.ptr ? text_segment_New(text.ptr) : NULL;
+        if (*text.ptr && segments == NULL) {
+            free(text.ptr);
+            return;
+        }
+        free(sys->plain_text);
+        sys->plain_text = text.ptr;
+        text_segment_ChainDelete(text_sys->region.p_segments);
+        text_sys->region.p_segments = segments;
+    } else
+        free(text.ptr);
+
+    /* Keep cue gaps region-free, like libass's empty frame. */
+    if (*sys->plain_text == '\0') {
+        vlc_spu_regions_Clear(&subpic->regions);
+        return;
+    }
+    if (mode_changed)
+        vlc_spu_regions_Clear(&subpic->regions);
+    MoveRegions(manual, subpic);
+    /* Rebuild when the active text changes even if video geometry is stable. */
+    if (changed || mode_changed)
+        text_sys->scaling_modes_flags = UINT64_MAX;
+    SubpictureTextUpdate(manual, cfg);
+    MoveRegions(subpic, manual);
+    subpic->i_original_picture_width = manual->i_original_picture_width;
+    subpic->i_original_picture_height = manual->i_original_picture_height;
+}
+
 static void SubpictureUpdate( subpicture_t *p_subpic,
                               const struct vlc_spu_updater_configuration *cfg )
 {
@@ -435,7 +546,36 @@ static void SubpictureUpdate( subpicture_t *p_subpic,
 
     vlc_mutex_lock( &p_sys->lock );
 
-    if( b_fmt_src || b_fmt_dst )
+    const uint64_t revision = vlc_subpicture_GetTextStyleRevision();
+    if (p_sys->style_revision != revision) {
+        p_sys->style_revision = revision;
+        p_sys->use_embedded_style = config_GetInt("sub-text-use-embedded-style");
+        p_sys->pixel_size = config_GetInt("sub-text-size-mode") == 1;
+        p_sys->pixel_size_value = config_GetInt("sub-text-size-pixels");
+        p_sys->text_scale = config_GetInt("sub-text-scale");
+    }
+    const vlc_tick_t i_stream_date = p_spusys->i_pts + (cfg->pts - p_subpic->i_start);
+    const bool manual = !p_sys->use_embedded_style;
+    const bool mode_changed = manual != p_spusys->manual_active;
+    p_spusys->manual_active = manual;
+    if (manual) {
+        RenderManualSubtitle(p_subpic, cfg, i_stream_date, mode_changed);
+        vlc_mutex_unlock(&p_sys->lock);
+        return;
+    }
+
+    double scale = p_sys->text_scale / 100.0;
+    if (p_sys->pixel_size && p_fmt_dst->i_visible_height > 0) {
+        const ASS_Track *track = p_sys->p_track;
+        const double script_height = track->PlayResY > 0 ? track->PlayResY : 288;
+        const double authored_size = track->default_style >= 0 && track->default_style < track->n_styles
+            ? track->styles[track->default_style].FontSize : 0;
+        const double size = authored_size > 0 ? authored_size : script_height * STYLE_DEFAULT_REL_FONT_SIZE / 100;
+        scale = p_sys->pixel_size_value * script_height / (size * p_fmt_dst->i_visible_height);
+    }
+    ass_set_font_scale(p_sys->p_renderer, scale);
+
+    if( b_fmt_src || b_fmt_dst || mode_changed )
     {
         ass_set_frame_size( p_sys->p_renderer, p_fmt_dst->i_visible_width, p_fmt_dst->i_visible_height );
 #if LIBASS_VERSION > 0x01010000
@@ -451,12 +591,11 @@ static void SubpictureUpdate( subpicture_t *p_subpic,
     }
 
     /* */
-    const vlc_tick_t i_stream_date = p_spusys->i_pts + (cfg->pts - p_subpic->i_start);
     int i_changed;
     ASS_Image *p_img = ass_render_frame( p_sys->p_renderer, p_sys->p_track,
                                          MS_FROM_VLC_TICK( i_stream_date ), &i_changed );
 
-    if( !i_changed && !b_fmt_src && !b_fmt_dst &&
+    if( !i_changed && !b_fmt_src && !b_fmt_dst && !mode_changed &&
         (p_img != NULL) == (!vlc_spu_regions_is_empty(&p_subpic->regions)) )
     {
         vlc_mutex_unlock( &p_sys->lock );
@@ -526,6 +665,9 @@ static void SubpictureDestroy( subpicture_t *p_subpic )
     libass_spu_updater_sys_t *p_spusys = p_subpic->updater.sys;
 
     DecSysRelease( p_spusys->p_dec_sys );
+    if (p_spusys->manual_subtitle != NULL)
+        subpicture_Delete(p_spusys->manual_subtitle);
+    free(p_spusys->plain_text);
     free( p_spusys );
 }
 

@@ -71,7 +71,7 @@ FocusScope {
         playing: Player.playingState === Player.PLAYING_STATE_PLAYING
         started: Player.isStarted
         hasVideo: MainCtx.hasEmbededVideo
-        seekable: Player.seekable
+        seekable: started && Player.seekable
         pausable: Player.pausable
         hasPrevious: MainPlaylistController.hasPrev
         hasNext: MainPlaylistController.hasNext
@@ -86,19 +86,19 @@ FocusScope {
         subtitleTimelineCues: Player.subtitleTimelineCues
         subtitleTimelineState: Player.subtitleTimelineState
         subtitleDelayMS: Player.subtitleDelayMS
-        durationSeconds: Player.lengthSeconds
+        durationSeconds: started ? Player.lengthSeconds : 0
         onSubtitleDelayRequested: milliseconds => playerPreferences.stage("redesign-subtitle-delay", milliseconds)
         maximized: MainCtx.intfMainWindow.visibility === Window.Maximized
         showWindowButtons: MainCtx.clientSideDecoration && !fullscreen
-        position: Player.position
+        position: started ? Player.position : 0
         volume: Player.volume
         maxVolume: MainCtx.maxVolume / 100
         buffering: Player.buffering
         statistics: Player.playbackStatistics
         mediaTitle: Player.title || Player.name || qsTr("VLC Media Player")
         locationTitle: view.libraryItem ? view.libraryItem.heading : qsTr("Videos")
-        timeText: rootPlayer.clockText(Player.time)
-        lengthText: rootPlayer.clockText(Player.length)
+        timeText: started ? rootPlayer.clockText(Player.time) : "00:00:00"
+        lengthText: started ? rootPlayer.clockText(Player.length) : "00:00:00"
         artist: Player.artist
         artwork: Player.artwork
         resumeAvailable: rootPlayer.resumeAvailable

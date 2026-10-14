@@ -153,7 +153,7 @@ endif
 
 ### SPU ###
 
-liblibass_plugin_la_SOURCES = codec/libass.c
+liblibass_plugin_la_SOURCES = codec/libass.c codec/libass_plaintext.h
 liblibass_plugin_la_CPPFLAGS = $(AM_CPPFLAGS) $(CPPFLAGS_libass)
 liblibass_plugin_la_CFLAGS = $(AM_CFLAGS) $(LIBASS_CFLAGS)
 liblibass_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(codec_RPATH)

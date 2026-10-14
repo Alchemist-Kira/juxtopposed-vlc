@@ -199,6 +199,12 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_input_subtitle_ass_text',
+    'sources' : files('input/subtitle_ass_text.c'),
+    'suite' : ['src', 'test_src'],
+}
+
+vlc_tests += {
     'name' : 'test_src_input_subtitle_duration',
     'sources' : files('input/subtitle_duration.c'),
     'suite' : ['src', 'test_src'],

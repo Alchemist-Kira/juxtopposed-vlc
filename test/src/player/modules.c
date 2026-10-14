@@ -7,6 +7,50 @@
 
 #include "common.h"
 
+#ifdef VIDEO_FILTER_TEST
+#include <stdatomic.h>
+extern atomic_uint video_filter_opens;
+extern atomic_uint video_filter_closes;
+extern atomic_uint video_filter_frame_value;
+extern vlc_mutex_t video_filter_lock;
+extern vlc_cond_t video_filter_wait;
+
+static void video_filter_Notify(void)
+{
+    vlc_mutex_lock(&video_filter_lock);
+    vlc_cond_signal(&video_filter_wait);
+    vlc_mutex_unlock(&video_filter_lock);
+}
+
+static picture_t *video_filter_Filter(filter_t *filter, picture_t *picture)
+{
+    atomic_store(&video_filter_frame_value,
+                 var_GetInteger(filter, "test-video-filter-value"));
+    video_filter_Notify();
+    return picture;
+}
+
+static void video_filter_Close(filter_t *filter)
+{
+    (void) filter;
+    atomic_fetch_add(&video_filter_closes, 1);
+    video_filter_Notify();
+}
+
+static int video_filter_Open(filter_t *filter)
+{
+    int ret = var_Create(filter, "test-video-filter-value", VLC_VAR_INTEGER | VLC_VAR_DOINHERIT);
+    if (ret != VLC_SUCCESS)
+        return ret;
+    static const struct vlc_filter_operations ops = {
+        .filter_video = video_filter_Filter, .close = video_filter_Close,
+    };
+    filter->ops = &ops;
+    atomic_fetch_add(&video_filter_opens, 1);
+    return VLC_SUCCESS;
+}
+#endif
+
 #define MODULE_NAME test_src_player
 #undef VLC_DYNAMIC_PLUGIN
 #include <vlc_plugin.h>
@@ -178,6 +222,13 @@ vlc_module_begin()
      * Insert our own resampler that keeps blocks and pts untouched. */
     set_capability ("audio resampler", 9999)
     set_callback (resampler_Open)
+#ifdef VIDEO_FILTER_TEST
+    add_submodule()
+    set_capability("video filter", 0)
+    add_shortcut("test-video-filter")
+    add_integer("test-video-filter-value", 1, "Test value", NULL)
+    set_callback_video_filter(video_filter_Open)
+#endif
 vlc_module_end()
 
 VLC_EXPORT const vlc_plugin_cb vlc_static_modules[] = {

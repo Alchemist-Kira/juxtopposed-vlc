@@ -21,6 +21,7 @@ player_programs = \
 	test_src_player_media \
 	test_src_player_next_prev \
 	test_src_player_outputs \
+	test_src_player_video_filters \
 	test_src_player_pause \
 	test_src_player_programs \
 	test_src_player_seeks \
@@ -293,6 +294,11 @@ test_src_player_next_prev_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_outputs_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/outputs.c
 test_src_player_outputs_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
+
+test_src_player_video_filters_SOURCES = src/player/common.h src/player/modules.c \
+	src/player/video_filters.c
+test_src_player_video_filters_CPPFLAGS = $(AM_CPPFLAGS) -DVIDEO_FILTER_TEST
+test_src_player_video_filters_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_pause_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/pause.c
 test_src_player_pause_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)

@@ -1765,6 +1765,9 @@ void PlayerController::setTime(VLCTime new_time)
 void PlayerController::setPosition(double position)
 {
     Q_D(PlayerController);
+    if (!std::isfinite(position))
+        return;
+    position = std::clamp(position, 0.0, 1.0);
     if (qFuzzyCompare(d->m_position, position))
         return;
 
@@ -1809,6 +1812,9 @@ void PlayerController::jumpTime(VLCTime i_time)
 void PlayerController::jumpToPos( double new_pos )
 {
     Q_D(PlayerController);
+    if (!std::isfinite(new_pos))
+        return;
+    new_pos = std::clamp(new_pos, 0.0, 1.0);
     {
         vlc_player_locker lock{ d->m_player };
         if( !d->isCurrentItemSynced() )

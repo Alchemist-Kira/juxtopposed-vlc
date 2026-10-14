@@ -160,6 +160,20 @@ TestCase {
         wait(220)
         compare([viewport.x, viewport.y, viewport.width, viewport.height], before)
     }
+    function test_dragPastSeekbarEndClampsAndCancelsWhenMediaStops() {
+        const seek = findChild(player, "seekBar")
+        player.position = 0.95
+        mousePress(seek, seek.width - 20, seek.height / 2)
+        mouseMove(seek, seek.width + 200, seek.height / 2, 40)
+        compare(player.position, 1)
+        verify(seekSpy.count > 0)
+        player.started = false
+        player.seekable = false
+        tryCompare(seek, "pressed", false)
+        verify(!seek.previewActive)
+        mouseRelease(seek, seek.width + 200, seek.height / 2)
+        player.seekable = true
+    }
     function test_statisticsOverlayUpdatesAndFitsVideo() {
         const overlay = findChild(player, "playbackStatisticsOverlay")
         verify(!overlay.visible)

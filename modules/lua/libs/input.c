@@ -39,6 +39,7 @@
 #include <vlc_player.h>
 
 #include <assert.h>
+#include <math.h>
 
 #include "../vlc.h"
 #include "input.h"
@@ -418,7 +419,14 @@ static int vlclua_player_next_video_frame(lua_State *L)
 static int vlclua_player_seek_by_pos_(lua_State *L,
                                       enum vlc_player_whence whence)
 {
-    float position = luaL_checknumber(L, 1);
+    double position = luaL_checknumber(L, 1);
+    if (!isfinite(position))
+        return luaL_argerror(L, 1, "position must be finite");
+
+    /* User input, including HTTP percentages, may exceed the seek range. */
+    position = VLC_CLIP(position,
+                        whence == VLC_PLAYER_WHENCE_ABSOLUTE ? 0.0 : -1.0,
+                        1.0);
 
     vlc_player_t *player = vlclua_get_player_internal(L);
 

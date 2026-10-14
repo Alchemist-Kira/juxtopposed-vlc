@@ -10,11 +10,6 @@ See the [Releases page](https://github.com/dsojevic/vlc/releases) for Windows be
 | --- | --- |
 | ![Library sidebar over the video](doc/images/redesign/sidebar.png) | ![Video settings over the video](doc/images/redesign/video-settings.png) |
 
-These screenshots show the native Linux interface with the supplied pixel-cat video.
-The sidebar and settings panel sit over the video. The original design is by
-[Juxtopposed](https://www.juxtopposed.com/), under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-
 **VLC** is a libre and open source **media player** and **multimedia engine**,
 focused on **playing everything**, and **running everywhere**.
 

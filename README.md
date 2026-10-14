@@ -1,5 +1,20 @@
 # VLC media player
 
+This fork adapts [Juxtopposed’s VLC redesign](https://www.figma.com/community/file/1691465999134370980/vlc-redesign)
+for VLC’s native interface. The interface and settings workflow are in active development.
+See the [Releases page](https://github.com/dsojevic/vlc/releases) for Windows beta builds.
+
+![Simple player with the pixel-cat video](doc/images/redesign/player.png)
+
+| Library sidebar | Video settings |
+| --- | --- |
+| ![Library sidebar over the video](doc/images/redesign/sidebar.png) | ![Video settings over the video](doc/images/redesign/video-settings.png) |
+
+These screenshots show the native Linux interface with the supplied pixel-cat video.
+The sidebar and settings panel sit over the video. The original design is by
+[Juxtopposed](https://www.juxtopposed.com/), under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 **VLC** is a libre and open source **media player** and **multimedia engine**,
 focused on **playing everything**, and **running everywhere**.
 

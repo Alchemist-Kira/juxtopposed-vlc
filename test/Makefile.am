@@ -65,6 +65,7 @@ check_PROGRAMS = \
 	test_src_input_decoder \
 	test_src_input_subtitle_style \
 	test_src_input_subtitle_duration \
+	test_src_input_overlay_opacity \
 	test_src_input_subtitle_ass_text \
 	test_src_interface_dialog \
 	test_src_media_source \
@@ -264,6 +265,8 @@ test_src_player_delays_SOURCES = src/player/common.h src/player/modules.c \
 test_src_player_delays_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_input_subtitle_style_SOURCES = src/input/subtitle_style.c
 test_src_input_subtitle_style_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_input_overlay_opacity_SOURCES = src/input/overlay_opacity.c
+test_src_input_overlay_opacity_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_input_subtitle_duration_SOURCES = src/input/subtitle_duration.c
 test_src_input_subtitle_duration_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_input_subtitle_ass_text_SOURCES = src/input/subtitle_ass_text.c

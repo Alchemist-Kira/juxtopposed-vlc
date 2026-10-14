@@ -317,6 +317,11 @@ static subpicture_t *Filter( filter_t *p_filter, vlc_tick_t date )
     p_region->i_y = p_sys->i_yoff;
 
     p_region->p_text->style = text_style_Duplicate( p_sys->p_style );
+    // Apply opacity once to the complete rendered overlay. Fading each text
+    // layer separately lets its dark outline show through the glyph fill.
+    p_spu->i_alpha = p_sys->p_style->i_font_alpha;
+    if( p_region->p_text->style )
+        p_region->p_text->style->i_font_alpha = 255;
 
 out:
     vlc_mutex_unlock( &p_sys->lock );

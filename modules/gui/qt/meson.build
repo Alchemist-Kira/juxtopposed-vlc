@@ -1364,6 +1364,25 @@ if qt6_dep.found()
 
     qtest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['Test'], required: false)
     if qtest_qt6_dep.found()
+        if x11_dep.found() and xcb_dep.found() and qt_features_xcb
+            vlc_tests += {
+                'name': 'test_qt_x11_surface_size',
+                'sources': files(
+                    'tests/test_x11_surface_size.cpp',
+                    'maininterface/compositor_x11_uisurface.cpp',
+                    'maininterface/compositor_common.cpp'),
+                'moc_sources': files('tests/test_x11_surface_size.cpp'),
+                'moc_headers': files(
+                    'maininterface/compositor_x11_uisurface.hpp',
+                    'maininterface/compositor_common.hpp'),
+                'suite': ['qt'],
+                'include_directories': qt_include_dir,
+                'link_with': [libvlccore, libvlc],
+                'link_args': qt_link_args,
+                'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            }
+        endif
+
         vlc_tests += {
             'name': 'test_qt_ml_model',
             'sources': files(

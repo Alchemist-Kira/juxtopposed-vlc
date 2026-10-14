@@ -157,7 +157,10 @@ void CompositorX11UISurface::setContent(QQuickItem* rootItem)
     m_rootItem->setParent(m_uiWindow->contentItem()); // QQuickView also does this
     m_rootItem->setParentItem(m_uiWindow->contentItem());
 
-    m_rootItem->setSize(size());
+    // The main window can restore its geometry before the QML root is ready.
+    // Size the first layout from that window, not the child surface default.
+    resize(m_renderWindow->size());
+    updateSizes();
 
     m_rootItem->forceActiveFocus();
 

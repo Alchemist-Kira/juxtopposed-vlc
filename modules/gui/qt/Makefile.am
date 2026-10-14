@@ -1853,6 +1853,31 @@ test_ml_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_ml_model
 TESTS += test_ml_model
 
+if HAVE_X
+if HAVE_QT_XCB
+if HAVE_XCB
+
+test_x11_surface_size_SOURCES = \
+	tests/test_x11_surface_size.cpp \
+	maininterface/compositor_x11_uisurface.hpp maininterface/compositor_x11_uisurface.cpp \
+	maininterface/compositor_common.hpp maininterface/compositor_common.cpp
+nodist_test_x11_surface_size_SOURCES = \
+	tests/test_x11_surface_size.moc \
+	maininterface/compositor_x11_uisurface.moc.cpp \
+	maininterface/compositor_common.moc.cpp
+BUILT_SOURCES += tests/test_x11_surface_size.moc
+CLEANFILES += tests/test_x11_surface_size.moc
+test_x11_surface_size_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_x11_surface_size_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_x11_surface_size_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_x11_surface_size_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_x11_surface_size
+TESTS += test_x11_surface_size
+
+endif
+endif
+endif
+
 # test_renderer_manager_model
 
 test_renderer_manager_model_SOURCES = \

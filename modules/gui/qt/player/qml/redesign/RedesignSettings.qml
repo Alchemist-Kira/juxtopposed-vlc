@@ -23,6 +23,7 @@ C.Pane {
     property string page: "playback"
     property bool showStatistics: false
     property int sleepTimerMinutes: 0
+    required property var preferenceStore
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal pageRequested(string page)
     signal closeRequested()
@@ -86,8 +87,8 @@ C.Pane {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
                     spacing: theme.dp(22)
                     visible: root.page === "audio"
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Audio tracks"); trackModel: Player.audioTracks; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Output device"); trackModel: Player.audioDevices; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
+                    Layout.topMargin: theme.dp(11)
+                    RedesignTrackDefaults { Layout.fillWidth: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
                     Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
                     Text { text: qsTr("Synchronization"); color: theme.bright; font.pixelSize: theme.dp(16) }
                     RedesignSettingSlider {
@@ -107,8 +108,8 @@ C.Pane {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
                     spacing: theme.dp(22)
                     visible: root.page === "subtitles"
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Subtitle tracks"); trackModel: Player.subtitleTracks; allowDisable: true; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected); onDisableRequested: root.disable(trackModel) }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "add"; caption: qsTr("Add subtitle file"); text: caption; onClicked: DialogsProvider.loadSubtitlesFile() }
+                    Layout.topMargin: theme.dp(11)
+                    RedesignTrackDefaults { Layout.fillWidth: true; subtitles: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
                     Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
                     Text { text: qsTr("Synchronization"); color: theme.bright; font.pixelSize: theme.dp(16) }
                     RedesignSettingSlider {
@@ -151,6 +152,12 @@ C.Pane {
                 }
                 Item { height: theme.dp(20) }
             }
+        }
+        RowLayout {
+            visible: root.preferenceStore.errorMessage.length > 0
+            Layout.fillWidth: true; Layout.margins: theme.dp(12)
+            Text { Layout.fillWidth: true; text: root.preferenceStore.errorMessage; wrapMode: Text.WordWrap; color: theme.danger; font.pixelSize: theme.dp(12) }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Retry"); text: caption; onClicked: root.preferenceStore.save() }
         }
         Rectangle {
             visible: root.page !== "playback"

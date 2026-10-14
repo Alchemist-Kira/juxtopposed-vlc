@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as C
+import QtQuick.Templates as T
 
 ColumnLayout {
     id: root
@@ -23,6 +24,7 @@ ColumnLayout {
     readonly property string editor: presentation.editor || description.editor || ""
     readonly property real factor: presentation.factor || 1
     readonly property bool fullWidth: !!presentation.fullWidth
+    readonly property bool compact: !!presentation.compact
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property bool available: description.kind !== undefined
     visible: available
@@ -35,12 +37,13 @@ ColumnLayout {
     }
     readonly property var displayedValue: presentation.inverted ? !currentValue : currentValue
     readonly property Component editorComponent: editor === "action" ? actionEditor : editor === "startup-volume" ? startupVolumeEditor : editor === "slider" ? sliderEditor
+        : editor === "track" ? trackEditor
         : description.kind === "bool" && !choices.length ? toggleEditor
         : editor === "color" ? colorEditor
         : choices.length ? choiceEditor : textEditor
     RowLayout {
         Layout.fillWidth: true
-        Layout.minimumHeight: !available ? 0 : theme.dp(root.editor === "startup-volume" ? 92 : root.editor === "slider" ? 68 : root.choices.length ? 46 : root.description.kind === "bool" ? 42 : 48)
+        Layout.minimumHeight: !available ? 0 : theme.dp(root.compact ? 52 : root.editor === "startup-volume" ? 92 : root.editor === "slider" ? 68 : root.choices.length ? 46 : root.description.kind === "bool" ? 42 : 48)
         spacing: theme.dp(10)
         implicitHeight: available ? Math.max(theme.dp(44), labelText.implicitHeight + theme.dp(10)) : 0
         Item {
@@ -60,7 +63,7 @@ ColumnLayout {
                 name: "info"; color: theme.foreground; opacity: 0.4
                 width: theme.dp(16); height: width
                 x: labelText.width + theme.dp(8); anchors.verticalCenter: parent.verticalCenter
-                visible: !!root.description.help
+                visible: !!root.description.help && !root.compact
             }
             C.ToolTip.text: root.description.help || ""
             C.ToolTip.visible: rowHover.hovered && C.ToolTip.text.length > 0
@@ -79,7 +82,7 @@ ColumnLayout {
             visible: !root.fullWidth
             active: visible
             enabled: root.editorEnabled
-            Layout.preferredWidth: Math.min(theme.dp(320), Math.max(theme.dp(150), root.width * 0.43))
+            Layout.preferredWidth: root.compact ? theme.dp(138) : Math.min(theme.dp(320), Math.max(theme.dp(150), root.width * 0.43))
             Layout.preferredHeight: item ? item.implicitHeight || theme.dp(34) : theme.dp(34)
             sourceComponent: root.editorComponent
         }
@@ -241,6 +244,38 @@ ColumnLayout {
                 Rectangle { width: theme.dp(20); height: width; color: parent.parent.chosenColor; border.color: theme.border; radius: theme.dp(2) }
             }
             onClicked: { const color = root.backend.chooseColor(chosenColor); if (color.length) root.commit(parseInt(color.slice(1), 16)) }
+        }
+    }
+    Component {
+        id: trackEditor
+        T.SpinBox {
+            id: trackField
+            objectName: "preferenceTrackEditor"
+            implicitHeight: theme.dp(34)
+            from: 0; to: root.description.maximum
+            value: Number(root.currentValue)
+            editable: true
+            font.pixelSize: theme.dp(14)
+            leftPadding: theme.dp(14); rightPadding: theme.dp(10)
+            textFromValue: (value, locale) => value === 0 ? qsTr("Automatic") : String(value)
+            valueFromText: (text, locale) => {
+                const input = text.trim()
+                if (input.toLocaleLowerCase() === qsTr("Automatic").toLocaleLowerCase()) return 0
+                const number = Number(input)
+                return input.length && Number.isInteger(number) && number >= 1 && number <= to ? number : value
+            }
+            contentItem: TextInput {
+                text: trackField.displayText; font: trackField.font; color: theme.foreground
+                selectionColor: theme.accent; selectedTextColor: theme.background
+                verticalAlignment: TextInput.AlignVCenter; selectByMouse: true; clip: true
+                onActiveFocusChanged: if (activeFocus) selectAll()
+            }
+            background: Rectangle {
+                radius: theme.dp(4); color: theme.field
+                border.color: trackField.activeFocus ? theme.accent : theme.background
+            }
+            Accessible.name: root.label
+            onValueModified: root.commit(value)
         }
     }
     Component {

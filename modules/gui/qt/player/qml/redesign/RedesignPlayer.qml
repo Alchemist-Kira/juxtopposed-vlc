@@ -22,6 +22,7 @@ FocusScope {
         return parts.length === 2 ? "00:" + parts.join(":") : parts.join(":")
     }
     RedesignSleepTimer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
+    RedesignPreferences { id: playerPreferences; ctx: MainCtx; autoSave: true }
     Binding {
         target: MainCtx
         property: "preferHotkeys"
@@ -172,6 +173,8 @@ FocusScope {
         }
         settingsContent: Component {
             RedesignSettings {
+                preferenceStore: playerPreferences
+                Component.onCompleted: playerPreferences.refresh()
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 page: view.settingsPage
                 showStatistics: view.showStatistics

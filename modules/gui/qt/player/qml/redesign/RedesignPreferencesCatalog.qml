@@ -75,7 +75,7 @@ QtObject {
                 ["playlist-cork", qsTr("Pause when another app uses audio")] ] },
             { title: qsTr("Tracks"), rows: [
                 ["preferred-resolution", qsTr("Preferred video quality")], ["menu-language", qsTr("Preferred menu language")],
-                ["audio-track", qsTr("Default audio track")], ["sub-track", qsTr("Default subtitle track")] ] },
+                ["redesign-audio-track", qsTr("Default audio track")], ["redesign-sub-track", qsTr("Default subtitle track")] ] },
             { title: qsTr("Order"), rows: [
                 ["redesign-repeat", qsTr("Repeat")], ["random", qsTr("Shuffle")],
                 ["play-and-stop", qsTr("Stop after each item")], ["redesign-after-playback", qsTr("When playback finishes")] ] },
@@ -108,10 +108,10 @@ QtObject {
                 ["audio-spatial-mode", qsTr("Spatial audio mode"), {enabledWhen: "audio-spatial"}],
                 ["filter:audio-filter:stereowiden", qsTr("Stereo widening")], ["filter:audio-filter:compressor", qsTr("Compressor")],
                 ["pitch-shift", qsTr("Pitch shift")], ["filter:audio-filter:chorus_flanger", qsTr("Chorus/flanger")], ["filter:audio-filter:karaoke", qsTr("Karaoke")] ] },
-            { title: qsTr("Tracks"), rows: [ ["audio-language", qsTr("Preferred audio language")], ["audio-desync", qsTr("Audio delay"), {factor: 0.001, decimals: 2, suffix: " s"}] ] },
+            { title: qsTr("Tracks"), rows: [ ["redesign-audio-language", qsTr("Preferred audio language")], ["audio-desync", qsTr("Audio delay"), {factor: 0.001, decimals: 2, suffix: " s"}] ] },
             { title: qsTr("Visualization"), rows: [ ["audio-visual", qsTr("Visualizer")] ] } ],
         subtitles: [
-            { title: qsTr("Tracks & Languages"), rows: [ ["spu", qsTr("Enable subtitles")], ["sub-language", qsTr("Preferred language")], ["subsdec-encoding", qsTr("Text encoding")] ] },
+            { title: qsTr("Tracks & Languages"), rows: [ ["spu", qsTr("Enable subtitles")], ["redesign-sub-language", qsTr("Preferred language")], ["subsdec-encoding", qsTr("Text encoding")] ] },
             { title: qsTr("Loading Subtitles"), rows: [ ["sub-autodetect-file", qsTr("Load subtitle files automatically")], ["sub-autodetect-fuzzy", qsTr("File name matching")] ] },
             { title: qsTr("Appearance"), rows: [ ["freetype-font", qsTr("Font")],
                 ["sub-text-scale", qsTr("Font size"), {choices: [{label: qsTr("Automatic"), value: 100}, {label: qsTr("Very small"), value: 50}, {label: qsTr("Small"), value: 75}, {label: qsTr("Large"), value: 150}, {label: qsTr("Very large"), value: 200}]}],

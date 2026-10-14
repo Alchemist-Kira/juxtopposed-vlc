@@ -5,8 +5,10 @@
 #include <vlc_plugin.h>
 #include <vlc_aout.h>
 #include <vlc_player.h>
+#include <vlc_iso_lang.h>
 #include "../../../../audio_filter/equalizer_presets.h"
 #include <cmath>
+#include <climits>
 #include <algorithm>
 #include <QFileDialog>
 #include <QColorDialog>
@@ -20,6 +22,33 @@
 #include "util/vlchotkeyconverter.hpp"
 
 namespace {
+QString trackOption(const QString& name)
+{
+    if (name == QLatin1String("redesign-audio-track")) return QStringLiteral("audio-track");
+    if (name == QLatin1String("redesign-sub-track")) return QStringLiteral("sub-track");
+    return {};
+}
+
+QString languageOption(const QString& name)
+{
+    if (name == QLatin1String("redesign-audio-language")) return QStringLiteral("audio-language");
+    if (name == QLatin1String("redesign-sub-language")) return QStringLiteral("sub-language");
+    return {};
+}
+
+QString languageNames(const QString& codes)
+{
+    if (codes.isEmpty()) return qtr("Automatic");
+    QStringList names;
+    for (const auto& code : codes.split(QLatin1Char(','))) {
+        const auto bytes = code.trimmed().toUtf8();
+        const auto* language = vlc_find_iso639(bytes.constData(), true);
+        // Keep unrecognized codes and native fallback tokens editable.
+        names.append(language ? qfu(language->psz_eng_name) : code.trimmed());
+    }
+    return names.join(QStringLiteral(", "));
+}
+
 bool supportsWebRemote()
 {
     // Lua's HTTP interface is a submodule: its shortcut need not be the
@@ -164,6 +193,10 @@ void RedesignPreferences::refresh()
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (const auto option = trackOption(name); !option.isEmpty())
+        return value(option).toLongLong() + 1;
+    if (const auto option = languageOption(name); !option.isEmpty())
+        return languageNames(value(option).toString());
     if (name == QLatin1String("redesign-audio-device")) {
         const QString module = audioOutputModule();
         const QString configured = value(QStringLiteral("audio-device-default")).toString();
@@ -214,6 +247,15 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (!trackOption(name).isEmpty())
+        return {{QStringLiteral("kind"), QStringLiteral("integer")}, {QStringLiteral("editor"), QStringLiteral("track")},
+            {QStringLiteral("minimum"), 0}, {QStringLiteral("maximum"), INT_MAX},
+            {QStringLiteral("defaultValue"), 0}, {QStringLiteral("value"), value(name)},
+            {QStringLiteral("help"), qtr("Choose a track for the next video. Track numbers start at 1. Automatic uses the language setting.")}};
+    if (!languageOption(name).isEmpty())
+        return {{QStringLiteral("kind"), QStringLiteral("string")}, {QStringLiteral("defaultValue"), QString()},
+            {QStringLiteral("value"), value(name)},
+            {QStringLiteral("help"), qtr("Enter a language name or code. Separate languages with commas. This sets the track to Automatic for the next video.")}};
     if (name == QLatin1String("redesign-reset-all"))
         return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
             {QStringLiteral("buttonLabel"), qtr("Reset")}, {QStringLiteral("destructive"), true},
@@ -336,6 +378,41 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (const auto option = trackOption(name); !option.isEmpty()) {
+        bool valid = false;
+        const auto number = proposed.toLongLong(&valid);
+        if (!stage(option, valid && number >= 0 && number <= INT_MAX ? QVariant(number - 1) : QVariant(QStringLiteral("invalid")))) return false;
+        // A legacy stream ID would otherwise override the chosen number.
+        return stage(option + QStringLiteral("-id"), QString());
+    }
+    if (const auto option = languageOption(name); !option.isEmpty()) {
+        const QString input = proposed.toString().trimmed();
+        if (input == value(name).toString()) {
+            m_invalid.remove(name);
+            return stage(option, value(option));
+        }
+        QStringList codes;
+        bool valid = true;
+        if (!input.isEmpty() && input.compare(qtr("Automatic"), Qt::CaseInsensitive) != 0) {
+            for (const auto& token : input.split(QLatin1Char(','))) {
+                const auto code = token.trimmed().toLower().toUtf8();
+                const auto* language = code.isEmpty() ? nullptr : vlc_find_iso639(code.constData(), true);
+                if (language) codes.append(qfu(*language->psz_iso639_1 ? language->psz_iso639_1 : language->psz_iso639_2T));
+                else if (code == "any" || code == "none") codes.append(qfu(code.constData()));
+                else { valid = false; break; }
+            }
+        }
+        if (!valid) {
+            m_invalid.insert(name);
+            m_error = qtr("Enter a language name or a two or three letter language code.");
+            ++m_revision; emit changed(); return false;
+        }
+        m_invalid.remove(name);
+        if (!stage(option, codes.join(QLatin1Char(',')))) return false;
+        const QString track = option == QLatin1String("audio-language") ? QStringLiteral("audio-track") : QStringLiteral("sub-track");
+        stage(track, -1);
+        return stage(track + QStringLiteral("-id"), QString());
+    }
     if (name == QLatin1String("audio-spatial") || name == QLatin1String("audio-spatial-mode")) {
         if (!module_exists("spatialaudio")) return false;
         if (name == QLatin1String("audio-spatial-mode") && proposed.toInt() != AOUT_MIX_MODE_BINAURAL
@@ -488,6 +565,17 @@ bool RedesignPreferences::save()
     // Apply audio effects to the current output after persistence succeeds.
     // Defaults remain available for the next output if nothing is playing.
     auto* player = m_ctx->getIntf()->p_player;
+    // Language preferences are cached by the player. Updating the config alone
+    // would leave subsequent episodes using the language from player creation.
+    vlc_player_Lock(player);
+    for (const auto category : {AUDIO_ES, SPU_ES}) {
+        const QString option = category == AUDIO_ES ? QStringLiteral("audio-language") : QStringLiteral("sub-language");
+        if (previous.contains(option)) {
+            const auto language = value(option).toString().toUtf8();
+            vlc_player_SelectCategoryLanguage(player, category, language.constData());
+        }
+    }
+    vlc_player_Unlock(player);
     const bool deviceChanged = previous.contains(QStringLiteral("audio-device-default"))
         || previous.contains(QStringLiteral("audio-device-default-module"))
         || previous.contains(audioOutputModule() + QStringLiteral("-audio-device"));
@@ -624,7 +712,10 @@ QVariantList RedesignPreferences::catalog(const QString& category, const QString
         if (!search.isEmpty()) {
             if (!entry.name.contains(search, Qt::CaseInsensitive) && !entry.title.contains(search, Qt::CaseInsensitive)) continue;
         } else if (entry.category != category) continue;
-        result.append(QVariantMap{{QStringLiteral("name"), entry.name}, {QStringLiteral("title"), entry.title}});
+        const bool track = entry.name == QLatin1String("audio-track") || entry.name == QLatin1String("sub-track");
+        const bool language = entry.name == QLatin1String("audio-language") || entry.name == QLatin1String("sub-language");
+        const auto name = track || language ? QStringLiteral("redesign-") + entry.name : entry.name;
+        result.append(QVariantMap{{QStringLiteral("name"), name}, {QStringLiteral("title"), entry.title}});
     }
     return result;
 }

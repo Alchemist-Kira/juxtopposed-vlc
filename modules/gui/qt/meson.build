@@ -750,6 +750,7 @@ qml_modules += {
        'player/qml/redesign/RedesignSleepTimer.qml',
        'player/qml/redesign/RedesignModelChoice.qml',
        'player/qml/redesign/RedesignPlaybackSettings.qml',
+       'player/qml/redesign/RedesignTrackDefaults.qml',
        'player/qml/redesign/RedesignSwitchRow.qml',
        'player/qml/redesign/RedesignStatistics.qml',
        'player/qml/redesign/RedesignSettings.qml',

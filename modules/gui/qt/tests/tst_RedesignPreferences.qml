@@ -17,6 +17,8 @@ TestCase {
         function value(name) { return values[name] }
         function refresh() { refreshCount++; revision++ }
         function describe(name) {
+            if (name.endsWith("-track")) return {kind: "integer", editor: "track", maximum: 2147483647}
+            if (name.endsWith("-language")) return {kind: "string"}
             if (name === "folderAction") return {kind: "action", editor: "action", buttonLabel: "Open"}
             if (name === "audio-spatial-mode") return {kind: "integer", title: "Spatial audio mode", choices: [{label: "Headphone virtualization", value: 2}, {label: "Surround speakers", value: 0}]}
             if (name === "volumeStep") return {kind: "float", title: "Volume step", choices: []}
@@ -54,6 +56,11 @@ TestCase {
         visible: false
     }
     RedesignPreferencesCatalog { id: catalog }
+    RedesignTrackDefaults {
+        id: defaults
+        width: 352; y: 450; backend: store
+        visible: false
+    }
     Column {
         width: parent.width
         RedesignPreferenceRow {
@@ -148,6 +155,7 @@ TestCase {
     SignalSpy { id: confirmationAccepted; target: confirmation; signalName: "accepted" }
     SignalSpy { id: confirmationRejected; target: confirmation; signalName: "rejected" }
     function init() {
+        defaults.visible = false; defaults.subtitles = false
         confirmation.close(); confirmationAccepted.clear(); confirmationRejected.clear()
         actionRow.visible = false; actionSpy.clear()
         shortcutEditor.close()
@@ -158,6 +166,43 @@ TestCase {
         store.values = {resize: true, fastSeek: false, timeout: 1800, clickPolicy: "auto", "volume-save": true, "redesign-startup-volume": 200, device: "", volumeStep: 12.800000190734863, "audio-spatial": false, "audio-spatial-mode": 2}
         store.revision++
         wait(20)
+    }
+    function editTrack(text) {
+        const field = findChild(defaults, "preferenceTrackEditor")
+        mouseClick(field)
+        keyClick(Qt.Key_A, Qt.ControlModifier)
+        for (const letter of text) keyClick(letter)
+        keyClick(Qt.Key_Return)
+    }
+    function test_defaultTrackHasAutomaticAndOneBasedNumbers() {
+        store.stage("redesign-audio-track", 0)
+        defaults.visible = true
+        const field = findChild(defaults, "preferenceTrackEditor")
+        compare(field.displayText, "Automatic")
+        editTrack("1")
+        compare(store.value("redesign-audio-track"), 1)
+        editTrack("2.5")
+        compare(store.value("redesign-audio-track"), 1)
+        editTrack("-1")
+        compare(store.value("redesign-audio-track"), 1)
+        editTrack("Automatic")
+        compare(store.value("redesign-audio-track"), 0)
+        store.stage("redesign-audio-track", 3)
+        compare(field.displayText, "3")
+    }
+    function test_subtitleDefaultsUseTheirOwnPreferences() {
+        store.stage("redesign-audio-track", 1)
+        store.stage("redesign-sub-track", 2)
+        store.stage("redesign-sub-language", "French")
+        defaults.subtitles = true; defaults.visible = true
+        compare(findChild(defaults, "preferenceTrackEditor").displayText, "2")
+        const language = findChild(defaults, "preferenceTextEditor")
+        compare(language.text, "French")
+        editTrack("3")
+        compare(store.value("redesign-sub-track"), 3)
+        compare(store.value("redesign-audio-track"), 1)
+        language.text = "English"; language.editingFinished()
+        compare(store.value("redesign-sub-language"), "English")
     }
     function test_volumeStepUsesPercentagePoints() {
         volumeStepRow.visible = true

@@ -12,6 +12,7 @@ RowLayout {
     property string emptyText
     property var choiceModel
     property var labelOverrides: ({})
+    property bool fullWidth: false
     property int revision: 0
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property int selectedIndex: {
@@ -23,9 +24,10 @@ RowLayout {
         return -1
     }
     signal selectionRequested(int index)
-    Layout.minimumHeight: theme.dp(68)
+    Layout.minimumHeight: theme.dp(fullWidth ? 46 : 68)
     spacing: theme.dp(12)
     Text {
+        visible: !root.fullWidth
         Layout.fillWidth: true
         text: root.label; color: theme.foreground
         font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap
@@ -39,7 +41,8 @@ RowLayout {
     }
     RedesignComboBox {
         objectName: "modelChoiceField"
-        Layout.preferredWidth: theme.dp(217)
+        Layout.fillWidth: root.fullWidth
+        Layout.preferredWidth: root.fullWidth ? 1 : theme.dp(217)
         Layout.minimumWidth: 0
         implicitHeight: theme.dp(46)
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor

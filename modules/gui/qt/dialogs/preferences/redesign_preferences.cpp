@@ -193,6 +193,11 @@ void RedesignPreferences::refresh()
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-equalizer-preset")) {
+        if (!value(QStringLiteral("filter:audio-filter:equalizer")).toBool()) return QString();
+        const auto preset = value(QStringLiteral("equalizer-preset")).toString();
+        return preset.isEmpty() ? QStringLiteral("custom") : preset;
+    }
     if (const auto option = trackOption(name); !option.isEmpty())
         return value(option).toLongLong() + 1;
     if (const auto option = languageOption(name); !option.isEmpty())
@@ -247,6 +252,18 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-equalizer-preset")) {
+        auto result = describe(QStringLiteral("equalizer-preset"));
+        if (result.isEmpty()) return {};
+        auto choices = result.value(QStringLiteral("choices")).toList();
+        if (value(QStringLiteral("equalizer-preset")).toString().isEmpty()
+            && !value(QStringLiteral("equalizer-bands")).toString().isEmpty())
+            choices.insert(1, QVariantMap{{QStringLiteral("label"), qtr("Custom")}, {QStringLiteral("value"), QStringLiteral("custom")}, {QStringLiteral("curve"), equalizerBands()}});
+        result.insert(QStringLiteral("choices"), choices);
+        result.insert(QStringLiteral("value"), value(name));
+        result.insert(QStringLiteral("defaultValue"), QString());
+        return result;
+    }
     if (!trackOption(name).isEmpty())
         return {{QStringLiteral("kind"), QStringLiteral("integer")}, {QStringLiteral("editor"), QStringLiteral("track")},
             {QStringLiteral("minimum"), 0}, {QStringLiteral("maximum"), INT_MAX},
@@ -378,6 +395,14 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-equalizer-preset")) {
+        const auto preset = proposed.toString();
+        if (preset.isEmpty()) return stage(QStringLiteral("filter:audio-filter:equalizer"), false);
+        if (preset == QLatin1String("custom")) {
+            if (!value(QStringLiteral("equalizer-preset")).toString().isEmpty()) return false;
+        } else if (!stage(QStringLiteral("equalizer-preset"), preset)) return false;
+        return stage(QStringLiteral("filter:audio-filter:equalizer"), true);
+    }
     if (const auto option = trackOption(name); !option.isEmpty()) {
         bool valid = false;
         const auto number = proposed.toLongLong(&valid);
@@ -568,6 +593,8 @@ bool RedesignPreferences::save()
     // Language preferences are cached by the player. Updating the config alone
     // would leave subsequent episodes using the language from player creation.
     vlc_player_Lock(player);
+    if (previous.contains(QStringLiteral("audio-desync")))
+        vlc_player_SetAudioDelay(player, VLC_TICK_FROM_MS(value(QStringLiteral("audio-desync")).toLongLong()), VLC_PLAYER_WHENCE_ABSOLUTE);
     for (const auto category : {AUDIO_ES, SPU_ES}) {
         const QString option = category == AUDIO_ES ? QStringLiteral("audio-language") : QStringLiteral("sub-language");
         if (previous.contains(option)) {
@@ -777,6 +804,7 @@ bool RedesignPreferences::setEqualizerBand(int index, double gain)
     QStringList bands;
     for (int i = 0; i < values.size(); ++i) bands.append(QString::number(i == index ? gain : values[i].toDouble(), 'f', 1));
     if (!stage(QStringLiteral("equalizer-bands"), bands.join(QLatin1Char(' ')))) return false;
+    if (!stage(QStringLiteral("filter:audio-filter:equalizer"), true)) return false;
     return stage(QStringLiteral("equalizer-preset"), QString());
 }
 

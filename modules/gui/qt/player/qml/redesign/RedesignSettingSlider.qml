@@ -22,6 +22,7 @@ ColumnLayout {
     property string minimumValueText
     property bool trimTrailingZeros: false
     property var ticks: []
+    property string tickSuffix
     property real sliderTopMargin: 0
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal moved(real value)
@@ -132,7 +133,7 @@ ColumnLayout {
                 objectName: "settingTick_" + index
                 x: Math.max(0, Math.min(parent.width - width, slider.leftPadding + sliderHandle.width / 2
                     + (modelData - root.from) / (root.to - root.from) * (slider.availableWidth - sliderHandle.width) - width / 2))
-                text: Number(modelData).toLocaleString(Qt.locale(), 'f', Number.isInteger(modelData) ? 0 : String(modelData).split('.')[1].length)
+                text: Number(modelData).toLocaleString(Qt.locale(), 'f', Number.isInteger(modelData) ? 0 : String(modelData).split('.')[1].length) + root.tickSuffix
                 color: theme.foreground; font.pixelSize: theme.dp(11)
             }
         }

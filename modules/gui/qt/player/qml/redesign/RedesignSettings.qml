@@ -83,26 +83,22 @@ C.Pane {
                     onSleepTimerRequested: minutes => root.sleepTimerRequested(minutes)
                     onVisualizationRequested: index => root.select(Player.audioVisualization, index, true)
                 }
-                ColumnLayout {
+                RedesignAudioSettings {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
-                    spacing: theme.dp(22)
                     visible: root.page === "audio"
                     Layout.topMargin: theme.dp(11)
-                    RedesignTrackDefaults { Layout.fillWidth: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
-                    Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
-                    Text { text: qsTr("Synchronization"); color: theme.bright; font.pixelSize: theme.dp(16) }
-                    RedesignSettingSlider {
-                        Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        label: qsTr("Audio track delay"); suffix: " s"; decimals: 3
-                        resetValue: 0
-                        from: -10; to: 10; stepSize: 0.05
-                        currentValue: Player.audioDelayMS / 1000
-                        onMoved: value => Player.audioDelayMS = Math.round(value * 1000)
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    backend: root.preferenceStore
+                    stereoModel: Player.audioStereoMode
+                    audioDelaySeconds: {
+                        root.preferenceStore.revision
+                        return Player.isStarted ? Player.audioDelayMS / 1000 : Number(root.preferenceStore.value("audio-desync")) / 1000
                     }
-                    Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
-                    RedesignTracks { Layout.fillWidth: true; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; heading: qsTr("Stereo mode"); trackModel: Player.audioStereoMode; onSelectionRequested: (index, selected) => root.select(trackModel, index, selected) }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Equalizer and audio filters"); text: caption; onClicked: DialogsProvider.extendedDialog() }
+                    onStereoRequested: index => {
+                        const value = Player.audioStereoMode.choiceValue(index)
+                        if (value !== undefined) root.preferenceStore.stage("stereo-mode", value)
+                    }
+                    onDelayRequested: seconds => root.preferenceStore.stage("audio-desync", Math.round(seconds * 1000))
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)

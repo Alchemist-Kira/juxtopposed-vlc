@@ -8,6 +8,7 @@ C.ComboBox {
     property real scaleFactor: 1
     property bool lightTheme: false
     property bool showCurvePreviews: false
+    property real choiceHeight: 34
     property var labelOverrides: ({})
     function labelAt(index) { const text = textAt(index); return labelOverrides[text] || text }
     signal aboutToOpen()
@@ -33,7 +34,7 @@ C.ComboBox {
     delegate: C.ItemDelegate {
         required property int index
         width: ListView.view.width
-        implicitHeight: root.theme.dp(34)
+        implicitHeight: root.theme.dp(root.choiceHeight)
         text: root.labelAt(index)
         highlighted: root.highlightedIndex === index
         contentItem: RowLayout {
@@ -43,7 +44,7 @@ C.ComboBox {
                 readonly property color fillColor: root.theme.accent
                 readonly property color lineColor: root.theme.foreground
                 Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(18)
-                visible: root.showCurvePreviews
+                visible: root.showCurvePreviews && curve.length > 0
                 onCurveChanged: requestPaint()
                 onFillColorChanged: requestPaint()
                 onLineColorChanged: requestPaint()
@@ -63,6 +64,11 @@ C.ComboBox {
                 Layout.fillWidth: true
                 text: root.labelAt(index); font: root.font; color: root.theme.foreground
                 verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+            }
+            Item {
+                Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20)
+                visible: root.showCurvePreviews && index === root.currentIndex
+                RedesignIcon { anchors.fill: parent; name: "check"; color: root.theme.accent }
             }
         }
         background: Rectangle { radius: root.theme.dp(3); color: parent.highlighted ? root.theme.hover : "transparent" }

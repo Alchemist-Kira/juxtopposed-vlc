@@ -10,6 +10,7 @@ ColumnLayout {
     property bool lightTheme: false
     property color accentColor: "#d37918"
     property bool expanded: false
+    property bool compact: false
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property var bands: { backend.revision; return backend.equalizerBands() }
     readonly property real preamp: { backend.revision; return Number(backend.value("equalizer-preamp")) }
@@ -19,32 +20,40 @@ ColumnLayout {
     spacing: 0
     function setGain(index, gain) {
         if (!Number.isFinite(gain) || gain < -20 || gain > 20) return false
-        return index === 0 ? backend.stage("equalizer-preamp", gain) : backend.setEqualizerBand(index - 1, gain)
+        if (index !== 0) return backend.setEqualizerBand(index - 1, gain)
+        if (!backend.stage("equalizer-preamp", gain)) return false
+        return !compact || backend.stage("filter:audio-filter:equalizer", true)
     }
     RedesignButton {
         objectName: "equalizerExpander"
-        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(40)
+        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(root.compact ? 48 : 40)
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-        text: root.expanded ? qsTr("Close Equalizer") : qsTr("Open Equalizer")
-        background: Rectangle { color: parent.hovered ? theme.hover : theme.background }
+        text: root.compact ? root.expanded ? qsTr("Collapse Settings") : qsTr("Expand Settings")
+            : root.expanded ? qsTr("Close Equalizer") : qsTr("Open Equalizer")
+        background: Rectangle { radius: root.compact ? theme.dp(4) : 0; color: parent.hovered ? theme.hover : root.compact ? theme.field : theme.background }
         contentItem: Item {
-            Row {
-                anchors.centerIn: parent; spacing: theme.dp(10)
-                Text { text: root.expanded ? qsTr("Close Equalizer") : qsTr("Open Equalizer"); color: root.theme.foreground; font.pixelSize: root.theme.dp(14); anchors.verticalCenter: parent.verticalCenter }
+            RowLayout {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.horizontalCenter: root.compact ? undefined : parent.horizontalCenter
+                anchors.left: root.compact ? parent.left : undefined
+                anchors.right: root.compact ? parent.right : undefined
+                anchors.leftMargin: root.theme.dp(16); anchors.rightMargin: root.theme.dp(16)
+                spacing: theme.dp(10)
+                Text { Layout.fillWidth: root.compact; text: root.compact ? root.expanded ? qsTr("Collapse Settings") : qsTr("Expand Settings") : root.expanded ? qsTr("Close Equalizer") : qsTr("Open Equalizer"); color: root.theme.foreground; font.pixelSize: root.theme.dp(14) }
                 RedesignIcon { name: root.expanded ? "chevron-down" : "chevron-right"; color: root.theme.foreground; width: root.theme.dp(20); height: width }
             }
         }
         onClicked: root.expanded = !root.expanded
     }
     Rectangle {
-        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(448)
+        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(root.compact ? 300 : 448)
         visible: root.expanded
         color: theme.background
         C.ScrollView {
             id: scroll
             anchors.fill: parent
             contentWidth: Math.max(availableWidth, root.theme.dp(640))
-            contentHeight: root.theme.dp(448)
+            contentHeight: root.theme.dp(root.compact ? 300 : 448)
             clip: true
             C.ScrollBar.vertical.policy: C.ScrollBar.AlwaysOff
             Row {
@@ -63,7 +72,7 @@ ColumnLayout {
                             id: slider
                             objectName: "equalizerSlider_" + band.index
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredHeight: root.theme.dp(320)
+                            Layout.preferredHeight: root.theme.dp(root.compact ? 200 : 320)
                             implicitWidth: root.theme.dp(32)
                             orientation: Qt.Vertical
                             from: -20; to: 20; stepSize: 0.1

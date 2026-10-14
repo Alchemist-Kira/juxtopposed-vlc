@@ -232,6 +232,10 @@ libqt_plugin_la_SOURCES = \
 	medialibrary/mlqueryparams.hpp \
 	medialibrary/mlrecentmediamodel.cpp \
 	medialibrary/mlrecentmediamodel.hpp \
+	medialibrary/mlrecentaudiomodel.cpp \
+	medialibrary/mlrecentaudiomodel.hpp \
+	medialibrary/mlplayedartistmodel.cpp \
+	medialibrary/mlplayedartistmodel.hpp \
 	medialibrary/mlrecentvideomodel.cpp \
 	medialibrary/mlrecentvideomodel.hpp \
 	medialibrary/mlurlmodel.cpp \
@@ -473,6 +477,8 @@ nodist_libqt_plugin_la_SOURCES = \
 	medialibrary/mlthreadpool.moc.cpp \
 	medialibrary/mlqmltypes.moc.cpp \
 	medialibrary/mlrecentmediamodel.moc.cpp \
+	medialibrary/mlrecentaudiomodel.moc.cpp \
+	medialibrary/mlplayedartistmodel.moc.cpp \
 	medialibrary/mlrecentvideomodel.moc.cpp \
 	medialibrary/mlurlmodel.moc.cpp \
 	medialibrary/mlvideo.moc.cpp \
@@ -1228,6 +1234,9 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignSvg.qml \
 	player/qml/redesign/RedesignActionMenu.qml \
 	player/qml/redesign/RedesignLibraryView.qml \
+	player/qml/redesign/RedesignHomeView.qml \
+	player/qml/redesign/RedesignLibraryDrag.qml \
+	player/qml/redesign/RedesignLibraryVisits.qml \
 	player/qml/redesign/RedesignMenu.qml \
 	player/qml/redesign/RedesignRecentMenuModel.qml \
 	player/qml/redesign/RedesignPlayerView.qml \

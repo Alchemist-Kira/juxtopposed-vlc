@@ -11,36 +11,53 @@ RedesignLibraryView {
     readonly property var emptyParentId: MediaLib.deserializeMlItemIdFromString("")
     property var selectedPlaylist
     property var selectedCollection
+    property string homeSection: ""
     property string currentFolder: ""
     property var folderTrail: []
     property string musicSection: ""
     property string selectedName: ""
     property var backStack: []
     property var forwardStack: []
-    readonly property var activeModel: currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : music) : category === 3 ? streams : category === 0 || category === 5 ? recent : libraryFolders
+    readonly property var homeModels: ({watching: recentVideo, listening: recentAudio, folders: frequentFolders, playlists: frequentPlaylists, artists: playedArtists})
+    readonly property var homeTitles: ({watching: qsTr("Continue Watching"), listening: qsTr("Listen Again"), folders: qsTr("Frequently Visited Folders"), playlists: qsTr("Frequently Visited Playlists"), artists: qsTr("Frequently Listened Artists")})
+    homeSectionsVisible: category === 0 && !homeSection
+    homeSections: [
+        {key: "watching", title: homeTitles.watching, model: recentVideo, icon: "video", emptyText: qsTr("No videos in your history.")},
+        {key: "listening", title: homeTitles.listening, model: recentAudio, icon: "music", emptyText: qsTr("No music in your history.")},
+        {key: "folders", title: homeTitles.folders, model: frequentFolders, icon: "folder", emptyText: qsTr("Open a library folder to see it here.")},
+        {key: "playlists", title: homeTitles.playlists, model: frequentPlaylists, icon: "playlist", emptyText: qsTr("Open a playlist to see it here.")},
+        {key: "artists", title: homeTitles.artists, model: playedArtists, icon: "artist", emptyText: qsTr("Play music to see artists here.")}
+    ]
+    itemCount: homeSectionsVisible ? recentVideo.maximumCount + recentAudio.maximumCount + frequentFolders.count + frequentPlaylists.count + playedArtists.maximumCount : currentFolder ? (folderLoader.item ? folderLoader.item.count : 0) : activeModel && activeModel.count !== undefined ? activeModel.count : libraryMediaCount
+    readonly property var activeModel: homeSection ? homeModels[homeSection] : currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : music) : category === 3 ? streams : category === 0 || category === 5 ? recent : libraryFolders
     mediaModel: activeModel
-    heading: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category] + (musicSection ? " › " + qsTr(musicSection) : "") + (currentFolder ? " › " + folderTrail.map(url => nameFromUrl(url)).join(" › ") : selectedName ? " › " + selectedName : "")
+    heading: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category] + (homeSection ? " › " + homeTitles[homeSection] : "") + (musicSection ? " › " + qsTr(musicSection) : "") + (currentFolder ? " › " + folderTrail.map(url => nameFromUrl(url)).join(" › ") : selectedName ? " › " + selectedName : "")
     canGoBack: backStack.length > 0
     canGoForward: forwardStack.length > 0
-    showingFolders: category === 1 && !currentFolder
-    showAddRow: category > 0 && category < 5 && !selectedPlaylist && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
+    defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 ? "playlist" : category === 2 ? "music" : "video"
+    showingFolders: category === 1 && !currentFolder || homeSection === "folders"
+    showAddRow: category > 0 && category < 5 && !selectedPlaylist && !selectedCollection && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
     canEnqueue: !(category === 2 && musicSection === "")
-    emptyText: category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
+    emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
-    function snapshot() { return { category: category, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, folderTrail: folderTrail.slice(), musicSection: musicSection, name: selectedName, search: searchText } }
+    function snapshot() { return { category: category, homeSection: homeSection, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, folderTrail: folderTrail.slice(), musicSection: musicSection, name: selectedName, search: searchText } }
     function remember() { backStack = [...backStack, snapshot()]; forwardStack = [] }
-    function restore(state) { category = state.category; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; folderTrail = state.folderTrail || []; musicSection = state.musicSection; selectedName = state.name; searchText = state.search }
+    function restore(state) { category = state.category; homeSection = state.homeSection || ""; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; folderTrail = state.folderTrail || []; musicSection = state.musicSection; selectedName = state.name; searchText = state.search; if (currentFolder) visits.record("folders", currentFolder, nameFromUrl(currentFolder)); else if (selectedPlaylist) visits.record("playlists", selectedPlaylist.toString(), selectedName) }
     function openFolder(url) {
         remember()
         folderTrail = currentFolder ? [...folderTrail, url.toString()] : [url.toString()]
         currentFolder = url.toString()
+        category = category === 2 ? 2 : 1
+        homeSection = ""
         selectedName = nameFromUrl(url)
+        visits.record("folders", currentFolder, selectedName)
         searchText = ""
     }
-    onCategoryRequested: newCategory => { remember(); selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; folderTrail = []; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
+    onCategoryRequested: newCategory => { remember(); homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; folderTrail = []; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
     onBackRequested: { const stack = backStack.slice(); const state = stack.pop(); forwardStack = [...forwardStack, snapshot()]; backStack = stack; restore(state) }
     onForwardRequested: { const stack = forwardStack.slice(); const state = stack.pop(); backStack = [...backStack, snapshot()]; forwardStack = stack; restore(state) }
     onActivated: index => {
+        if (homeSection) { openHomeItem(homeSection, index); return }
         if (currentFolder) {
             const url = folderLoader.item.get(index, "fileUrl")
             if (folderLoader.item.get(index, "fileIsDir")) openFolder(url)
@@ -51,12 +68,13 @@ RedesignLibraryView {
             remember(); musicSection = ["Songs", "Albums", "Artists", "Genres"][index]
         } else {
             const item = activeModel.getDataAt(index)
-            if (category === 4 && !selectedPlaylist) { remember(); selectedPlaylist = item.id; selectedName = item.name; searchText = "" }
+            if (category === 4 && !selectedPlaylist) { remember(); selectedPlaylist = item.id; selectedName = item.name; searchText = ""; visits.record("playlists", item.id.toString(), item.name) }
             else if (category === 2 && musicSection !== "Songs" && !selectedCollection) { remember(); selectedCollection = item.id; selectedName = item.title || item.name; searchText = "" }
             else MediaLib.addAndPlay(item.id)
         }
     }
     onEnqueueRequested: index => {
+        if (homeSection) { enqueueHomeItem(homeSection, index); return }
         if (currentFolder) MediaLib.addToPlaylist(folderLoader.item.get(index, "fileUrl"))
         else if (category === 1) MediaLib.addToPlaylist(libraryFolders.data(libraryFolders.index(index, 0), MLFolderModel.MRL))
         else MediaLib.addToPlaylist(activeModel.getDataAt(index).id)
@@ -67,6 +85,49 @@ RedesignLibraryView {
     }
     onPreferencesRequested: DialogsProvider.prefsPageDialog("library")
     onNewPlaylistRequested: { playlistName.text = ""; createPlaylist.open(); playlistName.forceActiveFocus() }
+
+    function homeItem(section, index) {
+        const model = homeModels[section]
+        if (section === "folders" || section === "playlists") {
+            const item = model.get(index)
+            return {key: item.key, name: item.name}
+        }
+        return model.getDataAt(index)
+    }
+    function openHomeItem(section, index) {
+        const item = homeItem(section, index)
+        if (section === "folders") { openFolder(item.key); return }
+        if (section === "playlists" || section === "artists") {
+            remember()
+            homeSection = ""; currentFolder = ""; folderTrail = []; musicSection = ""; searchText = ""
+            selectedPlaylist = undefined; selectedCollection = undefined
+            if (section === "playlists") {
+                category = 4; selectedPlaylist = MediaLib.deserializeMlItemIdFromString(item.key); selectedName = item.name
+                visits.record("playlists", item.key, item.name)
+            } else {
+                category = 2; musicSection = "Artists"; selectedCollection = item.id; selectedName = item.name
+            }
+        } else MediaLib.addAndPlay(item.id)
+    }
+    function enqueueHomeItem(section, index) {
+        const item = homeItem(section, index)
+        MediaLib.addToPlaylist(section === "folders" ? item.key : section === "playlists" ? MediaLib.deserializeMlItemIdFromString(item.key) : item.id)
+    }
+    onHomeActivated: (section, index) => openHomeItem(section, index)
+    onHomeEnqueueRequested: (section, index) => enqueueHomeItem(section, index)
+    onHomeSectionRequested: section => { remember(); homeSection = section; searchText = "" }
+    function refreshVisits() {
+        frequentFolders.clear(); frequentPlaylists.clear()
+        for (const item of visits.ranked("folders", searchText)) frequentFolders.append({key: item.key, name: item.name, iconName: "folder"})
+        for (const item of visits.ranked("playlists", searchText)) frequentPlaylists.append({key: item.key, name: item.name, iconName: "playlist"})
+    }
+    onSearchTextChanged: refreshVisits()
+    RedesignLibraryVisits { id: visits; ctx: MainCtx; onEntriesChanged: root.refreshVisits() }
+    ListModel { id: frequentFolders }
+    ListModel { id: frequentPlaylists }
+    MLRecentVideoModel { id: recentVideo; ml: MediaLib; sortOrder: Qt.DescendingOrder; limit: root.homeSectionsVisible ? 3 : 0; searchPattern: root.searchText }
+    MLRecentAudioModel { id: recentAudio; ml: MediaLib; sortOrder: Qt.DescendingOrder; limit: root.homeSectionsVisible ? 3 : 0; searchPattern: root.searchText }
+    MLPlayedArtistModel { id: playedArtists; ml: MediaLib; limit: root.homeSectionsVisible ? 3 : 0; searchPattern: root.searchText }
 
     Loader {
         id: folderLoader
@@ -90,7 +151,7 @@ RedesignLibraryView {
     MLArtistModel { id: artists; ml: MediaLib; searchPattern: root.searchText; sortOrder: root.descending ? Qt.DescendingOrder : Qt.AscendingOrder }
     MLGenreModel { id: genres; ml: MediaLib; searchPattern: root.searchText; sortOrder: root.descending ? Qt.DescendingOrder : Qt.AscendingOrder }
     MLAudioModel { id: collectionTracks; ml: MediaLib; parentId: root.selectedCollection || root.emptyParentId; searchPattern: root.searchText; sortOrder: root.descending ? Qt.DescendingOrder : Qt.AscendingOrder }
-    MLRecentMediaModel { id: recent; ml: MediaLib; searchPattern: root.searchText }
+    MLRecentMediaModel { id: recent; ml: MediaLib; sortOrder: Qt.DescendingOrder; searchPattern: root.searchText }
     MLPlaylistListModel { id: playlists; ml: MediaLib; searchPattern: root.searchText; sortOrder: root.descending ? Qt.DescendingOrder : Qt.AscendingOrder }
     MLPlaylistModel { id: playlistMedia; ml: MediaLib; parentId: root.selectedPlaylist || root.emptyParentId; searchPattern: root.searchText }
     MLUrlModel { id: streams; ml: MediaLib; searchPattern: root.searchText }

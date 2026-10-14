@@ -9,7 +9,10 @@ Item {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property var mediaModel
-    property int itemCount: mediaView.count
+    readonly property int libraryMediaCount: mediaView.count
+    property int itemCount: libraryMediaCount
+    property bool homeSectionsVisible: category === 0
+    property var homeSections: []
     property int category: 1
     property string heading: qsTr("Videos")
     property string searchText: ""
@@ -18,11 +21,15 @@ Item {
     property bool canGoBack: false
     property bool canGoForward: false
     property bool canEnqueue: true
+    property string defaultItemIcon: category === 4 ? "queue" : category === 2 ? "music" : "video"
     property bool showingFolders: false
     property bool showAddRow: category > 0 && category < 5
     property string addLabel: category === 4 ? qsTr("Create playlist") : category === 3 ? qsTr("Add Network Stream") : qsTr("Add")
     property string emptyText: qsTr("Add a folder to your library to see your media here.")
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
+    signal homeActivated(string section, int index)
+    signal homeEnqueueRequested(string section, int index)
+    signal homeSectionRequested(string section)
     signal categoryRequested(int category)
     signal activated(int index)
     signal enqueueRequested(int index)
@@ -59,7 +66,7 @@ Item {
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         entries: [
             { action: "grid", label: qsTr("Grid View"), icon: "grid", checked: root.grid },
-            { action: "list", label: qsTr("List View"), icon: "queue", checked: !root.grid }
+            { action: "list", label: qsTr("List View"), icon: "list-view", checked: !root.grid }
         ]
         onActionRequested: action => root.grid = action === "grid"
     }
@@ -79,9 +86,15 @@ Item {
                     required property string modelData
                     objectName: "libraryCategory" + index
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    iconName: ["home", "videos", "music", "network", "queue", "history", "add"][index]
+                    iconName: [root.category === 0 ? "home-active" : "home", "videos", "music", "network", "playlist", "history", "add"][index]
                     text: modelData; selected: root.category === index
                     onClicked: index === 6 ? root.addRequested() : root.categoryRequested(index)
+                    background: Rectangle {
+                        radius: root.theme.dp(6)
+                        color: parent.down ? root.theme.selected : parent.hovered ? root.theme.hover : "transparent"
+                        border.width: parent.visualFocus ? root.theme.dp(2) : 0
+                        border.color: root.theme.accent
+                    }
                 }
             }
         }
@@ -140,7 +153,7 @@ Item {
                 id: viewButton
                 objectName: "libraryViewButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: root.grid ? "queue" : "grid"; text: root.grid ? qsTr("List view") : qsTr("Grid view")
+                iconName: root.grid ? "grid" : "list-view"; text: qsTr("View options")
                 onClicked: viewMenu.popup(viewButton, 0, height)
             }
             RedesignButton {
@@ -180,6 +193,17 @@ Item {
                 Text { anchors.verticalCenter: parent.verticalCenter; text: root.addLabel; color: theme.foreground; font.pixelSize: theme.dp(14) }
             }
         }
+        RedesignHomeView {
+            objectName: "libraryHomeView"
+            visible: root.homeSectionsVisible
+            Layout.topMargin: theme.dp(9)
+            Layout.fillWidth: true; Layout.fillHeight: true
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            sections: root.homeSectionsVisible ? root.homeSections : []
+            onActivated: (section, index) => root.homeActivated(section, index)
+            onEnqueueRequested: (section, index) => root.homeEnqueueRequested(section, index)
+            onSectionRequested: section => root.homeSectionRequested(section)
+        }
         GridView {
             id: mediaView
             objectName: "libraryMediaView"
@@ -187,7 +211,7 @@ Item {
             Layout.fillWidth: true; Layout.fillHeight: true
             clip: true
             model: root.mediaModel
-            visible: root.itemCount > 0
+            visible: !root.homeSectionsVisible && root.itemCount > 0
             cellWidth: root.grid ? width / Math.max(1, Math.floor(width / theme.dp(130))) : width
             cellHeight: root.grid ? theme.dp(142) : theme.dp(42)
             keyNavigationEnabled: true
@@ -218,7 +242,7 @@ Item {
                             width: root.grid ? parent.width - theme.dp(8) : theme.dp(32)
                             height: root.grid ? theme.dp(90) : theme.dp(32)
                             radius: theme.dp(2); color: model.fileIsDir || root.showingFolders || model.iconName ? "transparent" : theme.field
-                            RedesignIcon { anchors.centerIn: parent; width: theme.dp(24); height: width; name: model.fileIsDir || root.showingFolders ? "folder" : model.iconName || (root.category === 4 ? "queue" : root.category === 2 ? "music" : "video"); color: theme.foreground }
+                            RedesignIcon { anchors.centerIn: parent; width: theme.dp(24); height: width; name: model.fileIsDir || root.showingFolders ? "folder" : model.iconName || root.defaultItemIcon; color: theme.foreground }
                             Image { anchors.fill: parent; source: delegate.itemArtwork; fillMode: Image.PreserveAspectCrop; visible: status === Image.Ready }
                         }
                         Text {
@@ -235,19 +259,10 @@ Item {
                         target: null
                         enabled: root.canEnqueue
                     }
-                    Drag.active: false
-                    Drag.supportedActions: Qt.CopyAction
-                    Drag.keys: ["vlc-redesign-library"]
-                    Drag.hotSpot: Qt.point(width / 2, height / 2)
-                    property int mediaIndex: delegate.index
-                    property var libraryView: root
-                    // The queue accepts the model index and resolves it through MediaLib.
-                    Connections {
-                        target: dragHandler
-                        function onActiveChanged() {
-                            if (dragHandler.active) mediaButton.Drag.active = true
-                            else { mediaButton.Drag.drop(); mediaButton.Drag.active = false }
-                        }
+                    RedesignLibraryDrag {
+                        handler: dragHandler
+                        libraryView: root
+                        mediaIndex: delegate.index
                     }
                 }
                 RedesignButton {
@@ -263,7 +278,7 @@ Item {
         Text {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: root.itemCount === 0
+            visible: !root.homeSectionsVisible && root.itemCount === 0
             text: root.searchText.length > 0 ? qsTr("No media matches your search.") : root.emptyText
             wrapMode: Text.WordWrap; color: theme.foreground; font.pixelSize: theme.dp(14)
             verticalAlignment: Text.AlignTop

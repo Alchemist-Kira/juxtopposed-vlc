@@ -519,6 +519,8 @@ void aout_Release(audio_output_t *aout)
     aout_Destroy(aout);
 }
 
+static bool aout_HasStereoMode(audio_output_t *aout, int mode);
+
 static int aout_PrepareStereoMode(audio_output_t *aout,
                                   const audio_sample_format_t *restrict fmt)
 {
@@ -532,7 +534,7 @@ static int aout_PrepareStereoMode(audio_output_t *aout,
     if (!AOUT_FMT_LINEAR(fmt) || fmt->i_channels != 2)
         return AOUT_VAR_CHAN_UNSET;
 
-    int i_default_mode = owner->requested_stereo_mode;
+    int i_default_mode;
 
     val.i_int = AOUT_VAR_CHAN_MONO;
     var_Change(aout, "stereo-mode", VLC_VAR_ADDCHOICE, val, _("Mono"));
@@ -563,7 +565,8 @@ static int aout_PrepareStereoMode(audio_output_t *aout,
     var_Change(aout, "stereo-mode", VLC_VAR_ADDCHOICE, val,
                _("Reverse stereo"));
 
-    return i_default_mode;
+    return aout_HasStereoMode(aout, owner->requested_stereo_mode)
+        ? owner->requested_stereo_mode : i_default_mode;
 }
 
 static void aout_UpdateStereoMode(audio_output_t *aout, int mode,

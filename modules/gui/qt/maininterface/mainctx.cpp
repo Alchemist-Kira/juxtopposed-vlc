@@ -794,13 +794,18 @@ bool MainCtx::hasEmbededVideo() const
 
 void MainCtx::setVideoSurfaceProvider(VideoSurfaceProvider* videoSurfaceProvider)
 {
+    disconnect(m_releaseVideoMouseConnection);
     if (m_videoSurfaceProvider)
         disconnect(m_videoSurfaceProvider, &VideoSurfaceProvider::hasVideoEmbedChanged, this, &MainCtx::hasEmbededVideoChanged);
     m_videoSurfaceProvider = videoSurfaceProvider;
     if (m_videoSurfaceProvider)
+    {
+        m_releaseVideoMouseConnection = connect(DialogsProvider::getInstance(), &DialogsProvider::releaseMouseEvents,
+                m_videoSurfaceProvider, &VideoSurfaceProvider::releaseMouseButtons);
         connect(m_videoSurfaceProvider, &VideoSurfaceProvider::hasVideoEmbedChanged,
                 this, &MainCtx::hasEmbededVideoChanged,
                 Qt::QueuedConnection);
+    }
     emit hasEmbededVideoChanged(m_videoSurfaceProvider && m_videoSurfaceProvider->hasVideoEmbed());
 }
 

@@ -432,6 +432,7 @@ protected:
 
     bool m_hasEmbededVideo = false;
     VideoSurfaceProvider* m_videoSurfaceProvider = nullptr;
+    QMetaObject::Connection m_releaseVideoMouseConnection;
     bool m_showRemainingTime = false;
 
     /* */

@@ -70,6 +70,7 @@ public slots:
     void onWindowClosed();
     void onMousePressed( int vlcButton );
     void onMouseReleased( int vlcButton );
+    void releaseMouseButtons();
     void onMouseDoubleClick( int vlcButton );
     void onMouseMoved( float x, float y );
     void onMouseWheeled(int vlcButton);
@@ -80,6 +81,7 @@ public slots:
 
 protected:
     vlc_window_t* m_voutWindow = nullptr;
+    unsigned m_pressedButtons = 0;
     bool m_videoEmbed = false;
     bool m_threadedSurfaceUpdates = false;
 };

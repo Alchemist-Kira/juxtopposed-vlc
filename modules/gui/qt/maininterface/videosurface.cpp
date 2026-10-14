@@ -19,6 +19,7 @@
 
 #include <QSGRectangleNode>
 #include <QThreadPool>
+#include <utility>
 #include <vlc_window.h>
 
 #include <QQuickRenderControl>
@@ -48,6 +49,7 @@ void VideoSurfaceProvider::enable(vlc_window_t* voutWindow)
 {
     assert(voutWindow);
     m_voutWindow = voutWindow;
+    m_pressedButtons = 0;
     emit videoEnabledChanged(true);
 }
 
@@ -55,6 +57,7 @@ void VideoSurfaceProvider::disable()
 {
     setVideoEmbed(false);
     m_voutWindow = nullptr;
+    m_pressedButtons = 0;
     emit videoEnabledChanged(false);
 }
 
@@ -72,14 +75,30 @@ void VideoSurfaceProvider::onWindowClosed()
 
 void VideoSurfaceProvider::onMousePressed(int vlcButton)
 {
-    if (m_voutWindow)
+    if (m_voutWindow && unsigned(vlcButton) < 3)
+    {
+        m_pressedButtons |= 1u << vlcButton;
         vlc_window_ReportMousePressed(m_voutWindow, vlcButton);
+    }
 }
 
 void VideoSurfaceProvider::onMouseReleased(int vlcButton)
 {
-    if (m_voutWindow)
+    if (m_voutWindow && unsigned(vlcButton) < 3)
+    {
+        m_pressedButtons &= ~(1u << vlcButton);
         vlc_window_ReportMouseReleased(m_voutWindow, vlcButton);
+    }
+}
+
+void VideoSurfaceProvider::releaseMouseButtons()
+{
+    // A popup takes the mouse grab before the surface receives the release.
+    const unsigned pressed = std::exchange(m_pressedButtons, 0);
+    if (m_voutWindow)
+        for (int button = 0; button < 3; ++button)
+            if (pressed & (1u << button))
+                vlc_window_ReportMouseReleased(m_voutWindow, button);
 }
 
 void VideoSurfaceProvider::onMouseDoubleClick(int vlcButton)

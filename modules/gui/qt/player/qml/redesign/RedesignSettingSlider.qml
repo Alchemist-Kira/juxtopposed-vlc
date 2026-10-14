@@ -23,9 +23,17 @@ ColumnLayout {
     property bool trimTrailingZeros: false
     property var ticks: []
     property string tickSuffix
+    property bool positiveTickSign: false
     property real sliderTopMargin: 0
+    property real sliderLeftMargin: 0
+    property bool scaleLabelsVisible: true
+    property bool displayValueAsText: false
+    property string valueLabel
+    property var valueToPosition: null
+    property var positionToValue: null
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal moved(real value)
+    function positionFor(value) { return valueToPosition ? valueToPosition(value) : (value - from) / (to - from) }
     spacing: theme.dp(8)
     RowLayout {
         Layout.fillWidth: true
@@ -35,6 +43,7 @@ ColumnLayout {
             objectName: "settingValueField"
             property real factor: Math.pow(10, root.decimals)
             Layout.preferredWidth: theme.dp(138)
+            visible: !root.displayValueAsText
             implicitHeight: theme.dp(34)
             leftPadding: theme.dp(14); rightPadding: theme.dp(10)
             font.pixelSize: theme.dp(14)
@@ -78,16 +87,37 @@ ColumnLayout {
             Accessible.name: root.label
             onValueModified: root.moved(value / factor)
         }
+        Text {
+            visible: root.displayValueAsText
+            Layout.preferredWidth: theme.dp(138)
+            horizontalAlignment: Text.AlignRight
+            text: root.valueLabel; color: theme.foreground; font.pixelSize: theme.dp(14)
+        }
     }
     C.Slider {
         id: slider
         objectName: "settingSlider"
         Layout.fillWidth: true
+        Layout.leftMargin: theme.dp(root.sliderLeftMargin)
         Layout.topMargin: theme.dp(root.sliderTopMargin)
+        padding: 0
         implicitHeight: theme.dp(24)
-        from: root.from; to: root.to; stepSize: root.stepSize
-        Binding on value { when: !slider.pressed; value: root.currentValue }
-        onMoved: root.moved(value)
+        from: root.valueToPosition ? 0 : root.from
+        to: root.valueToPosition ? 1 : root.to
+        stepSize: root.valueToPosition ? 0.005 : root.stepSize
+        Binding on value { when: !slider.pressed; value: root.valueToPosition ? root.valueToPosition(root.currentValue) : root.currentValue }
+        onMoved: root.moved(root.positionToValue ? root.positionToValue(value) : value)
+        Keys.onPressed: event => {
+            let value
+            if (event.key === Qt.Key_Home) value = root.from
+            else if (event.key === Qt.Key_End) value = root.to
+            else if (!root.valueToPosition) return
+            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Down) value = root.currentValue - root.stepSize
+            else if (event.key === Qt.Key_Right || event.key === Qt.Key_Up) value = root.currentValue + root.stepSize
+            else return
+            root.moved(Math.max(root.from, Math.min(root.to, value)))
+            event.accepted = true
+        }
         Accessible.name: root.label
         background: Rectangle {
             x: slider.leftPadding; y: slider.topPadding + slider.availableHeight / 2 - height / 2
@@ -98,7 +128,7 @@ ColumnLayout {
                 Rectangle {
                     required property real modelData
                     width: theme.dp(1); height: theme.dp(7)
-                    x: sliderHandle.width / 2 + (modelData - root.from) / (root.to - root.from) * (parent.width - sliderHandle.width)
+                    x: sliderHandle.width / 2 + root.positionFor(modelData) * (parent.width - sliderHandle.width)
                     anchors.verticalCenter: parent.verticalCenter
                     color: theme.background
                 }
@@ -114,7 +144,7 @@ ColumnLayout {
     }
     RowLayout {
         Layout.fillWidth: true
-        visible: root.ticks.length === 0
+        visible: root.scaleLabelsVisible && root.ticks.length === 0
         Text { text: root.from + root.suffix; color: theme.foreground; font.pixelSize: theme.dp(11) }
         Item { Layout.fillWidth: true }
         RedesignButton { objectName: "settingResetButton"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Reset"); text: qsTr("Reset %1").arg(root.label); implicitHeight: theme.dp(24); onClicked: root.moved(root.resetValue) }
@@ -124,7 +154,7 @@ ColumnLayout {
     Item {
         Layout.fillWidth: true
         implicitHeight: theme.dp(16)
-        visible: root.ticks.length > 0
+        visible: root.scaleLabelsVisible && root.ticks.length > 0
         Repeater {
             model: root.ticks
             Text {
@@ -132,8 +162,8 @@ ColumnLayout {
                 required property real modelData
                 objectName: "settingTick_" + index
                 x: Math.max(0, Math.min(parent.width - width, slider.leftPadding + sliderHandle.width / 2
-                    + (modelData - root.from) / (root.to - root.from) * (slider.availableWidth - sliderHandle.width) - width / 2))
-                text: Number(modelData).toLocaleString(Qt.locale(), 'f', Number.isInteger(modelData) ? 0 : String(modelData).split('.')[1].length) + root.tickSuffix
+                    + root.positionFor(modelData) * (slider.availableWidth - sliderHandle.width) - width / 2))
+                text: (root.positiveTickSign && modelData > 0 ? "+" : "") + Number(modelData).toLocaleString(Qt.locale(), 'f', Number.isInteger(modelData) ? 0 : String(modelData).split('.')[1].length) + root.tickSuffix
                 color: theme.foreground; font.pixelSize: theme.dp(11)
             }
         }

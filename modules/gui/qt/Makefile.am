@@ -1189,6 +1189,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignPlaybackSettings.qml \
 	player/qml/redesign/RedesignTrackDefaults.qml \
 	player/qml/redesign/RedesignAudioSettings.qml \
+	player/qml/redesign/RedesignSubtitleSettings.qml \
 	player/qml/redesign/RedesignSwitchRow.qml \
 	player/qml/redesign/RedesignStatistics.qml \
 	player/qml/redesign/RedesignSettings.qml \

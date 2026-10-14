@@ -754,6 +754,7 @@ qml_modules += {
        'player/qml/redesign/RedesignPlaybackSettings.qml',
        'player/qml/redesign/RedesignTrackDefaults.qml',
        'player/qml/redesign/RedesignAudioSettings.qml',
+       'player/qml/redesign/RedesignSubtitleSettings.qml',
        'player/qml/redesign/RedesignSwitchRow.qml',
        'player/qml/redesign/RedesignStatistics.qml',
        'player/qml/redesign/RedesignSettings.qml',
@@ -997,6 +998,7 @@ qml_tests = {
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
     'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
     'tst_RedesignPlayerPreset': files('tests/tst_RedesignPlayerPreset.qml'),
+    'tst_RedesignSubtitles': files('tests/tst_RedesignSubtitles.qml'),
 }
 
 qmllibs = []

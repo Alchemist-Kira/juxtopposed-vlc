@@ -100,40 +100,22 @@ C.Pane {
                     }
                     onDelayRequested: seconds => root.preferenceStore.stage("audio-desync", Math.round(seconds * 1000))
                 }
-                ColumnLayout {
-                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
-                    spacing: theme.dp(22)
+                RedesignSubtitleSettings {
+                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(20)
                     visible: root.page === "subtitles"
                     Layout.topMargin: theme.dp(11)
-                    RedesignTrackDefaults { Layout.fillWidth: true; subtitles: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
-                    Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
-                    Text { text: qsTr("Synchronization"); color: theme.bright; font.pixelSize: theme.dp(16) }
-                    RedesignSettingSlider {
-                        Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        label: qsTr("Subtitle track delay"); suffix: " s"; decimals: 3
-                        resetValue: 0
-                        from: -10; to: 10; inputFrom: -2147483.648; inputTo: 2147483.647; stepSize: 0.05
-                        currentValue: {
-                            root.preferenceStore.revision
-                            return Player.isStarted && !root.preferenceStore.isStaged("redesign-subtitle-delay") ? Player.subtitleDelayMS / 1000 : Number(root.preferenceStore.value("redesign-subtitle-delay")) / 1000
-                        }
-                        onMoved: value => root.preferenceStore.stage("redesign-subtitle-delay", Math.round(value * 1000))
+                    backend: root.preferenceStore
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    subtitleDelaySeconds: {
+                        root.preferenceStore.revision
+                        return Player.isStarted && !root.preferenceStore.isStaged("redesign-subtitle-delay") ? Player.subtitleDelayMS / 1000 : Number(root.preferenceStore.value("redesign-subtitle-delay")) / 1000
                     }
-                    RedesignSettingSlider {
-                        Layout.fillWidth: true
-                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        objectName: "subtitleFPSControl"
-                        label: qsTr("Subtitle Speed"); suffix: " fps"; decimals: 3
-                        from: 0; to: 60; stepSize: 0.001
-                        resetValue: 0; minimumValueText: qsTr("Automatic")
-                        currentValue: {
-                            root.preferenceStore.revision
-                            return Player.isStarted && !root.preferenceStore.isStaged("sub-fps") ? Player.subtitleFPS : Number(root.preferenceStore.value("sub-fps"))
-                        }
-                        onMoved: value => root.preferenceStore.stage("sub-fps", value)
+                    subtitleFPS: {
+                        root.preferenceStore.revision
+                        return Player.isStarted && !root.preferenceStore.isStaged("sub-fps") ? Player.subtitleFPS : Number(root.preferenceStore.value("sub-fps"))
                     }
-                    RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Subtitle font, size and appearance"); text: caption; onClicked: DialogsProvider.prefsDialog() }
+                    onDelayRequested: value => root.preferenceStore.stage("redesign-subtitle-delay", Math.round(value * 1000))
+                    onFpsRequested: value => root.preferenceStore.stage("sub-fps", value)
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)

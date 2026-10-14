@@ -235,6 +235,7 @@ ColumnLayout {
         id: colorEditor
         RedesignButton {
             implicitHeight: theme.dp(34)
+            leftPadding: theme.dp(14); rightPadding: theme.dp(6)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             readonly property string chosenColor: "#" + Number(root.currentValue).toString(16).padStart(6, "0")
             caption: chosenColor.toUpperCase(); text: qsTr("Choose %1").arg(root.label)

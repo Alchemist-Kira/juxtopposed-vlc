@@ -6,6 +6,8 @@
 #include <vlc_aout.h>
 #include <vlc_player.h>
 #include <vlc_iso_lang.h>
+#include <vlc_subpicture.h>
+#include <vlc_vout.h>
 #include "../../../../audio_filter/equalizer_presets.h"
 #include <cmath>
 #include <climits>
@@ -44,7 +46,8 @@ const QStringList& presetOptions()
         QStringLiteral("saturation"), QStringLiteral("gamma"), QStringLiteral("transform-type"), QStringLiteral("rotate-angle"),
         QStringLiteral("zoom"), QStringLiteral("aspect-ratio"), QStringLiteral("crop"), QStringLiteral("deinterlace"), QStringLiteral("deinterlace-mode"),
         QStringLiteral("subsdec-formatted"), QStringLiteral("sub-margin"), QStringLiteral("sub-text-scale"),
-        QStringLiteral("subsdelay-factor"), QStringLiteral("sub-filter"),
+        QStringLiteral("sub-text-use-embedded-style"), QStringLiteral("sub-text-size-mode"), QStringLiteral("sub-text-size-pixels"),
+        QStringLiteral("subsdelay-factor"), QStringLiteral("subsdelay-mode"), QStringLiteral("sub-filter"),
         QStringLiteral("freetype-font"), QStringLiteral("freetype-fontsize"), QStringLiteral("freetype-rel-fontsize"),
         QStringLiteral("freetype-color"), QStringLiteral("freetype-opacity"), QStringLiteral("freetype-bold"),
         QStringLiteral("freetype-outline-thickness"), QStringLiteral("freetype-outline-color"), QStringLiteral("freetype-outline-opacity"),
@@ -52,6 +55,11 @@ const QStringList& presetOptions()
         QStringLiteral("freetype-shadow-opacity"), QStringLiteral("freetype-background-color"), QStringLiteral("freetype-background-opacity")
     };
     return names;
+}
+
+bool subtitleStyleOption(const QString& name)
+{
+    return name.startsWith(QLatin1String("freetype-")) || name.startsWith(QLatin1String("sub-text-"));
 }
 
 bool validPresetName(const QString& name, const QVariantList& presets, const QString& except = {})
@@ -467,6 +475,10 @@ bool RedesignPreferences::deletePlayerPreset(const QString& id)
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-manual-style"))
+        return !value(QStringLiteral("sub-text-use-embedded-style")).toBool();
+    if (name == QLatin1String("redesign-subtitle-duration"))
+        return value(QStringLiteral("filter:sub-filter:subsdelay")).toBool() ? value(QStringLiteral("subsdelay-factor")) : QVariant(0.0);
     if (name == QLatin1String("redesign-subtitle-delay"))
         return value(QStringLiteral("sub-delay")).toLongLong() * 100 + value(QStringLiteral("sub-delay-ms")).toLongLong();
     if (name == QLatin1String("redesign-equalizer-preset")) {
@@ -535,6 +547,14 @@ bool RedesignPreferences::isStaged(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-subtitle-duration")) {
+        if (!module_exists("subsdelay")) return {};
+        auto description = describe(QStringLiteral("subsdelay-factor"));
+        description.insert(QStringLiteral("value"), value(name));
+        description.insert(QStringLiteral("defaultValue"), 0.0);
+        description.insert(QStringLiteral("help"), qtr("Change how long subtitles stay on screen. Set 0 to use the file duration."));
+        return description;
+    }
     if (name == QLatin1String("redesign-subtitle-delay")) {
         auto description = describe(QStringLiteral("sub-delay-ms"));
         description.insert(QStringLiteral("value"), value(name));
@@ -685,6 +705,11 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-subtitle-duration")) {
+        if (!module_exists("subsdelay") || !stage(QStringLiteral("subsdelay-factor"), proposed)) return false;
+        if (proposed.toDouble() > 0) stage(QStringLiteral("subsdelay-mode"), 1);
+        return stage(QStringLiteral("filter:sub-filter:subsdelay"), proposed.toDouble() > 0);
+    }
     if (name == QLatin1String("redesign-subtitle-delay")) {
         if (!stage(QStringLiteral("sub-delay-ms"), proposed)) return false;
         return stage(QStringLiteral("sub-delay"), 0);
@@ -922,6 +947,8 @@ bool RedesignPreferences::save()
         vlc_player_SetSubtitleDelay(player, VLC_TICK_FROM_MS(value(QStringLiteral("redesign-subtitle-delay")).toLongLong()), VLC_PLAYER_WHENCE_ABSOLUTE);
     if (previous.contains(QStringLiteral("sub-fps")))
         vlc_player_SetAssociatedSubsFPS(player, value(QStringLiteral("sub-fps")).toFloat());
+    if (previous.contains(QStringLiteral("sub-text-scale")))
+        vlc_player_SetSubtitleTextScale(player, value(QStringLiteral("sub-text-scale")).toUInt());
     for (const auto category : {AUDIO_ES, SPU_ES}) {
         const QString option = category == AUDIO_ES ? QStringLiteral("audio-language") : QStringLiteral("sub-language");
         if (previous.contains(option)) {
@@ -930,6 +957,31 @@ bool RedesignPreferences::save()
         }
     }
     vlc_player_Unlock(player);
+    if (previous.contains(QStringLiteral("sub-margin")) || previous.contains(QStringLiteral("subsdelay-factor"))
+        || previous.contains(QStringLiteral("subsdelay-mode")) || previous.contains(QStringLiteral("sub-filter"))) {
+        size_t count = 0;
+        auto** outputs = vlc_player_vout_HoldAll(player, &count);
+        for (size_t i = 0; i < count; ++i) {
+            // Set duration parameters before loading its filter. Existing
+            // filters receive changes through the native command proxies.
+            for (const auto& name : {QStringLiteral("subsdelay-factor"), QStringLiteral("subsdelay-mode"),
+                                   QStringLiteral("sub-margin"), QStringLiteral("sub-filter")}) {
+                if (!previous.contains(name)) continue;
+                const auto bytes = name.toUtf8();
+                const int type = config_GetType(bytes.constData()) & VLC_VAR_CLASS;
+                if (var_Type(outputs[i], bytes.constData()) == 0)
+                    var_Create(outputs[i], bytes.constData(), type);
+                const auto current = value(name);
+                if (type == VLC_VAR_FLOAT) var_SetFloat(outputs[i], bytes.constData(), current.toFloat());
+                else if (type == VLC_VAR_STRING) var_SetString(outputs[i], bytes.constData(), current.toString().toUtf8().constData());
+                else var_SetInteger(outputs[i], bytes.constData(), current.toLongLong());
+            }
+            vout_Release(outputs[i]);
+        }
+        free(outputs);
+    }
+    if (std::any_of(previous.keyBegin(), previous.keyEnd(), subtitleStyleOption))
+        vlc_subpicture_InvalidateTextStyle();
     const bool deviceChanged = previous.contains(QStringLiteral("audio-device-default"))
         || previous.contains(QStringLiteral("audio-device-default-module"))
         || previous.contains(audioOutputModule() + QStringLiteral("-audio-device"));
@@ -1053,6 +1105,7 @@ bool RedesignPreferences::resetAll()
     }
 #endif
     intf->preferencesResetPending = true;
+    vlc_subpicture_InvalidateTextStyle();
     m_ctx->reloadPrefs();
     m_ctx->reloadFromSettings();
     discard();

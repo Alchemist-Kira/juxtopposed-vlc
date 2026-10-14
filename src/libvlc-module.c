@@ -896,6 +896,9 @@ static const char* const ppsz_restore_playback_desc[] = {
 #define SUB_DELAY_TEXT N_("Subtitle delay")
 #define SUB_DELAY_LONGTEXT \
     N_("Apply a delay to all subtitles (in 1/10s, eg 100 means 10s).")
+#define SUB_DELAY_MS_TEXT N_("Subtitle delay (ms)")
+#define SUB_DELAY_MS_LONGTEXT \
+    N_("Apply a subtitle delay in milliseconds. VLC adds this delay to the delay set by sub-delay.")
 
 #define SUB_FILE_TEXT N_("Use subtitle file")
 #define SUB_FILE_LONGTEXT N_( \
@@ -1843,6 +1846,8 @@ vlc_module_begin ()
     set_section( N_("Subtitles") , NULL )
     add_float( "sub-fps", 0.0, SUB_FPS_TEXT, SUB_FPS_LONGTEXT )
     add_integer( "sub-delay", 0, SUB_DELAY_TEXT, SUB_DELAY_LONGTEXT )
+    add_integer_with_range( "sub-delay-ms", 0, INT_MIN, INT_MAX,
+                            SUB_DELAY_MS_TEXT, SUB_DELAY_MS_LONGTEXT )
     add_loadfile("sub-file", NULL, SUB_FILE_TEXT, SUB_FILE_LONGTEXT)
         change_safe()
     add_bool( "sub-autodetect-file", true,

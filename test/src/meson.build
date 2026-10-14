@@ -191,6 +191,14 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_player_delays',
+    'sources' : files('player/common.h', 'player/modules.c', 'player/delays.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : vlc_plugins_targets.keys()
+}
+
+vlc_tests += {
     'name' : 'test_src_player_lifecycle',
     'sources' : files(
         'player/common.h',

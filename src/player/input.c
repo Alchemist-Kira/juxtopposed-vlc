@@ -1337,7 +1337,8 @@ vlc_player_input_New(vlc_player_t *player, input_item_t *item)
         [AUDIO_ES] =
             VLC_TICK_FROM_MS(var_InheritInteger(player, "audio-desync")),
         [SPU_ES] =
-            vlc_tick_from_samples(var_InheritInteger(player, "sub-delay"), 10),
+            vlc_tick_from_samples(var_InheritInteger(player, "sub-delay"), 10)
+            + VLC_TICK_FROM_MS(var_InheritInteger(player, "sub-delay-ms")),
     };
 
     for (enum es_format_category_e i = UNKNOWN_ES; i < DATA_ES; ++i)

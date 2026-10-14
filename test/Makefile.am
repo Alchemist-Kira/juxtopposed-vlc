@@ -11,6 +11,7 @@ player_programs = \
 	test_src_player_abloop \
 	test_src_player_attachments \
 	test_src_player_capabilities \
+	test_src_player_delays \
 	test_src_player_discontinuities \
 	test_src_player_eof \
 	test_src_player_errors \
@@ -254,6 +255,9 @@ test_src_player_attachments_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_capabilities_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/capabilities.c
 test_src_player_capabilities_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
+test_src_player_delays_SOURCES = src/player/common.h src/player/modules.c \
+	src/player/delays.c
+test_src_player_delays_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_discontinuities_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/discontinuities.c
 test_src_player_discontinuities_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)

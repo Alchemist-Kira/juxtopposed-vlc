@@ -377,6 +377,14 @@ TestCase {
         verify(field.invalid)
         compare(store.value("timeout"), 2400)
     }
+    function test_resetClearsInvalidTextAndUsesTheDefault() {
+        const field = findChild(timingTextRow, "preferenceTextEditor")
+        field.text = "invalid"; field.editingFinished(); verify(field.invalid)
+        const reset = findChild(timingTextRow, "preferenceResetButton")
+        verify(reset !== null)
+        reset.clicked()
+        verify(!field.invalid); compare(field.text, "1.8"); compare(store.value("timeout"), 1800)
+    }
     function test_simpleAndAdvancedHaveDifferentContents() {
         const basicGeneral = catalog.sections.general.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])
         const advancedGeneral = catalog.advancedSections.general.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])

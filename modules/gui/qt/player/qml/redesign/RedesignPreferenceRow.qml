@@ -14,6 +14,7 @@ ColumnLayout {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     signal actionRequested(string action)
+    signal editorResetRequested()
     readonly property var description: { if (presentation.dynamicChoices) backend.revision; return backend.describe(optionName) }
     readonly property var currentValue: { backend.revision; return backend.value(optionName) }
     readonly property var choices: {
@@ -69,13 +70,14 @@ ColumnLayout {
             C.ToolTip.visible: rowHover.hovered && C.ToolTip.text.length > 0
             C.ToolTip.delay: 500
             RedesignButton {
+                objectName: "preferenceResetButton"
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 width: theme.dp(26); height: theme.dp(28); iconSize: theme.dp(18)
                 iconName: "history"; text: qsTr("Reset to default")
                 enabled: root.editorEnabled
                 visible: root.description.kind !== "action" && (rowHover.hovered || hovered || visualFocus)
-                onClicked: root.backend.reset(root.optionName)
+                onClicked: { root.backend.reset(root.optionName); root.editorResetRequested() }
             }
         }
         Loader {
@@ -290,9 +292,14 @@ ColumnLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 property bool invalid: false
                 readonly property bool numeric: root.description.kind === "integer" || root.description.kind === "float"
-                text: root.currentValue === undefined ? "" : numeric
+                readonly property string formattedValue: root.currentValue === undefined ? "" : numeric
                     ? root.presentation.decimals === undefined ? String(Number(root.currentValue) * root.factor) : (Number(root.currentValue) * root.factor).toFixed(root.presentation.decimals)
                     : String(root.currentValue)
+                Binding on text {
+                    when: !field.activeFocus && !field.invalid
+                    restoreMode: Binding.RestoreNone
+                    value: field.formattedValue
+                }
                 leftPadding: theme.dp(14); rightPadding: theme.dp(10)
                 Layout.minimumHeight: theme.dp(34)
                 color: invalid ? "#e56b6b" : theme.foreground; font.pixelSize: theme.dp(14)
@@ -304,6 +311,11 @@ ColumnLayout {
                 onEditingFinished: {
                     const number = Number(text)
                     invalid = numeric ? !text.trim().length || !Number.isFinite(number) || !root.commit(root.description.kind === "integer" ? Math.round(number / root.factor) : number / root.factor) : !root.commit(text)
+                    if (!invalid) text = formattedValue
+                }
+                Connections {
+                    target: root
+                    function onEditorResetRequested() { field.invalid = false; field.text = field.formattedValue }
                 }
                 TextMetrics { id: valueMetrics; text: field.text; font: field.font }
                 Text {

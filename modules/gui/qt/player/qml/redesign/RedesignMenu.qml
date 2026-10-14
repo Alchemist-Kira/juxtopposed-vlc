@@ -10,6 +10,7 @@ C.Menu {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property var recentModel: null
+    property bool recentFilesAvailable: true
     property bool recentFilesEnabled: true
     property var profiles: []
     property string selectedProfile: ""
@@ -94,7 +95,7 @@ C.Menu {
         delegate: MenuRow { }
         background: Rectangle { color: root.lightTheme ? root.theme.background : "#191919"; opacity: 0.95; radius: root.theme.dp(10) }
         Instantiator {
-            model: root.recentFilesEnabled ? root.recentModel : null
+            model: root.recentFilesAvailable && root.recentFilesEnabled ? root.recentModel : null
             delegate: MenuRow {
                 required property var model
                 text: model.url; glyph: "video"
@@ -108,15 +109,15 @@ C.Menu {
             onObjectRemoved: (index, object) => recentMenu.removeItem(object)
         }
         MenuRow {
-            text: root.recentFilesEnabled ? qsTr("No recent files") : qsTr("Recent file history is off")
+            text: !root.recentFilesAvailable ? qsTr("Recent files need the media library.") : root.recentFilesEnabled ? qsTr("No recent files") : qsTr("Recent file history is off")
             enabled: false
-            visible: !root.recentFilesEnabled || !root.recentModel || root.recentModel.count === 0
+            visible: !root.recentFilesAvailable || !root.recentFilesEnabled || !root.recentModel || root.recentModel.count === 0
             height: visible ? implicitHeight : 0
         }
         MenuDivider { }
         MenuRow {
             text: qsTr("Clear Recent Files"); glyph: "close"
-            enabled: root.recentFilesEnabled && !!root.recentModel && root.recentModel.count > 0
+            enabled: root.recentFilesAvailable && root.recentFilesEnabled && !!root.recentModel && root.recentModel.count > 0
             onTriggered: { root.dismiss(); root.clearRecentRequested() }
         }
     }

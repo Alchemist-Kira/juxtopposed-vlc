@@ -247,6 +247,7 @@ FocusScope {
         parent: view
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
         recentModel: recentMenuModel.item
+        recentFilesAvailable: MainCtx.mediaLibraryAvailable
         recentFilesEnabled: { playerPreferences.revision; return !!playerPreferences.value("save-recentplay") }
         profiles: { playerPreferences.revision; return playerPreferences.playerPresets }
         selectedProfile: { playerPreferences.revision; return playerPreferences.selectedPlayerPreset }

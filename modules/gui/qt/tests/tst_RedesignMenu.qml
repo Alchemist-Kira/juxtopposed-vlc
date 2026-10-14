@@ -27,6 +27,7 @@ TestCase {
         menu.scaleFactor = 1
         menu.lightTheme = false
         menu.recentFilesEnabled = true
+        menu.recentFilesAvailable = true
         menu.selectedProfile = "movies"
         recentFiles.clear()
         recentFiles.append({id: 42, url: "/videos/cat.mkv"})
@@ -108,6 +109,13 @@ TestCase {
         keyClick(Qt.Key_Return)
         compare(menu.selectedProfile, "")
         compare(menu.itemAt(8).text, "Profile (Default Preset)")
+    }
+    function test_historyWithoutMediaLibrary() {
+        menu.recentFilesAvailable = false
+        const submenu = openSubmenu(6)
+        tryCompare(submenu, "count", 3)
+        compare(submenu.itemAt(0).text, "Recent files need the media library.")
+        verify(!submenu.itemAt(2).enabled)
     }
     function test_shortcutsEntry() {
         menu.currentIndex = 9

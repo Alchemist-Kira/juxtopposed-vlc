@@ -487,8 +487,13 @@ int (config_SaveConfigFile) (libvlc_int_t *p_this)
     vlc_unlink (permanent);
 #endif
     /* Atomically replace the file... */
-    if (vlc_rename (temporary, permanent))
+    const int ret = vlc_rename (temporary, permanent);
+    if (ret != 0)
+    {
+        msg_Err (p_this, "cannot replace configuration file: %s",
+                 vlc_strerror_c(errno));
         vlc_unlink (temporary);
+    }
     /* (...then synchronize the directory, err, TODO...) */
     /* ...and finally close the file */
     vlc_mutex_unlock (&lock);
@@ -498,7 +503,7 @@ int (config_SaveConfigFile) (libvlc_int_t *p_this)
 
     free (temporary);
     free (permanent);
-    return 0;
+    return ret;
 
 error:
     free (temporary);

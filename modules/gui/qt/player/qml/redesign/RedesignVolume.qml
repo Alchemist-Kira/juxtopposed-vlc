@@ -21,39 +21,24 @@ T.Slider {
     padding: 0
     handle: Item { width: 0; height: 0 }
     background: Item {
-        Canvas {
+        Image {
             id: cone
             anchors.fill: parent
             opacity: root.muted ? 0.3 : 1
-            onPaint: {
-                const ctx = getContext("2d")
-                ctx.reset()
-                ctx.beginPath()
-                ctx.moveTo(2, height * 0.35)
-                ctx.lineTo(width - 2, 1)
-                ctx.quadraticCurveTo(width, 1, width, 4)
-                ctx.lineTo(width, height - 4)
-                ctx.quadraticCurveTo(width, height - 1, width - 2, height - 1)
-                ctx.lineTo(2, height * 0.65)
-                ctx.quadraticCurveTo(0, height * 0.65, 0, height * 0.5)
-                ctx.closePath()
-                ctx.fillStyle = "#090909"
-                ctx.fill()
-                ctx.save()
-                ctx.clip()
-                const gradient = ctx.createLinearGradient(0, 0, width, 0)
-                gradient.addColorStop(0, "#6d9c00")
-                gradient.addColorStop(0.7, "#d4b400")
-                gradient.addColorStop(1, "#d37918")
-                ctx.fillStyle = gradient
-                ctx.fillRect(2, 2, Math.max(0, root.position * (width - 4)), height - 4)
-                ctx.restore()
-            }
-            Connections {
-                target: root
-                function onValueChanged() { cone.requestPaint() }
-                function onWidthChanged() { cone.requestPaint() }
-                function onHeightChanged() { cone.requestPaint() }
+            sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
+            source: {
+                if (width <= 0 || height <= 0) return ""
+                const path = "M2 " + (height * 0.35) + " L" + (width - 2) + " 1 Q" + width + " 1 " + width + " 4"
+                    + " L" + width + " " + (height - 4) + " Q" + width + " " + (height - 1) + " " + (width - 2) + " " + (height - 1)
+                    + " L2 " + (height * 0.65) + " Q0 " + (height * 0.65) + " 0 " + (height * 0.5) + " Z"
+                return "data:image/svg+xml;utf8," + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
+                    + '<defs><clipPath id="cone"><path d="' + path + '"/></clipPath>'
+                    + '<linearGradient id="volume" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="' + width + '" y2="0">'
+                    + '<stop offset="0" stop-color="#6d9c00"/><stop offset="0.7" stop-color="#d4b400"/><stop offset="1" stop-color="#d37918"/>'
+                    + '</linearGradient></defs><path d="' + path + '" fill="#090909"/>'
+                    + '<rect x="2" y="2" width="' + Math.max(0, root.position * (width - 4)) + '" height="' + Math.max(0, height - 4)
+                    + '" clip-path="url(#cone)" fill="url(#volume)"/></svg>')
             }
         }
         Rectangle {

@@ -39,25 +39,24 @@ C.ComboBox {
         highlighted: root.highlightedIndex === index
         contentItem: RowLayout {
             spacing: root.theme.dp(10)
-            Canvas {
+            Image {
                 readonly property var curve: root.model && root.model[index] ? root.model[index].curve || [] : []
                 readonly property color fillColor: root.theme.accent
                 readonly property color lineColor: root.theme.foreground
                 Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(18)
                 visible: root.showCurvePreviews && curve.length > 0
-                onCurveChanged: requestPaint()
-                onFillColorChanged: requestPaint()
-                onLineColorChanged: requestPaint()
-                onPaint: {
-                    const ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    if (!curve.length) return
+                sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
+                source: {
+                    if (curve.length < 2 || width <= 0 || height <= 0) return ""
                     const middle = height / 2
-                    ctx.beginPath(); ctx.moveTo(0, middle)
-                    for (let i = 0; i < curve.length; ++i) ctx.lineTo(i * width / (curve.length - 1), middle - Number(curve[i]) * middle / 20)
-                    ctx.lineTo(width, middle); ctx.closePath(); ctx.fillStyle = fillColor; ctx.fill()
-                    ctx.beginPath(); ctx.moveTo(0, middle); ctx.lineTo(width, middle)
-                    ctx.strokeStyle = lineColor; ctx.lineWidth = 1; ctx.stroke()
+                    let path = "M0 " + middle
+                    for (let i = 0; i < curve.length; ++i)
+                        path += " L" + (i * width / (curve.length - 1)) + " " + (middle - Number(curve[i]) * middle / 20)
+                    path += " L" + width + " " + middle + " Z"
+                    return "data:image/svg+xml;utf8," + encodeURIComponent(
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
+                        + '<path d="' + path + '" fill="' + fillColor + '"/>'
+                        + '<path d="M0 ' + middle + ' H' + width + '" fill="none" stroke="' + lineColor + '" stroke-width="1"/></svg>')
                 }
             }
             Text {

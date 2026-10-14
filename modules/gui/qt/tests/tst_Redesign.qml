@@ -107,6 +107,9 @@ TestCase {
         player.playing = false
         player.muted = false
         player.fullscreen = false
+        player.started = true
+        player.hasVideo = true
+        player.autoHideMode = 1
         player.lightTheme = false
         player.scaleFactor = 1
         testCase.width = 1280
@@ -375,6 +378,21 @@ TestCase {
         verify(viewport.height === 180)
         player.libraryOpen = false
         verify(!player.libraryExpanded)
+    }
+    function test_audioAfterVideoRestoresHiddenControls() {
+        player.fullscreen = true
+        player.autoHideMode = 2
+        player.forceActiveFocus()
+        mouseMove(player, player.width / 2, player.height / 2)
+        wait(1900)
+        verify(!player.bottomVisible)
+        player.hasVideo = false
+        tryCompare(player, "bottomVisible", true)
+        player.hasVideo = true
+        player.revealControls()
+        verify(player.bottomVisible)
+        player.started = false
+        verify(player.bottomVisible)
     }
     function test_fullscreenUsesIndependentEdges() {
         player.fullscreen = true

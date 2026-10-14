@@ -552,6 +552,7 @@ if host_system == 'windows'
         'style/windowsthemeprovider.cpp',
         'util/csdmenu_win32.c',
         'util/csdmenu_win32.h',
+        'util/win32_emutls.cpp',
         'maininterface/compositor_dcomp.cpp',
         'maininterface/compositor_dcomp_acrylicsurface.cpp',
     )
@@ -1118,6 +1119,17 @@ if qt6_dep.found()
         else
             warning('Failed to find qmake6 to get static Qt variables')
         endif
+    endif
+
+    if host_system == 'windows'
+        vlc_tests += {
+            'name': 'test_qt_win32_emutls',
+            'sources': files('tests/test_win32_emutls.cpp', 'util/win32_emutls.cpp'),
+            'suite': ['qt'],
+            'dependencies': [qt6_dep, qt_extra_deps],
+            'cpp_args': qt_extra_flags,
+            'link_args': qt_link_args,
+        }
     endif
 
     qt6pre_qrc = qt6.preprocess(

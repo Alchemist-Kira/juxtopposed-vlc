@@ -583,7 +583,8 @@ libqt_plugin_la_SOURCES += \
 	maininterface/win32windoweffects_module.cpp \
 	maininterface/win32windoweffects_module.hpp \
 	util/csdmenu_win32.c \
-	util/csdmenu_win32.h
+	util/csdmenu_win32.h \
+	util/win32_emutls.cpp
 
 nodist_libqt_plugin_la_SOURCES += maininterface/mainctx_win32.moc.cpp \
 	maininterface/compositor_win7.moc.cpp
@@ -1792,6 +1793,16 @@ base_model_test_LDADD = $(QT_LIBS) $(LIBS_qt)
 base_model_test_LDFLAGS = $(AM_LDFLAGS) $(QT_LDFLAGS)
 check_PROGRAMS = base_model_test
 TESTS = base_model_test
+
+if HAVE_WIN32
+test_qt_win32_emutls_SOURCES = tests/test_win32_emutls.cpp util/win32_emutls.cpp
+test_qt_win32_emutls_CPPFLAGS = $(AM_CPPFLAGS)
+test_qt_win32_emutls_CXXFLAGS = $(AM_CXXFLAGS) $(QT_CFLAGS) $(CXXFLAGS_qt)
+test_qt_win32_emutls_LDADD = $(QT_LIBS) $(LIBS_qt)
+test_qt_win32_emutls_LDFLAGS = $(AM_LDFLAGS) $(QT_LDFLAGS)
+check_PROGRAMS += test_qt_win32_emutls
+TESTS += test_qt_win32_emutls
+endif
 
 if HAVE_QT_QTEST
 

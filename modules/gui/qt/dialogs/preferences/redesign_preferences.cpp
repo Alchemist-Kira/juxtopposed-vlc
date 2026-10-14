@@ -36,15 +36,39 @@ const QStringList& videoFilterOptions()
         QStringLiteral("extract-component"), QStringLiteral("colorthres-color"),
         QStringLiteral("colorthres-saturationthres"), QStringLiteral("colorthres-similaritythres"),
         QStringLiteral("posterize-level"), QStringLiteral("gradient-mode"), QStringLiteral("gradient-color"),
-        QStringLiteral("gradient-cartoon"), QStringLiteral("sepia-intensity")
+        QStringLiteral("gradient-cartoon"), QStringLiteral("sepia-intensity"),
+        QStringLiteral("brightness-threshold"), QStringLiteral("puzzle-rows"), QStringLiteral("puzzle-cols"),
+        QStringLiteral("puzzle-mode"), QStringLiteral("puzzle-rotation"), QStringLiteral("puzzle-border"),
+        QStringLiteral("puzzle-preview"), QStringLiteral("puzzle-preview-size"), QStringLiteral("puzzle-shape-size"),
+        QStringLiteral("puzzle-auto-shuffle"), QStringLiteral("puzzle-auto-solve"),
+        QStringLiteral("erase-mask"), QStringLiteral("erase-x"), QStringLiteral("erase-y"),
+        QStringLiteral("blur-factor"), QStringLiteral("gaussianblur-sigma"),
+        QStringLiteral("antiflicker-window-size"), QStringLiteral("antiflicker-softening-size"),
+        QStringLiteral("hqdn3d-luma-spat"), QStringLiteral("hqdn3d-chroma-spat"),
+        QStringLiteral("hqdn3d-luma-temp"), QStringLiteral("hqdn3d-chroma-temp"), QStringLiteral("anaglyph-scheme")
+    };
+    return names;
+}
+
+const QStringList& overlayOptions()
+{
+    static const QStringList names{
+        QStringLiteral("marq-marquee"), QStringLiteral("marq-file"),
+        QStringLiteral("marq-x"), QStringLiteral("marq-y"), QStringLiteral("marq-position"),
+        QStringLiteral("marq-color"), QStringLiteral("marq-size"), QStringLiteral("marq-opacity"),
+        QStringLiteral("marq-timeout"), QStringLiteral("marq-refresh"),
+        QStringLiteral("logo-file"), QStringLiteral("logo-x"), QStringLiteral("logo-y"),
+        QStringLiteral("logo-position"), QStringLiteral("logo-opacity"),
+        QStringLiteral("logo-delay"), QStringLiteral("logo-repeat")
     };
     return names;
 }
 
 const QStringList& presetOptions()
 {
-    // Only media presentation belongs in a show preset. Do not capture devices,
-    // file paths, credentials, interface settings or other machine preferences.
+    // Only media presentation belongs in a show preset. Overlay images and
+    // text files are presentation assets. Do not capture device selections,
+    // credentials, general file paths or other machine preferences.
     static const QStringList names = [] {
         QStringList names{
             QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
@@ -68,6 +92,8 @@ const QStringList& presetOptions()
             QStringLiteral("freetype-shadow-opacity"), QStringLiteral("freetype-background-color"), QStringLiteral("freetype-background-opacity")
         };
         names += videoFilterOptions();
+        names += overlayOptions();
+        names.append(QStringLiteral("sub-source"));
         names += {QStringLiteral("preferred-resolution"), QStringLiteral("d3d11-hdr-mode")};
         return names;
     }();
@@ -93,7 +119,9 @@ const QStringList& videoOutputOptions()
             QStringLiteral("transform-type"), QStringLiteral("rotate-angle")
         };
         names += videoFilterOptions();
+        names += overlayOptions();
         names.append(QStringLiteral("video-filter"));
+        names.append(QStringLiteral("sub-source"));
         return names;
     }();
     return names;
@@ -613,7 +641,7 @@ QVariant RedesignPreferences::value(const QString& name) const
 
 QVariant RedesignPreferences::videoValue(const QString& name) const
 {
-    if (!m_ctx || m_edits.contains(name) || !videoOutputOptions().contains(name))
+    if (!m_ctx || m_edits.contains(name) || (!videoOutputOptions().contains(name) && name != QLatin1String("sub-filter")))
         return value(name);
     auto* player = m_ctx->getIntf()->p_player;
     vlc_player_Lock(player);
@@ -911,7 +939,24 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     if (name.startsWith(QLatin1String("filter:"))) {
         const auto parts = name.split(QLatin1Char(':'));
         if (parts.size() != 3 || !module_exists(parts[2].toUtf8().constData())) return false;
-        auto filters = (parts[1] == QLatin1String("video-filter") ? videoValue(parts[1]) : value(parts[1])).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        auto filters = (parts[1] == QLatin1String("video-filter") || parts[1] == QLatin1String("sub-source")
+            ? videoValue(parts[1]) : value(parts[1])).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        // Older configurations can put sources in sub-filter. Move the
+        // active sources together, so enabling one does not hide another.
+        if (parts[1] == QLatin1String("sub-source")) {
+            const auto legacy = videoValue(QStringLiteral("sub-filter")).toString().split(QLatin1Char(':'), Qt::SkipEmptyParts);
+            QStringList retained;
+            for (const auto& entry : legacy) {
+                const auto* module = module_find(entry.toUtf8().constData());
+                if (module && module_provides(module, "sub source")) {
+                    if (!filters.contains(entry)) filters.append(entry);
+                } else {
+                    retained.append(entry);
+                }
+            }
+            if (retained != legacy)
+                stage(QStringLiteral("sub-filter"), retained.join(QLatin1Char(':')));
+        }
         // Editing an enabled effect must preserve its position. Moving an
         // adjust filter after transform can discard the transform orientation.
         if (!proposed.toBool()) filters.removeAll(parts[2]);
@@ -1121,6 +1166,17 @@ bool RedesignPreferences::save()
                 case VLC_VAR_FLOAT: var_SetFloat(outputs[i], bytes.constData(), current.toFloat()); break;
                 case VLC_VAR_STRING: var_SetString(outputs[i], bytes.constData(), current.toString().toUtf8().constData()); break;
                 }
+            }
+            // marq-file is inherited at creation, unlike the command-backed
+            // overlay options. Reload its source after a successful save.
+            if (previous.contains(QStringLiteral("marq-file"))
+                && !previous.contains(QStringLiteral("sub-source"))) {
+                const auto sources = outputValue(outputs[i], QStringLiteral("sub-source")).toString().split(QLatin1Char(':'));
+                const auto legacy = outputValue(outputs[i], QStringLiteral("sub-filter")).toString().split(QLatin1Char(':'));
+                if (sources.contains(QStringLiteral("marq")))
+                    var_TriggerCallback(outputs[i], "sub-source");
+                else if (legacy.contains(QStringLiteral("marq")))
+                    var_TriggerCallback(outputs[i], "sub-filter");
             }
             vout_Release(outputs[i]);
         }

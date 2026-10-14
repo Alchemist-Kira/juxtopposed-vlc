@@ -775,6 +775,7 @@ qml_modules += {
        'player/qml/redesign/RedesignSvg.qml',
        'player/qml/redesign/RedesignLibraryView.qml',
        'player/qml/redesign/RedesignMenu.qml',
+       'player/qml/redesign/RedesignRecentMenuModel.qml',
        'player/qml/redesign/RedesignPlayerView.qml',
        'player/qml/redesign/RedesignQueue.qml',
        'player/qml/redesign/RedesignSeekBar.qml',

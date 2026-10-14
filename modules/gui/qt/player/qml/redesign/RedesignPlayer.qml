@@ -7,7 +7,6 @@ import VLC.Playlist
 import VLC.Style
 import VLC.Util
 import VLC.Dialogs
-import VLC.MediaLibrary
 import VLC.Menus as Menus
 import VLC.Widgets as Widgets
 
@@ -235,7 +234,7 @@ FocusScope {
     Loader {
         id: recentMenuModel
         active: MainCtx.mediaLibraryAvailable && mediaMenu.recentFilesEnabled
-        sourceComponent: MLRecentMediaModel { ml: MediaLib; limit: 10 }
+        source: active ? "qrc:///qt/qml/VLC/Player/RedesignRecentMenuModel.qml" : ""
     }
     RedesignShortcuts {
         id: shortcutEditor
@@ -251,7 +250,7 @@ FocusScope {
         recentFilesEnabled: { playerPreferences.revision; return !!playerPreferences.value("save-recentplay") }
         profiles: { playerPreferences.revision; return playerPreferences.playerPresets }
         selectedProfile: { playerPreferences.revision; return playerPreferences.selectedPlayerPreset }
-        onRecentRequested: mediaId => MediaLib.addAndPlay(mediaId)
+        onRecentRequested: mediaId => { if (recentMenuModel.item) recentMenuModel.item.playMedia(mediaId) }
         onClearRecentRequested: if (recentMenuModel.item) recentMenuModel.item.clearHistory()
         onProfileRequested: profileId => playerPreferences.selectPlayerPreset(profileId)
         onActionRequested: action => {

@@ -757,6 +757,7 @@ qml_modules += {
        'player/qml/redesign/RedesignAudioSettings.qml',
        'player/qml/redesign/RedesignSubtitleSettings.qml',
        'player/qml/redesign/RedesignVideoSettings.qml',
+       'player/qml/redesign/RedesignOnboardingView.qml',
        'player/qml/redesign/RedesignFilterSection.qml',
        'player/qml/redesign/RedesignSwitchRow.qml',
        'player/qml/redesign/RedesignStatistics.qml',

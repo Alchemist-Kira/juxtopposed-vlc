@@ -43,6 +43,7 @@ FocusScope {
 
     Component.onCompleted: {
         MainCtx.playqueuePanel.docked = true
+        view.queueOpen = MainCtx.playqueuePanel.visible
     }
 
     RedesignPlayerView {

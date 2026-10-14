@@ -8,6 +8,7 @@ import VLC.Playlist
 
 Item {
     id: root
+    Component.onCompleted: console.debug("Play queue panel ready")
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false

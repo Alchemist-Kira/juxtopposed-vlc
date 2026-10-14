@@ -111,7 +111,6 @@ ColumnLayout {
             let value
             if (event.key === Qt.Key_Home) value = root.from
             else if (event.key === Qt.Key_End) value = root.to
-            else if (!root.valueToPosition) return
             else if (event.key === Qt.Key_Left || event.key === Qt.Key_Down) value = root.currentValue - root.stepSize
             else if (event.key === Qt.Key_Right || event.key === Qt.Key_Up) value = root.currentValue + root.stepSize
             else return

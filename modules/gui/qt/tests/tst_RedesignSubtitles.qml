@@ -100,6 +100,9 @@ TestCase {
         slider("subtitleBackgroundOpacitySetting").forceActiveFocus(); keyClick(Qt.Key_End)
         compare(store.lastName, "freetype-background-opacity"); compare(store.lastValue, 255)
         keyClick(Qt.Key_Home); compare(store.lastValue, 0)
+        keyClick(Qt.Key_Right); compare(store.lastValue, 3)
+        keyClick(Qt.Key_Right); compare(store.lastValue, 5)
+        compare(item("subtitleBackgroundOpacitySetting").valueLabel, "2 %")
     }
     function test_embeddedFormattingDisablesManualStyleButKeepsOffsetAndSizing() {
         mouseClick(findChild(item("subtitleAppearance_sub-text-use-embedded-style"), "preferenceToggleEditor"))

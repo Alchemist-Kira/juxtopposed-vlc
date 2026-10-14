@@ -9,11 +9,35 @@
 
 #ifdef VIDEO_FILTER_TEST
 #include <stdatomic.h>
+#include <vlc_vout_display.h>
 extern atomic_uint video_filter_opens;
 extern atomic_uint video_filter_closes;
 extern atomic_uint video_filter_frame_value;
 extern vlc_mutex_t video_filter_lock;
 extern vlc_cond_t video_filter_wait;
+extern video_format_t video_display_format;
+extern unsigned video_display_frames;
+
+static void video_display_Display(vout_display_t *display, picture_t *picture)
+{
+    (void) picture;
+    vlc_mutex_lock(&video_filter_lock);
+    video_display_format = *display->source;
+    video_display_frames++;
+    vlc_cond_signal(&video_filter_wait);
+    vlc_mutex_unlock(&video_filter_lock);
+}
+
+static int video_display_Open(vout_display_t *display, video_format_t *format,
+                              vlc_video_context *context)
+{
+    (void) format; (void) context;
+    static const struct vlc_display_operations ops = {
+        .display = video_display_Display,
+    };
+    display->ops = &ops;
+    return VLC_SUCCESS;
+}
 
 static void video_filter_Notify(void)
 {
@@ -228,6 +252,9 @@ vlc_module_begin()
     add_shortcut("test-video-filter")
     add_integer("test-video-filter-value", 1, "Test value", NULL)
     set_callback_video_filter(video_filter_Open)
+    add_submodule()
+    add_shortcut("test-video-display")
+    set_callback_display(video_display_Open, 0)
 #endif
 vlc_module_end()
 

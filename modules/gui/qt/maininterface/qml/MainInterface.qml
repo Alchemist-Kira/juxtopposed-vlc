@@ -58,6 +58,13 @@ Item {
     Connections {
         target: DialogsProvider
         function onShowRedesignNetworkStreams() { if (networkStreams.item) networkStreams.item.begin() }
+        function onShowRedesignAddToPlaylist(media, type) { if (addToPlaylist.item) addToPlaylist.item.beginSelection(media, type) }
+    }
+    Loader {
+        id: addToPlaylist
+        anchors.fill: parent
+        active: MainCtx.mediaLibraryAvailable
+        source: active ? "qrc:///qt/qml/VLC/Player/RedesignAddToPlaylist.qml" : ""
     }
 
     property bool _extendedFrameVisible: MainCtx.windowSuportExtendedFrame

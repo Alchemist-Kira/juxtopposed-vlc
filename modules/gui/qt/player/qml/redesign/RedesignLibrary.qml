@@ -56,6 +56,7 @@ RedesignLibraryView {
             {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play"},
             {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
         ].concat(["section", "home"].includes(target.kind) ? [] : [{action: "queue", label: qsTr("Add to queue"), icon: "queue"}])
+            .concat(["file", "media", "collection", "playlist"].includes(target.kind) ? [{action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist"}] : [])
             .concat(playlistEditing && !section ? [
                 {action: "earlier", label: qsTr("Move earlier"), icon: "sort", enabled: index > 0 && !playlistBusy},
                 {action: "later", label: qsTr("Move later"), icon: "sort", enabled: index < itemCount - 1 && !playlistBusy},
@@ -68,6 +69,7 @@ RedesignLibraryView {
             const id = MediaLib.deserializeMlItemIdFromString(target.key)
             playlistMedia.editItem(target.playlistRow, target.playlistRow + (action === "earlier" ? -1 : action === "later" ? 1 : 0), action === "remove-entry", id, selectedPlaylist)
         } else if (action === "pin") pinStore.toggle(target)
+        else if (action === "add-playlist") DialogsProvider.playlistsDialog([target.kind === "file" ? Qt.resolvedUrl(target.key) : MediaLib.deserializeMlItemIdFromString(target.key)])
         else if (action === "queue") enqueueTarget(target)
         else if (action === "open") openTarget(target)
         else playTarget(target)

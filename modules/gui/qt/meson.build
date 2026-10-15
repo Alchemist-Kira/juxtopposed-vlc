@@ -762,6 +762,8 @@ qml_modules += {
        'player/qml/redesign/RedesignConfirmationDialog.qml',
        'player/qml/redesign/RedesignNetworkDialog.qml',
        'player/qml/redesign/RedesignPlaylistDialog.qml',
+       'player/qml/redesign/RedesignAddToPlaylistDialog.qml',
+       'player/qml/redesign/RedesignAddToPlaylist.qml',
        'player/qml/redesign/RedesignNetworkStreams.qml',
        'player/qml/redesign/RedesignPreferencesCatalog.qml',
        'player/qml/redesign/RedesignPreferencesWindow.qml',

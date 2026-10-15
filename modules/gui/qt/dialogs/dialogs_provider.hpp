@@ -314,6 +314,7 @@ signals:
     void showRedesignPreferences();
     void showRedesignPreferencesPage(const QString& page);
     void showRedesignNetworkStreams();
+    void showRedesignAddToPlaylist(const QVariantList& media, int type);
 #ifdef UPDATE_CHECK
     void updateDialogVisibleChanged();
 #endif

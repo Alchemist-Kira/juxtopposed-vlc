@@ -214,6 +214,81 @@ void MLPlaylistListModel::createWithFiles(const QString& name, const QStringList
         });
 }
 
+void MLPlaylistListModel::saveSelection(const MLItemId& playlistId, const QString& newName, const QVariantList& items)
+{
+    if (transactionPending()) return;
+    const auto name = newName.trimmed();
+    if (items.isEmpty() || (!playlistId.id && name.isEmpty())) {
+        emit selectionSaved(false, {}, qtr("Select a playlist or enter a new name."));
+        return;
+    }
+    // Resolve input items while their caller is alive. The worker receives only
+    // value types, and keeps the selection's order even when sources are mixed.
+    QVariantList sources;
+    for (const auto& item : items) {
+        if (item.canConvert<MLItemId>()) sources.push_back(item);
+        else {
+            const auto media = vlc::playlist::toMediaList({item});
+            if (media.size() != 1 || !media.front().raw()->psz_uri) {
+                emit selectionSaved(false, {}, qtr("VLC cannot read this selection. Select the files again."));
+                return;
+            }
+            sources.push_back(qfu(media.front().raw()->psz_uri));
+        }
+    }
+    setTransactionPending(true);
+    struct Result { MLItemId id; QString error = qtr("VLC cannot save this selection. Try again."); };
+    m_mediaLib->runOnMLThread<Result>(this,
+        [playlistId, name, sources](vlc_medialibrary_t* ml, Result& result) {
+            ml_unique_ptr<vlc_ml_playlist_t> playlist;
+            const bool create = !name.isEmpty();
+            if (!create) {
+                playlist.reset(vlc_ml_get_playlist(ml, playlistId.id));
+                if (!playlist) return;
+                if (playlist->b_is_read_only) { result.error = qtr("You cannot change this playlist."); return; }
+            }
+            std::vector<int64_t> ids;
+            auto query = vlc_ml_query_params_create();
+            for (const auto& source : sources) {
+                if (source.canConvert<MLItemId>()) {
+                    const auto id = source.value<MLItemId>();
+                    if (!id.id) return;
+                    if (id.hasParent()) {
+                        ml_unique_ptr<vlc_ml_media_list_t> media(id.type == VLC_ML_PARENT_PLAYLIST
+                            ? vlc_ml_list_playlist_media(ml, &query, id.id)
+                            : vlc_ml_list_media_of(ml, &query, id.type, id.id));
+                        if (!media) return;
+                        for (const auto& entry : ml_range_iterate<vlc_ml_media_t>(media)) ids.push_back(entry.i_id);
+                    } else {
+                        ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media(ml, id.id));
+                        if (!media) return;
+                        ids.push_back(media->i_id);
+                    }
+                } else {
+                    const auto uri = QUrl(source.toString(), QUrl::TolerantMode).toEncoded();
+                    ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
+                    if (!media) media.reset(vlc_ml_new_external_media(ml, uri.constData()));
+                    if (!media) return;
+                    ids.push_back(media->i_id);
+                }
+            }
+            if (ids.empty()) { result.error = qtr("This selection has no media to add."); return; }
+            if (create) playlist.reset(vlc_ml_playlist_create(ml, qtu(name)));
+            if (!playlist) return;
+            bool saved = false;
+            const auto rollback = qScopeGuard([&] { if (create && !saved) vlc_ml_playlist_delete(ml, playlist->i_id); });
+            if (vlc_ml_playlist_append(ml, playlist->i_id, ids.data(), ids.size()) != VLC_SUCCESS) return;
+            saved = true;
+            result.id = MLItemId(playlist->i_id, VLC_ML_PARENT_PLAYLIST);
+            result.error.clear();
+        },
+        [this](quint64, const Result& result) {
+            endTransaction();
+            emit resetRequested();
+            emit selectionSaved(result.error.isEmpty(), result.id, result.error);
+        });
+}
+
 /* Q_INVOKABLE */ void MLPlaylistListModel::append(const MLItemId     & playlistId,
                                                    const QVariantList & ids)
 {
@@ -374,7 +449,8 @@ QHash<int, QByteArray> MLPlaylistListModel::roleNames() const /* override */
         { PLAYLIST_COUNT,     QByteArrayLiteral("count")      },
         { PLAYLIST_NB_AUDIO,  QByteArrayLiteral("nb_audio")   },
         { PLAYLIST_NB_VIDEO,  QByteArrayLiteral("nb_video")   },
-        { PLAYLIST_NB_UNKNOWN,QByteArrayLiteral("nb_unknown") }
+        { PLAYLIST_NB_UNKNOWN,QByteArrayLiteral("nb_unknown") },
+        { PLAYLIST_READ_ONLY, QByteArrayLiteral("readOnly")   }
     };
 }
 
@@ -394,6 +470,8 @@ QVariant MLPlaylistListModel::itemRoleData(const MLItem *item, int role) const /
             return QVariant::fromValue(playlist->getId());
         case PLAYLIST_NAME:
             return playlist->getName();
+        case PLAYLIST_READ_ONLY:
+            return playlist->readOnly();
         case PLAYLIST_THUMBNAIL:
             return getCover(playlist);
         case PLAYLIST_DURATION:

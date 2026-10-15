@@ -40,7 +40,8 @@ public:
         PLAYLIST_COUNT,
         PLAYLIST_NB_AUDIO,
         PLAYLIST_NB_VIDEO,
-        PLAYLIST_NB_UNKNOWN
+        PLAYLIST_NB_UNKNOWN,
+        PLAYLIST_READ_ONLY
     };
     Q_ENUM(Roles)
 
@@ -72,6 +73,7 @@ public:
 public: // Interface
     Q_INVOKABLE void create(const QString & name, const QVariantList& initialItems);
     Q_INVOKABLE void createWithFiles(const QString& name, const QStringList& urls, const QUrl& cover);
+    Q_INVOKABLE void saveSelection(const MLItemId& playlistId, const QString& newName, const QVariantList& items);
 
     Q_INVOKABLE void append(const MLItemId & playlistId, const QVariantList & ids);
 
@@ -111,6 +113,7 @@ private: // MLBaseModel implementation
 
 signals:
     void playlistCreated(bool success, const MLItemId& id, const QString& error);
+    void selectionSaved(bool success, const MLItemId& id, const QString& error);
     void coverSizeChanged   ();
     void coverDefaultChanged();
     void coverPrefixChanged ();

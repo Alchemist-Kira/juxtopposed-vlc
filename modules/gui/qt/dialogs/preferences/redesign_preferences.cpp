@@ -599,8 +599,6 @@ QVariant RedesignPreferences::value(const QString& name) const
 {
     if (name == QLatin1String("redesign-subtitle-relative-size"))
         return value(QStringLiteral("sub-text-scale"));
-    if (name == QLatin1String("redesign-subtitle-manual-style"))
-        return !value(QStringLiteral("sub-text-use-embedded-style")).toBool();
     if (name == QLatin1String("redesign-subtitle-duration"))
         return value(QStringLiteral("filter:sub-filter:subsdelay")).toBool() ? value(QStringLiteral("subsdelay-factor")) : QVariant(0.0);
     if (name == QLatin1String("redesign-subtitle-delay"))

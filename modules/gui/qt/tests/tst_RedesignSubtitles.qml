@@ -14,7 +14,7 @@ TestCase {
         property var values: ({})
         property string lastName
         property var lastValue
-        function value(name) { return name === "redesign-subtitle-manual-style" ? !values["sub-text-use-embedded-style"] : values[name] }
+        function value(name) { return values[name] }
         function describe(name) {
             if (name.endsWith("-track")) return {kind: "integer", editor: "track", maximum: 2147483647}
             if (name.endsWith("-language") || name === "freetype-font") return {kind: "string"}
@@ -105,14 +105,25 @@ TestCase {
         keyClick(Qt.Key_Right); compare(store.lastValue, 5)
         compare(item("subtitleBackgroundOpacitySetting").valueLabel, "2 %")
     }
-    function test_embeddedFormattingDisablesManualStyleButKeepsOffsetAndSizing() {
+    function test_embeddedFormattingKeepsFallbackAppearanceEditable() {
         mouseClick(findChild(item("subtitleAppearance_sub-text-use-embedded-style"), "preferenceToggleEditor"))
-        verify(!item("subtitleAppearance_freetype-font").editorEnabled)
-        verify(!item("subtitleAppearance_freetype-color").editorEnabled)
-        verify(!item("subtitleOutlineThicknessSetting").enabled)
-        verify(!item("subtitleBackgroundOpacitySetting").enabled)
+        verify(store.value("sub-text-use-embedded-style"))
+        verify(item("subtitleEmbeddedStyleHelp").visible)
+        verify(item("subtitleAppearance_freetype-font").editorEnabled)
+        verify(item("subtitleAppearance_freetype-color").editorEnabled)
+        verify(item("subtitleAppearance_freetype-outline-color").editorEnabled)
+        verify(item("subtitleOutlineThicknessSetting").enabled)
+        verify(item("subtitleBackgroundOpacitySetting").enabled)
         verify(item("subtitleAppearance_sub-margin").editorEnabled)
         verify(item("subtitleFontSizeSetting").enabled)
+        slider("subtitleOutlineThicknessSetting").forceActiveFocus(); keyClick(Qt.Key_End)
+        compare(store.lastName, "freetype-outline-thickness"); compare(store.lastValue, 50)
+        slider("subtitleBackgroundOpacitySetting").forceActiveFocus(); keyClick(Qt.Key_End)
+        compare(store.lastName, "freetype-background-opacity"); compare(store.lastValue, 255)
+        verify(store.value("sub-text-use-embedded-style"))
+        mouseClick(findChild(item("subtitleAppearance_sub-text-use-embedded-style"), "preferenceToggleEditor"))
+        verify(!item("subtitleEmbeddedStyleHelp").visible)
+        verify(item("subtitleOutlineThicknessSetting").enabled)
     }
     function test_liveSizingShowsShortcutValuesWithoutChangingSavedDefaults() {
         subtitles.liveTextScale = 130

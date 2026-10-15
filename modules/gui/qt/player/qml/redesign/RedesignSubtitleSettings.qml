@@ -15,7 +15,7 @@ ColumnLayout {
     property color accentColor: "#d37918"
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property bool pixels: { backend.revision; return (liveSizeMode >= 0 ? liveSizeMode : Number(backend.value("sub-text-size-mode"))) === 1 }
-    readonly property bool manualStyle: { backend.revision; return !backend.value("sub-text-use-embedded-style") }
+    readonly property bool useEmbeddedStyle: { backend.revision; return !!backend.value("sub-text-use-embedded-style") }
     readonly property real fontSize: { backend.revision; const live = root.pixels ? livePixelSize : liveTextScale; return live === undefined ? Number(backend.value(root.pixels ? "sub-text-size-pixels" : "sub-text-scale")) : Number(live) }
     signal delayRequested(real seconds)
     signal fpsRequested(real fps)
@@ -69,20 +69,33 @@ ColumnLayout {
     }
     Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(18); height: theme.dp(1); color: theme.border }
     Text { objectName: "subtitleAppearanceHeading"; Layout.topMargin: theme.dp(20); Layout.bottomMargin: theme.dp(8); text: qsTr("Appearance"); color: theme.bright; font.pixelSize: theme.dp(16) }
+    RedesignPreferenceRow {
+        objectName: "subtitleAppearance_sub-text-use-embedded-style"
+        Layout.fillWidth: true
+        backend: root.backend; optionName: "sub-text-use-embedded-style"; label: qsTr("Embedded Sub Format")
+        presentation: ({compact: true})
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+    }
+    Text {
+        objectName: "subtitleEmbeddedStyleHelp"
+        Layout.fillWidth: true; Layout.bottomMargin: theme.dp(8)
+        visible: root.useEmbeddedStyle
+        text: qsTr("Subtitle files can set their own style. Turn off Embedded Sub Format to use these settings for all text subtitles.")
+        color: theme.foreground; font.pixelSize: theme.dp(12); wrapMode: Text.WordWrap
+    }
     Repeater {
         model: [
-            {name: "sub-text-use-embedded-style", label: qsTr("Embedded Sub Format"), manual: false},
-            {name: "freetype-font", label: qsTr("Subtitle Font"), manual: true},
-            {name: "freetype-color", label: qsTr("Text Color"), manual: true},
-            {name: "freetype-outline-color", label: qsTr("Outline Color"), manual: true},
-            {name: "sub-margin", label: qsTr("Subtitle Offset"), manual: false, suffix: " px"}
+            {name: "freetype-font", label: qsTr("Subtitle Font")},
+            {name: "freetype-color", label: qsTr("Text Color")},
+            {name: "freetype-outline-color", label: qsTr("Outline Color")},
+            {name: "sub-margin", label: qsTr("Subtitle Offset"), suffix: " px"}
         ]
         RedesignPreferenceRow {
             required property var modelData
             objectName: "subtitleAppearance_" + modelData.name
             Layout.fillWidth: true
             backend: root.backend; optionName: modelData.name; label: modelData.label
-            presentation: ({compact: true, suffix: modelData.suffix || "", enabledWhen: modelData.manual ? "redesign-subtitle-manual-style" : ""})
+            presentation: ({compact: true, suffix: modelData.suffix || ""})
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         }
     }
@@ -130,7 +143,6 @@ ColumnLayout {
     RedesignSettingSlider {
         objectName: "subtitleOutlineThicknessSetting"
         Layout.fillWidth: true; Layout.topMargin: theme.dp(36)
-        enabled: root.manualStyle; opacity: enabled ? 1 : .5
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         label: qsTr("Outline Thickness"); displayValueAsText: true
         valueLabel: currentValue === 0 ? qsTr("None") : currentValue === 1 ? qsTr("Thin") : currentValue === 4 ? qsTr("Normal") : currentValue === 8 ? qsTr("Thick") : Math.round(currentValue) + " %"
@@ -144,7 +156,6 @@ ColumnLayout {
     RedesignSettingSlider {
         objectName: "subtitleBackgroundOpacitySetting"
         Layout.fillWidth: true; Layout.topMargin: theme.dp(36)
-        enabled: root.manualStyle; opacity: enabled ? 1 : .5
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         label: qsTr("Background Opacity"); displayValueAsText: true
         valueLabel: Math.round(currentValue) + " %"

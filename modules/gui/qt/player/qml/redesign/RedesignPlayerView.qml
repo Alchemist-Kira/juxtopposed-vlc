@@ -92,6 +92,7 @@ FocusScope {
     signal seekDragStarted()
     signal seekDragFinished(real value, bool commit)
     signal volumeRequested(real value)
+    signal volumeWheelRequested(var event)
     signal muteRequested()
     signal fullscreenRequested()
     signal minimizeRequested()
@@ -593,6 +594,14 @@ FocusScope {
                 iconName: root.muted ? "muted" : "volume"
                 text: root.muted ? qsTr("Unmute") : qsTr("Mute")
                 onClicked: root.muteRequested()
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    onWheel: event => {
+                        root.volumeWheelRequested(event)
+                        event.accepted = true
+                    }
+                }
             }
             RedesignVolume {
                 focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
@@ -601,6 +610,8 @@ FocusScope {
                 visible: root.width > theme.dp(750)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 muted: root.muted; to: root.maxVolume
+                currentVolume: root.volume
+                onWheelRequested: event => root.volumeWheelRequested(event)
                 Binding on value { when: !volumeSlider.pressed; value: root.volume; restoreMode: Binding.RestoreBindingOrValue }
                 onMoved: root.volumeRequested(value)
             }

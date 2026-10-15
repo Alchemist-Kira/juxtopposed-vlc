@@ -32,6 +32,17 @@ FocusScope {
         const parts = tick.formatHMS(0).split(":")
         return parts.length === 2 ? "00:" + parts.join(":") : parts.join(":")
     }
+    WheelToVLCConverter {
+        id: volumeWheel
+        function adjust(steps) {
+            if (steps === 0) return
+            Player.muted = false
+            if (steps > 0) Player.setVolumeUp(steps)
+            else Player.setVolumeDown(-steps)
+        }
+        onWheelUpDown: steps => adjust(steps)
+        onWheelLeftRight: steps => adjust(steps)
+    }
     RedesignSleepTimer { id: sleepTimer; onTriggered: MainPlaylistController.pause() }
     RedesignPreferences { id: playerPreferences; ctx: MainCtx; autoSave: true; editPlayerPreset: true }
     Shortcut {
@@ -125,6 +136,17 @@ FocusScope {
         onSeekDragStarted: Player.beginSeekDrag()
         onSeekDragFinished: (value, commit) => Player.finishSeekDrag(value, commit)
         onVolumeRequested: value => { Player.muted = false; Player.volume = value }
+        onVolumeWheelRequested: event => {
+            // Match the standard volume widget's continuous touchpad scrolling.
+            const pixels = Math.abs(event.pixelDelta.x) > Math.abs(event.pixelDelta.y)
+                         ? event.pixelDelta.x : event.pixelDelta.y
+            if (Math.abs(pixels) % 120 > 0) {
+                Player.muted = false
+                Player.volume = Math.max(0, Math.min(2, Player.volume + (event.inverted ? -pixels : pixels) * 0.001))
+            } else {
+                volumeWheel.qmlWheelEvent(event)
+            }
+        }
         onMuteRequested: Player.muted = !Player.muted
         onFullscreenRequested: MainCtx.toggleInterfaceFullScreen()
         onMinimizeRequested: MainCtx.requestInterfaceMinimized()

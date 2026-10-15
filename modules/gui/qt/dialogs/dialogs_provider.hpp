@@ -311,6 +311,7 @@ signals:
     void prefsDialogVisibleChanged();
     void showRedesignPreferences();
     void showRedesignPreferencesPage(const QString& page);
+    void showRedesignNetworkStreams();
 #ifdef UPDATE_CHECK
     void updateDialogVisibleChanged();
 #endif

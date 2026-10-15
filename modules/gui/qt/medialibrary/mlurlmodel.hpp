@@ -63,7 +63,12 @@ public:
 
     Q_INVOKABLE void addAndPlay( const QString& url );
 
+    Q_INVOKABLE void openStreams(const QStringList& urls, const QString& playlistName);
+
     Q_INVOKABLE void deleteStream( const MLItemId itemId );
+
+signals:
+    void streamsOpened(bool success);
 
 protected:
     QVariant itemRoleData(const MLItem *item, int role) const override;

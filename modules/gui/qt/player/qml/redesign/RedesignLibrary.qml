@@ -233,7 +233,7 @@ RedesignLibraryView {
         else MediaLib.addToPlaylist(activeModel.getDataAt(index).id)
     }
     onAddRequested: {
-        if (category === 3) networkDialog.open()
+        if (category === 3) DialogsProvider.openNetDialog()
         else { const folder = DialogsProvider.selectLibraryFolder(); if (folder.toString().length > 0) libraryFolders.add(folder) }
     }
     onPreferencesRequested: DialogsProvider.prefsPageDialog("library")
@@ -366,16 +366,5 @@ RedesignLibraryView {
         standardButtons: C.Dialog.Ok | C.Dialog.Cancel
         contentItem: C.TextField { id: playlistName; placeholderText: qsTr("Playlist name"); onAccepted: createPlaylist.accept() }
         onAccepted: if (playlistName.text.trim().length > 0) playlists.create(playlistName.text.trim(), [])
-    }
-    C.Dialog {
-        id: networkDialog
-        parent: root
-        anchors.centerIn: parent
-        width: Math.min(root.width - root.theme.dp(20), root.theme.dp(360))
-        title: qsTr("Open network stream")
-        modal: true
-        standardButtons: C.Dialog.Open | C.Dialog.Cancel
-        contentItem: C.TextField { id: streamUrl; placeholderText: qsTr("https://…"); onAccepted: networkDialog.accept() }
-        onAccepted: if (streamUrl.text.trim().length > 0) streams.addAndPlay(streamUrl.text.trim())
     }
 }

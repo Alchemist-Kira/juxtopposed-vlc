@@ -49,6 +49,17 @@ Item {
     RedesignPreferencesWindow { }
     RedesignOnboardingWindow { }
 
+    Loader {
+        id: networkStreams
+        anchors.fill: parent
+        active: MainCtx.mediaLibraryAvailable
+        source: active ? "qrc:///qt/qml/VLC/Player/RedesignNetworkStreams.qml" : ""
+    }
+    Connections {
+        target: DialogsProvider
+        function onShowRedesignNetworkStreams() { if (networkStreams.item) networkStreams.item.begin() }
+    }
+
     property bool _extendedFrameVisible: MainCtx.windowSuportExtendedFrame
                                       && MainCtx.clientSideDecoration
                                       && (MainCtx.intfMainWindow.visibility === Window.Windowed)

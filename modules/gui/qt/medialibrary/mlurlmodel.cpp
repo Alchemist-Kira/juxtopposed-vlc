@@ -20,6 +20,8 @@
 
 #include <QDateTime>
 #include <QTimeZone>
+#include <QUrl>
+#include <vector>
 
 MLUrlModel::MLUrlModel(QObject *parent)
     : MLBaseModel(parent)
@@ -83,6 +85,51 @@ void MLUrlModel::addAndPlay( const QString &url )
         m_mediaLib->addAndPlay(ctx.itemId);
         emit resetRequested();
     });
+}
+
+void MLUrlModel::openStreams(const QStringList& urls, const QString& playlistName)
+{
+    QStringList normalized;
+    for (const auto& text : urls) {
+        const QUrl url(text.trimmed(), QUrl::StrictMode);
+        if (!url.isValid() || url.scheme().isEmpty() || !text.contains(QStringLiteral("://"))) {
+            emit streamsOpened(false);
+            return;
+        }
+        normalized.push_back(url.toString(QUrl::FullyEncoded));
+    }
+    if (normalized.isEmpty()) {
+        emit streamsOpened(false);
+        return;
+    }
+    struct Result { bool success = false; QVariantList media; };
+    m_mediaLib->runOnMLThread<Result>(this,
+        [normalized, name = playlistName.trimmed()](vlc_medialibrary_t* ml, Result& result) {
+            std::vector<int64_t> ids;
+            for (const auto& url : normalized) {
+                ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, qtu(url)));
+                if (!media) media.reset(vlc_ml_new_stream(ml, qtu(url)));
+                if (!media) return;
+                ids.push_back(media->i_id);
+                result.media.push_back(QVariant::fromValue(MLItemId(media->i_id, VLC_ML_PARENT_UNKNOWN)));
+            }
+            if (!name.isEmpty()) {
+                ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_playlist_create(ml, qtu(name)));
+                if (!playlist) return;
+                if (vlc_ml_playlist_append(ml, playlist->i_id, ids.data(), ids.size()) != VLC_SUCCESS) {
+                    vlc_ml_playlist_delete(ml, playlist->i_id);
+                    return;
+                }
+            }
+            result.success = true;
+        },
+        [this](quint64, Result& result) {
+            if (result.success) {
+                m_mediaLib->addAndPlay(result.media);
+                emit resetRequested();
+            }
+            emit streamsOpened(result.success);
+        });
 }
 
 void MLUrlModel::deleteStream( const MLItemId itemId )

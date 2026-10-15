@@ -664,6 +664,10 @@ void DialogsProvider::openDiscDialog()
 }
 void DialogsProvider::openNetDialog()
 {
+    if (p_intf->p_mi && p_intf->p_mi->hasMediaLibrary()) {
+        emit showRedesignNetworkStreams();
+        return;
+    }
     openDialog( OpenDialog::OPEN_NETWORK_TAB );
 }
 void DialogsProvider::openCaptureDialog()

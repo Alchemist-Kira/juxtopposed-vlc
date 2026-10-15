@@ -90,6 +90,10 @@ public: // QAbstractItemModel reimplementation
                         int role = Qt::DisplayRole) const override;
 
 protected: // MLBaseModel implementation
+    vlc_ml_sorting_criteria_t nameToCriteria(QByteArray name) const override
+    {
+        return name == "insertion" ? VLC_ML_SORTING_INSERTIONDATE : VLC_ML_SORTING_ALPHA;
+    }
     QVariant itemRoleData(const MLItem* item, int role = Qt::DisplayRole) const override;
 
     std::unique_ptr<MLListCacheLoader> createMLLoader() const override;

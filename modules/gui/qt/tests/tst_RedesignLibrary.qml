@@ -41,6 +41,7 @@ TestCase {
         onDropped: drop => { drops++; sourceItem = drop.source; drop.acceptProposedAction() }
     }
     Component { id: visitsComponent; RedesignLibraryVisits { ctx: settings } }
+    Component { id: sortComponent; RedesignLibrarySort { ctx: settings } }
     SignalSpy { id: homeSpy; target: library; signalName: "homeActivated" }
     SignalSpy { id: homeQueueSpy; target: library; signalName: "homeEnqueueRequested" }
     SignalSpy { id: sectionSpy; target: library; signalName: "homeSectionRequested" }
@@ -48,20 +49,97 @@ TestCase {
     SignalSpy { id: playlistSpy; target: library; signalName: "newPlaylistRequested" }
     SignalSpy { id: settingsSpy; target: library; signalName: "preferencesRequested" }
     function init() {
+        testCase.height = 986
+        testCase.Window.window.height = 986
+        wait(20)
         queueDrop.visible = false; queueDrop.drops = 0; queueDrop.sourceItem = null
         settings.saved = "[]"
         library.homeSections = []
         homeSpy.clear(); homeQueueSpy.clear(); sectionSpy.clear()
         library.category = 1
         library.grid = false
+        library.sortState.saved = ({})
+        library.sortFields = ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
         library.canGoBack = false
         addSpy.clear(); playlistSpy.clear(); settingsSpy.clear()
     }
     function cleanup() {
-        for (const name of ["libraryMoreMenu", "libraryViewMenu"]) {
+        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu"]) {
             const menu = findChild(library, name)
-            menu.close()
-            tryCompare(menu, "opened", false)
+            if (menu) { menu.close(); tryVerify(() => !menu || !menu.visible) }
+        }
+    }
+    function test_sortMenuMatchesReferenceAndKeepsChoice() {
+        const button = findChild(library, "librarySortButton")
+        mouseClick(button)
+        let menu = library.sortPopup
+        tryCompare(menu, "opened", true)
+        compare(menu.width, 265)
+        compare(menu.count, 16)
+        let first = findChild(menu, "libraryAction_unwatched")
+        compare(first.height, 48)
+        verify(first.checked)
+        let track = findChild(menu, "libraryAction_track-desc")
+        mouseClick(track)
+        compare(library.sortField, "track_number")
+        compare(library.descending, true)
+        mouseClick(button)
+        menu = library.sortPopup
+        tryCompare(menu, "opened", true)
+        track = findChild(menu, "libraryAction_track-desc")
+        first = findChild(menu, "libraryAction_unwatched")
+        verify(track.checked)
+        verify(!first.checked)
+        compare(button.iconName, "sort-active")
+        keyClick(Qt.Key_Escape)
+        tryCompare(library, "sortPopup", null)
+    }
+    function test_sortMenuRestrictsChoicesToFolderData() {
+        library.sortFields = ["title", "insertion", "uri"]
+        library.sortState.select("title-asc")
+        mouseClick(findChild(library, "librarySortButton"))
+        let menu = library.sortPopup
+        tryCompare(menu, "opened", true)
+        compare(menu.count, 6)
+        verify(!findChild(library, "libraryAction_track-asc"))
+        library.sortState.select("track-asc")
+        compare(library.sortField, "title")
+    }
+    function test_sortMenuFitsSmallWindowAndReachesLastChoice() {
+        testCase.height = 480
+        testCase.Window.window.height = 480
+        wait(20)
+        mouseClick(findChild(library, "librarySortButton"))
+        let menu = library.sortPopup
+        tryCompare(menu, "opened", true)
+        verify(menu.height <= testCase.height - 20)
+        for (let i = 0; i < 15; ++i) keyClick(Qt.Key_Down)
+        tryVerify(() => menu.contentItem.currentItem === menu.itemAt(15))
+        keyClick(Qt.Key_Return)
+        tryCompare(library, "sortField", "disc_number")
+        compare(library.descending, true)
+        testCase.height = 986
+    }
+    function test_sortChoicesPersistByViewAndSurviveReload() {
+        settings.saved = "{}"
+        let sort = createTemporaryObject(sortComponent, testCase, {scope: "folders", fields: ["title", "uri"], defaultChoice: "title-asc"})
+        sort.select("uri-desc")
+        compare(sort.selection.id, "uri-desc")
+        sort.scope = "songs"
+        sort.fields = ["title", "track_number"]
+        compare(sort.selection.id, "title-asc")
+        sort.select("track-asc")
+        sort = createTemporaryObject(sortComponent, testCase, {scope: "folders", fields: ["title", "uri"], defaultChoice: "title-asc"})
+        compare(sort.selection.id, "uri-desc")
+        sort.scope = "songs"
+        sort.fields = ["title", "track_number"]
+        compare(sort.selection.id, "track-asc")
+    }
+    function test_sortChoicesRejectInvalidSavedData() {
+        for (const value of ["invalid", "[]", "null", "42", '{"media":"unknown"}']) {
+            settings.saved = value
+            const sort = createTemporaryObject(sortComponent, testCase)
+            compare(sort.selection.id, "unwatched")
         }
     }
     function test_folderNamesKeepLiteralPercents() {

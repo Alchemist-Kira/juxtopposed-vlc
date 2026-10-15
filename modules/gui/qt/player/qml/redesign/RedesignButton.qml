@@ -17,6 +17,7 @@ T.Button {
     property color selectedForeground: theme.accent
     property real iconSize: theme.dp(24)
     property real iconReveal: 0
+    property var iconDetailColor
     property real captionFontSize: 14
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
@@ -54,6 +55,7 @@ T.Button {
             name: root.iconName
             sidebarReveal: root.iconReveal
             color: root.iconName === "cone" ? theme.accent : root.accent ? "#161616" : root.selected ? theme.accent : root.hovered || root.visualFocus ? theme.bright : root.foreground
+            detailColor: root.iconDetailColor === undefined ? color : root.iconDetailColor
             opacity: root.enabled ? 1 : 0.35
         }
         Text {

@@ -9,11 +9,13 @@ C.Menu {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property var entries: []
+    property string checkedAction: ""
     signal actionRequested(string action)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     width: theme.dp(265)
     padding: theme.dp(4)
     margins: theme.dp(10)
+    height: Math.min(implicitHeight, parent && parent.Window.window ? parent.Window.window.height - 2 * margins : implicitHeight)
     popupType: C.Popup.Item
     background: Rectangle {
         color: root.lightTheme ? root.theme.background : "#191919"
@@ -30,8 +32,8 @@ C.Menu {
             rightPadding: root.theme.dp(14)
             text: modelData.label
             enabled: modelData.enabled !== false
-            checkable: modelData.checked !== undefined
-            checked: modelData.checked === true
+            checkable: root.checkedAction.length > 0 || modelData.checked !== undefined
+            checked: root.checkedAction.length > 0 ? modelData.action === root.checkedAction : modelData.checked === true
             indicator: null
             arrow: null
             background: Rectangle { radius: root.theme.dp(6); color: row.highlighted ? root.theme.hover : "transparent" }

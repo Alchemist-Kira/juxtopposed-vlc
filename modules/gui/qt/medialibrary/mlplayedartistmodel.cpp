@@ -53,13 +53,20 @@ const std::vector<int64_t>& MLPlayedArtistModel::Loader::rankedArtists(vlc_media
     std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
         return a.second == b.second ? a.first < b.first : a.second > b.second;
     });
-    std::vector<int64_t> result;
+    std::vector<std::pair<int64_t, QString>> matches;
     const auto pattern = QString::fromUtf8(m_searchPattern);
     for (const auto& [id, plays] : sorted) {
         ml_unique_ptr<vlc_ml_artist_t> artist{vlc_ml_get_artist(ml, id)};
         if (artist && QString::fromUtf8(artist->psz_name).contains(pattern, Qt::CaseInsensitive))
-            result.push_back(id);
+            matches.emplace_back(id, QString::fromUtf8(artist->psz_name));
     }
+    if (m_sortName == "title" || m_sortName == "name")
+        std::sort(matches.begin(), matches.end(), [this](const auto& a, const auto& b) {
+            const int name = QString::compare(a.second, b.second, Qt::CaseInsensitive);
+            return name ? (m_sortDesc ? name > 0 : name < 0) : a.first < b.first;
+        });
+    std::vector<int64_t> result;
+    for (const auto& match : matches) result.push_back(match.first);
     ranked = std::move(result);
     return *ranked;
 }

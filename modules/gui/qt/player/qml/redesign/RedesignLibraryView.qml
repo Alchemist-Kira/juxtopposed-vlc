@@ -17,7 +17,14 @@ Item {
     property string heading: qsTr("Videos")
     property string searchText: ""
     property bool grid: false
-    property bool descending: false
+    property var settingsContext
+    property string sortScope: "media"
+    property var sortFields: ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
+    property string defaultSortChoice: "unwatched"
+    property var extraSortOptions: []
+    readonly property alias sortState: sorting
+    readonly property bool descending: sorting.selection.descending
+    readonly property string sortField: sorting.selection.field
     property bool canGoBack: false
     property bool canGoForward: false
     property bool canEnqueue: true
@@ -49,6 +56,38 @@ Item {
     function addMedia() {
         if (category === 4) newPlaylistRequested()
         else addRequested()
+    }
+    RedesignLibrarySort {
+        id: sorting
+        ctx: root.settingsContext; scope: root.sortScope
+        fields: root.sortFields; defaultChoice: root.defaultSortChoice; extraOptions: root.extraSortOptions
+    }
+    property var sortPopup: null
+    Component {
+        id: sortMenuComponent
+        RedesignActionMenu {
+            id: menu
+            objectName: "librarySortMenu"
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            checkedAction: sorting.selection.id
+            onActionRequested: action => sorting.select(action)
+            onOpened: currentIndex = sorting.options.findIndex(option => option.id === sorting.selection.id)
+            onClosed: {
+                if (root.sortPopup === menu) root.sortPopup = null
+                destroy()
+            }
+        }
+    }
+    Connections {
+        target: sorting
+        function onOptionsChanged() { if (root.sortPopup) root.sortPopup.close() }
+    }
+    function openSortMenu(anchor) {
+        if (sortPopup) { sortPopup.close(); return }
+        sortPopup = sortMenuComponent.createObject(root, {
+            entries: sorting.options.map(option => ({action: option.id, label: option.label}))
+        })
+        sortPopup.popup(anchor, 0, anchor.height)
     }
     RedesignActionMenu {
         id: moreMenu
@@ -143,11 +182,14 @@ Item {
                 color: theme.foreground; font.pixelSize: theme.dp(14)
             }
             RedesignButton {
+                id: sortButton
                 objectName: "librarySortButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "sort"; text: root.descending ? qsTr("Sort ascending") : qsTr("Sort descending")
-                selected: root.descending
-                onClicked: root.descending = !root.descending
+                visible: !root.homeSectionsVisible && sorting.options.length > 0
+                iconName: root.sortPopup || sorting.selection.id !== root.defaultSortChoice ? "sort-active" : "sort"
+                iconDetailColor: root.theme.accent
+                text: qsTr("Sort options")
+                onClicked: root.openSortMenu(sortButton)
             }
             RedesignButton {
                 id: viewButton

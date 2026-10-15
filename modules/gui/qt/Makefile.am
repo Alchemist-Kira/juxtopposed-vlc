@@ -1237,6 +1237,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignHomeView.qml \
 	player/qml/redesign/RedesignLibraryDrag.qml \
 	player/qml/redesign/RedesignLibraryVisits.qml \
+	player/qml/redesign/RedesignLibrarySort.qml \
 	player/qml/redesign/RedesignMenu.qml \
 	player/qml/redesign/RedesignRecentMenuModel.qml \
 	player/qml/redesign/RedesignPlayerView.qml \

@@ -47,6 +47,10 @@ public:
     bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
 
     void updateCurrent(QString current);
+    Q_INVOKABLE void refresh();
+    // Read the current device from the aout: the "device changed" event that reports it
+    // can fire before this model subscribes, leaving no checkmark until a manual pick.
+    void syncCurrent();
 
     QHash<int, QByteArray> roleNames() const override;
 

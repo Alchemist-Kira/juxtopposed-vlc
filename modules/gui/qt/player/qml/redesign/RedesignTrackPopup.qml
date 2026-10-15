@@ -5,6 +5,15 @@ import QtQuick.Controls.Basic as C
 
 C.Popup {
     id: root
+    // The device list is read once upstream; re-read it so hotplugged outputs show up.
+    onAboutToShow: if (root.audioDevices) root.audioDevices.refresh()
+    // Cheap: copies the list PipeWire already keeps; refresh() is a no-op when unchanged.
+    Timer {
+        interval: 2000
+        repeat: true
+        running: root.opened && root.page === "audio" && !!root.audioDevices
+        onTriggered: root.audioDevices.refresh()
+    }
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false

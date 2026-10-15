@@ -384,6 +384,33 @@ TestCase {
         mouseClick(findChild(player, "subtitleButton"))
         compare(subtitleSpy.count, 1)
     }
+    function test_settingsTabsKeepSettingsButtonSelected() {
+        const settings = findChild(player, "playbackSettingsButton")
+        const audio = findChild(player, "audioButton")
+        const subtitles = findChild(player, "subtitleButton")
+        mouseClick(settings)
+        compare(player.settingsPage, "playback")
+        for (const page of ["playback", "video", "audio", "subtitles"]) {
+            player.settingsPage = page
+            verify(settings.selected, page)
+            verify(!audio.selected, page)
+            verify(!subtitles.selected, page)
+        }
+        mouseClick(audio)
+        tryCompare(trackPicker, "opened", true)
+        verify(audio.selected)
+        verify(!subtitles.selected)
+        verify(!settings.selected)
+        mouseClick(subtitles)
+        compare(trackPicker.page, "subtitles")
+        verify(subtitles.selected)
+        verify(!audio.selected)
+        verify(!settings.selected)
+        mouseClick(subtitles)
+        tryCompare(trackPicker, "visible", false)
+        verify(!subtitles.selected)
+        verify(!settings.selected)
+    }
     function test_subtitleButtonClosesOpenPopupAndExpandedSubtitlePanel() {
         const button = findChild(player, "subtitleButton")
         mouseClick(button)

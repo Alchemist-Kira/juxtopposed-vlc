@@ -599,21 +599,21 @@ FocusScope {
                 visible: root.width > theme.dp(900)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "audio"; text: qsTr("Audio tracks and output")
-                selected: root.settingsPage === "audio" || !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "audio"
+                selected: !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "audio"
                 onClicked: { root.toggleTracks(this, "audio"); root.audioTracksRequested(this) }
             }
             ChromeButton {
                 objectName: "subtitleButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "subtitles"; text: qsTr("Subtitle tracks")
-                selected: root.settingsPage === "subtitles" || !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "subtitles"
+                selected: !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "subtitles"
                 onClicked: { root.toggleTracks(this, "subtitles"); root.subtitleTracksRequested(this) }
             }
             ChromeButton {
                 objectName: "playbackSettingsButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "settings"; text: qsTr("Playback settings")
-                selected: root.settingsPage === "playback"
+                selected: root.settingsPage.length > 0
                 onClicked: root.toggleSettings("playback")
             }
             ChromeButton {

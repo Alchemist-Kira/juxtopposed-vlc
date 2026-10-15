@@ -209,7 +209,7 @@ TestCase {
     }
     function test_itemContextMenuKeepsItsTargetAndDoesNotActivateOnRightClick() {
         const records = [{key: "original"}]
-        library.menuForItem = (index, section) => ({target: {key: records[index].key}, entries: [{action: "pin", label: "Pin to sidebar"}]})
+        library.menuForItem = (index, section) => ({target: {key: records[index].key}, entries: [{action: "pin", label: "Add to sidebar"}]})
         const button = findChild(library, "libraryMediaItem0")
         mouseClick(button, 10, 10, Qt.RightButton)
         const menu = findChild(library, "libraryItemMenu")
@@ -230,7 +230,7 @@ TestCase {
     function test_homeContextMenuUsesItsSection() {
         library.category = 0
         library.homeSections = [{key: "folders", title: "Folders", model: homeItems, icon: "folder", emptyText: "None"}]
-        library.menuForItem = (index, section) => ({target: {key: index.toString(), section: section}, entries: [{action: "pin", label: "Pin to sidebar"}]})
+        library.menuForItem = (index, section) => ({target: {key: index.toString(), section: section}, entries: [{action: "pin", label: "Add to sidebar"}]})
         const button = findChild(library, "homeItem_folders_0")
         tryVerify(() => button.visible)
         verify(waitForRendering(button))
@@ -249,7 +249,7 @@ TestCase {
         tryCompare(menu, "opened", true)
         let pin = findChild(menu, "libraryAction_pin")
         verify(waitForRendering(pin))
-        compare(pin.text, "Pin to sidebar")
+        compare(pin.text, "Add to sidebar")
         mouseClick(pin)
         compare(pinLocationSpy.count, 1)
         library.locationPinned = true

@@ -126,7 +126,7 @@ Item {
         entries: [
             { action: "add", label: root.addLabel, icon: "add" },
             { action: "settings", label: qsTr("Library settings"), icon: "settings" }
-        ].concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Pin to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
+        ].concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
             .concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
         onActionRequested: action => {
             if (action === "add") root.addMedia()

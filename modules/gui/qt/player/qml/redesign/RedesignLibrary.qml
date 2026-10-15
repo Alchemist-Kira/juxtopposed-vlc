@@ -37,7 +37,7 @@ RedesignLibraryView {
         const navigate = ["folder", "section", "home"].includes(target.kind)
         return {target: target, entries: [
             {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play"},
-            {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Pin to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
+            {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
         ].concat(["section", "home"].includes(target.kind) ? [] : [{action: "queue", label: qsTr("Add to queue"), icon: "queue"}])}
     }
     onItemActionRequested: (target, action) => {

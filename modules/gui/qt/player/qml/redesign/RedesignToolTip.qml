@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // An explicit, styled tooltip. The shared attached C.ToolTip instance is unreliable to style
 // (Qt 6.11 can hand out a different instance than the one configured), so redesign controls
-// declare their own. Popup.Window lets KWin place it past the main window's edge.
+// declare their own.
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls.Basic as C
@@ -15,11 +15,11 @@ C.ToolTip {
                                       ? controlWindow.renderWindow : controlWindow
     readonly property real s: theme ? theme.scaleFactor : 1
 
-    // Offscreen render controls cannot display native popup windows. Fullscreen
-    // also uses an item popup to keep pointer hover on the player controls.
-    popupType: (hostWindow && hostWindow !== controlWindow)
-               || (hostWindow && hostWindow.visibility === Window.FullScreen)
-               ? C.Popup.Item : C.Popup.Window
+    // A native tooltip window can make Windows send hover-leave to its owner.
+    // Hiding it then restores hover and opens it again, including on title-bar
+    // buttons. Keep every tooltip in the controls' overlay so it cannot change
+    // native window hover/focus. Popup margins keep edge tooltips on screen.
+    popupType: C.Popup.Item
     delay: 650
     margins: 6 * s
     padding: 6 * s

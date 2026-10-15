@@ -71,9 +71,12 @@ C.Control {
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
         }
-        C.ToolTip.text: text
-        C.ToolTip.visible: hovered || visualFocus
-        C.ToolTip.delay: 650
+        property string toolTipText: text
+        RedesignToolTip {
+            theme: root.theme
+            text: button.toolTipText
+            visible: button.hovered || button.visualFocus
+        }
     }
     Row {
         anchors.verticalCenter: parent.verticalCenter
@@ -84,7 +87,7 @@ C.Control {
             width: root.overflowWidth
             text: "..."
             Accessible.name: qsTr("Parent locations")
-            C.ToolTip.text: qsTr("Parent locations")
+            toolTipText: qsTr("Parent locations")
             onClicked: ancestors.popup(overflow, 0, height)
         }
         Repeater {

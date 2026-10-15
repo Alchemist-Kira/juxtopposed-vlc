@@ -786,6 +786,8 @@ qml_modules += {
        'player/qml/redesign/RedesignLibraryView.qml',
        'player/qml/redesign/RedesignBreadcrumbs.qml',
        'player/qml/redesign/RedesignLibraryPath.qml',
+       'player/qml/redesign/RedesignLibraryPins.qml',
+       'player/qml/redesign/RedesignLibraryNavigation.qml',
        'player/qml/redesign/RedesignHomeView.qml',
        'player/qml/redesign/RedesignLibraryDrag.qml',
        'player/qml/redesign/RedesignLibraryVisits.qml',

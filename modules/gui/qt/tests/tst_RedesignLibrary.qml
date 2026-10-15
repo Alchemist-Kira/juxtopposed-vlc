@@ -43,6 +43,7 @@ TestCase {
     }
     Component { id: visitsComponent; RedesignLibraryVisits { ctx: settings } }
     Component { id: sortComponent; RedesignLibrarySort { ctx: settings } }
+    Component { id: pinsComponent; RedesignLibraryPins { ctx: settings } }
     RedesignLibraryPath { id: folderPath }
     SignalSpy { id: homeSpy; target: library; signalName: "homeActivated" }
     SignalSpy { id: homeQueueSpy; target: library; signalName: "homeEnqueueRequested" }
@@ -53,6 +54,9 @@ TestCase {
     SignalSpy { id: activateSpy; target: library; signalName: "activated" }
     SignalSpy { id: categorySpy; target: library; signalName: "categoryRequested" }
     SignalSpy { id: breadcrumbSpy; target: library; signalName: "breadcrumbActivated" }
+    SignalSpy { id: pinSpy; target: library; signalName: "pinActivated" }
+    SignalSpy { id: pinRemoveSpy; target: library; signalName: "pinRemoved" }
+    SignalSpy { id: pinQueueSpy; target: library; signalName: "pinEnqueueRequested" }
     function init() {
         testCase.width = 427
         testCase.Window.window.width = 427
@@ -69,6 +73,11 @@ TestCase {
         library.expanded = false
         library.searchText = ""
         library.breadcrumbs = []
+        library.pins = []
+        library.selectedPinId = ""
+        library.forceActiveFocus()
+        findChild(library, "libraryNavigationScroll").contentY = 0
+        pinSpy.clear(); pinRemoveSpy.clear(); pinQueueSpy.clear()
         breadcrumbSpy.clear()
         library.sortState.saved = ({})
         library.sortFields = ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
@@ -78,7 +87,7 @@ TestCase {
         wait(20)
     }
     function cleanup() {
-        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu", "libraryAncestorMenu"]) {
+        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu", "libraryAncestorMenu", "libraryPinMenu"]) {
             const menu = findChild(library, name)
             if (menu) { menu.close(); tryVerify(() => !menu || !menu.visible) }
         }
@@ -107,6 +116,81 @@ TestCase {
         compare(button.iconName, "sort-active")
         keyClick(Qt.Key_Escape)
         tryCompare(library, "sortPopup", null)
+    }
+    function test_pinsPersistInOrderAndDoNotDuplicate() {
+        let pins = createTemporaryObject(pinsComponent, testCase)
+        const folder = {kind: "folder", key: "file:///Shows", name: "Shows", category: 1}
+        const playlist = {kind: "playlist", key: "saved-playlist", name: "My songs"}
+        pins.add(folder); pins.add(playlist)
+        verify(pins.contains(folder))
+        pins.add(Object.assign({}, folder, {name: "Renamed shows"}))
+        compare(pins.entries.length, 2)
+        compare(pins.entries[0].name, "Renamed shows")
+        pins = createTemporaryObject(pinsComponent, testCase)
+        compare(pins.entries[0].key, folder.key)
+        compare(pins.entries[1].key, playlist.key)
+        pins.toggle(folder)
+        verify(!pins.contains(folder))
+        compare(pins.entries[0].key, playlist.key)
+        pins = createTemporaryObject(pinsComponent, testCase)
+        compare(pins.entries.length, 1)
+        compare(pins.entries[0].category, 4)
+    }
+    function test_pinsRejectInvalidSavedEntries() {
+        const folder = {kind: "folder", key: "file:///Shows", name: "Shows"}
+        settings.saved = JSON.stringify([null, {}, {kind: "invalid", key: "x", name: "x"}, {kind: "collection", key: "1", name: "x", section: "invalid"}, folder, folder])
+        const pins = createTemporaryObject(pinsComponent, testCase)
+        compare(pins.entries.length, 1)
+        for (const value of ["invalid", "null", "42", "{}"]) {
+            settings.saved = value
+            compare(createTemporaryObject(pinsComponent, testCase).entries.length, 0)
+        }
+    }
+    function test_pinnedShortcutsOpenQueueAndRemoveFromTheirMenu() {
+        library.pins = [{id: "folder:shows", kind: "folder", key: "shows", name: "Shows", icon: "folder"}]
+        const button = findChild(library, "libraryPin0")
+        verify(button.visible)
+        tryVerify(() => button.mapToItem(library, 0, 0).y === 282)
+        mouseClick(button)
+        compare(pinSpy.count, 1)
+        compare(pinSpy.signalArguments[0][0].key, "shows")
+        mouseClick(button, 10, 10, Qt.RightButton)
+        const menu = findChild(library, "libraryPinMenu")
+        tryCompare(menu, "opened", true)
+        const queue = findChild(menu, "libraryAction_queue")
+        verify(waitForRendering(queue))
+        mouseClick(queue)
+        compare(pinQueueSpy.count, 1)
+        button.forceActiveFocus()
+        keyClick(Qt.Key_Menu)
+        tryCompare(menu, "opened", true)
+        const remove = findChild(menu, "libraryAction_remove")
+        verify(waitForRendering(remove))
+        mouseClick(remove)
+        compare(pinRemoveSpy.count, 1)
+        compare(pinRemoveSpy.signalArguments[0][0].key, "shows")
+        library.selectedPinId = "folder:shows"
+        verify(button.selected)
+        expandLibrary()
+        compare(findChild(library, "libraryPin0").text, "Shows")
+        verify(findChild(library, "libraryPin0").selected)
+    }
+    function test_manyPinsKeepAddAndKeyboardFocusInView() {
+        const pins = []
+        for (let i = 0; i < 30; ++i) pins.push({id: "folder:" + i, kind: "folder", key: i.toString(), name: "Folder " + i, icon: "folder"})
+        library.pins = pins
+        const scroll = findChild(library, "libraryNavigationScroll")
+        tryVerify(() => scroll.contentHeight > scroll.height)
+        const button = findChild(library, "libraryPin29")
+        button.forceActiveFocus()
+        verify(scroll.contentY > 0)
+        const add = findChild(library, "libraryCategory6")
+        add.forceActiveFocus()
+        verify(add.mapToItem(scroll, 0, add.height).y <= scroll.height)
+        keyClick(Qt.Key_Space)
+        compare(addSpy.count, 1)
+        library.pins = []
+        tryCompare(scroll, "contentY", 0)
     }
     function test_sortMenuRestrictsChoicesToFolderData() {
         library.sortFields = ["title", "insertion", "uri"]

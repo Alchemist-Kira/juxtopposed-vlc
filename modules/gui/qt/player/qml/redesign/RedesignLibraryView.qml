@@ -16,6 +16,8 @@ Item {
     property int category: 1
     property string heading: qsTr("Videos")
     property var breadcrumbs: []
+    property var pins: []
+    property string selectedPinId: ""
     property string searchText: ""
     property bool grid: false
     property bool expanded: false
@@ -51,6 +53,9 @@ Item {
     signal newPlaylistRequested()
     signal preferencesRequested()
     signal breadcrumbActivated(int index)
+    signal pinActivated(var pin)
+    signal pinRemoved(var pin)
+    signal pinEnqueueRequested(var pin)
 
     function nameFromUrl(url) {
         const value = url.toString()
@@ -121,45 +126,21 @@ Item {
         onActionRequested: action => root.grid = action === "grid"
     }
 
-    Rectangle {
+    RedesignLibraryNavigation {
         id: rail
         objectName: "libraryNavigation"
         x: root.expanded ? theme.dp(8) : 0
         anchors.top: parent.top; anchors.bottom: parent.bottom
         anchors.topMargin: root.expanded ? theme.dp(8) : 0
         anchors.bottomMargin: root.expanded ? theme.dp(8) : 0
-        width: root.expanded ? theme.dp(201) : theme.dp(50)
-        radius: root.expanded ? theme.dp(6) : 0
-        color: root.expanded && !root.lightTheme ? "#191919" : theme.background
-        Column {
-            anchors.top: parent.top; anchors.topMargin: theme.dp(root.expanded ? 10 : 6)
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: root.expanded ? parent.width - theme.dp(16) : theme.dp(36)
-            spacing: theme.dp(10)
-            Repeater {
-                model: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files"), qsTr("Add media")]
-                RedesignButton {
-                    required property int index
-                    required property string modelData
-                    objectName: "libraryCategory" + index
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    iconName: [root.category === 0 ? "home-active" : "home", "videos", "music", "network", "playlist", "history", "add"][index]
-                    text: modelData; selected: root.category === index
-                    width: parent.width
-                    caption: root.expanded ? [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network"), qsTr("Playlists"), qsTr("Recent"), qsTr("Add item")][index] : ""
-                    leftAligned: root.expanded
-                    captionSpacing: 10
-                    selectedForeground: root.theme.bright
-                    onClicked: index === 6 ? root.addRequested() : root.categoryRequested(index)
-                    background: Rectangle {
-                        radius: root.theme.dp(6)
-                        color: parent.down ? root.theme.selected : parent.hovered ? root.theme.hover : "transparent"
-                        border.width: parent.visualFocus ? root.theme.dp(2) : 0
-                        border.color: root.theme.accent
-                    }
-                }
-            }
-        }
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        expanded: root.expanded; category: root.category
+        pins: root.pins; selectedPinId: root.selectedPinId
+        onCategoryRequested: category => root.categoryRequested(category)
+        onAddRequested: root.addRequested()
+        onPinActivated: pin => root.pinActivated(pin)
+        onPinRemoved: pin => root.pinRemoved(pin)
+        onPinEnqueueRequested: pin => root.pinEnqueueRequested(pin)
     }
     property bool searchOpen: false
     component LibraryButton: RedesignButton {

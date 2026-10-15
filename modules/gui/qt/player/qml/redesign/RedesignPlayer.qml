@@ -145,12 +145,7 @@ FocusScope {
             if (library && Player.artist) library.openArtistByName(Player.artist)
         }
         trackPopup: tracksPopup
-        onMenuRequested: anchor => {
-            const point = anchor.mapToItem(view, 0, anchor.height)
-            mediaMenu.x = Math.min(point.x, view.width - mediaMenu.width)
-            mediaMenu.y = point.y
-            mediaMenu.open()
-        }
+        onMenuRequested: anchor => mediaMenu.toggleFrom(anchor, view)
         onResumeRequested: resume => {
             rootPlayer.resumeAvailable = false
             if (resume) Player.restorePlaybackPos()

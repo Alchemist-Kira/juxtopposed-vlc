@@ -23,6 +23,19 @@ C.Menu {
     width: theme.dp(375)
     padding: theme.dp(4)
     focus: true
+    closePolicy: C.Popup.CloseOnEscape | C.Popup.CloseOnPressOutsideParent
+
+    // Opens below anchor, kept inside area; closes when already open.
+    function toggleFrom(anchor, area) {
+        if (visible) { close(); return }
+        // Exclude the opening button from outside-click dismissal. Its next
+        // click must close this menu, rather than dismiss and reopen it.
+        const point = anchor.mapToItem(area, 0, anchor.height)
+        const local = area.mapToItem(anchor, Math.min(point.x, area.width - width), point.y)
+        parent = anchor
+        x = local.x; y = local.y
+        open()
+    }
     popupType: C.Popup.Item
     background: Rectangle { color: root.lightTheme ? root.theme.background : "#191919"; opacity: 0.95; radius: root.theme.dp(10) }
     delegate: MenuRow { }

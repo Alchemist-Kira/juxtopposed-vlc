@@ -19,11 +19,19 @@ TestCase {
         onProfileRequested: profileId => selectedProfile = profileId
         onClearRecentRequested: recentFiles.clear()
     }
+    RedesignButton {
+        id: menuButton
+        x: 1100; y: 10
+        text: "Menu"
+        onClicked: menu.toggleFrom(this, testCase)
+    }
     SignalSpy { id: actions; target: menu; signalName: "actionRequested" }
     SignalSpy { id: recent; target: menu; signalName: "recentRequested" }
     SignalSpy { id: profiles; target: menu; signalName: "profileRequested" }
     function init() {
         menu.dismiss()
+        menu.parent = testCase
+        menu.x = 20; menu.y = 20
         menu.scaleFactor = 1
         menu.lightTheme = false
         menu.recentFilesEnabled = true
@@ -37,6 +45,22 @@ TestCase {
         tryCompare(menu, "opened", true)
     }
     function cleanup() { menu.dismiss() }
+    function test_menuButtonTogglesTheMenu() {
+        menu.dismiss()
+        tryCompare(menu, "visible", false)
+        mouseClick(menuButton)
+        tryCompare(menu, "opened", true)
+        const origin = menu.background.mapToItem(testCase, 0, 0)
+        compare(origin.x, testCase.width - menu.width)
+        compare(origin.y, menuButton.y + menuButton.height)
+        // The press on the open menu's button must not dismiss it and let the click reopen it.
+        mouseClick(menuButton)
+        tryCompare(menu, "visible", false)
+        mouseClick(menuButton)
+        tryCompare(menu, "opened", true)
+        mouseClick(testCase, 100, 800)
+        tryCompare(menu, "visible", false)
+    }
     function openSubmenu(index) {
         menu.currentIndex = index
         menu.itemAt(index).forceActiveFocus()

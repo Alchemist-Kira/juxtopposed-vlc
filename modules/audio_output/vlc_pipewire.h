@@ -57,5 +57,8 @@ VLC_EXPORT void vlc_pw_roundtrip_unlocked(struct vlc_pw_context *ctx);
 VLC_EXPORT int vlc_pw_registry_listen(struct vlc_pw_context *ctx, struct spa_hook *hook,
                            const struct pw_registry_events *, void *);
 
+VLC_EXPORT void *vlc_pw_registry_bind(struct vlc_pw_context *ctx, uint32_t id,
+                                      const char *type, uint32_t version);
+
 VLC_EXPORT void vlc_pw_disconnect(struct vlc_pw_context *ctx);
 VLC_EXPORT struct vlc_pw_context *vlc_pw_connect(vlc_object_t *obj, const char *name);

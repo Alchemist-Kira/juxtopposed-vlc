@@ -139,6 +139,14 @@ void vlc_pw_roundtrip_unlocked(struct vlc_pw_context *ctx)
     spa_hook_remove(&listener);
 }
 
+void *vlc_pw_registry_bind(struct vlc_pw_context *ctx, uint32_t id,
+                           const char *type, uint32_t version)
+{
+    if (ctx->registry == NULL)
+        return NULL;
+    return pw_registry_bind(ctx->registry, id, type, version, 0);
+}
+
 int vlc_pw_registry_listen(struct vlc_pw_context *ctx, struct spa_hook *hook,
                            const struct pw_registry_events *evts, void *data)
 {

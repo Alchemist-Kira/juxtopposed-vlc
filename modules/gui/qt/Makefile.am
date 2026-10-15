@@ -1873,6 +1873,17 @@ QT_QTEST_COMMON_cxxflags = $(AM_CXXFLAGS) $(QT_CFLAGS) $(QT_QTEST_CFLAGS) -fPIC 
 QT_QTEST_COMMON_ldadd = $(QT_LIBS) $(LIBS_qt) $(QT_QTEST_LIBS) $(LIBVLCCORE) $(LIBVLC)
 QT_QTEST_COMMON_ldflags = $(AM_LDFLAGS) $(QT_LDFLAGS) $(QT_QTEST_LDFLAGS)
 
+test_cover_generator_SOURCES = tests/test_cover_generator.cpp util/covergenerator.cpp util/covergenerator.hpp
+nodist_test_cover_generator_SOURCES = tests/test_cover_generator.moc
+BUILT_SOURCES += tests/test_cover_generator.moc
+CLEANFILES += tests/test_cover_generator.moc
+test_cover_generator_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_cover_generator_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_cover_generator_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_cover_generator_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_cover_generator
+TESTS += test_cover_generator
+
 test_redesign_folder_model_SOURCES = tests/test_redesign_folder_model.cpp util/redesign_folder_model.cpp util/redesign_folder_model.hpp
 nodist_test_redesign_folder_model_SOURCES = tests/test_redesign_folder_model.moc util/redesign_folder_model.moc.cpp
 BUILT_SOURCES += tests/test_redesign_folder_model.moc

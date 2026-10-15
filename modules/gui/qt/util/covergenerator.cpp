@@ -107,6 +107,22 @@ int CoverGenerator::requiredNoOfThumbnails() const
 
 QImage CoverGenerator::execute(QStringList thumbnails) const
 {
+    if (m_default.isEmpty())
+    {
+        // An empty default requests transparent gaps, rather than the album
+        // placeholder. Ignore missing/unreadable images before dividing tiles.
+        thumbnails.removeIf([](const QString& name) {
+            const auto local = QQmlFile::urlToLocalFileOrQrc(QUrl(name));
+            QImageReader reader(local.isEmpty() ? name : local);
+            return !reader.canRead();
+        });
+        if (thumbnails.isEmpty())
+        {
+            QImage image(m_size, QImage::Format_ARGB32_Premultiplied);
+            image.fill(Qt::transparent);
+            return image;
+        }
+    }
     int count = m_countX * m_countY;
 
     int countX;
@@ -154,9 +170,9 @@ QImage CoverGenerator::execute(QStringList thumbnails) const
         countY = std::ceil((qreal) thumbnails.count() / m_countX);
     }
 
-    QImage image(m_size, QImage::Format_RGB32);
+    QImage image(m_size, m_default.isEmpty() ? QImage::Format_ARGB32_Premultiplied : QImage::Format_RGB32);
 
-    image.fill(Qt::white);
+    image.fill(m_default.isEmpty() ? Qt::transparent : Qt::white);
 
     QPainter painter;
 

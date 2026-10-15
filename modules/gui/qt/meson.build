@@ -1427,6 +1427,14 @@ if qt6_dep.found()
             'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
         }
         vlc_tests += {
+            'name': 'test_qt_cover_generator',
+            'sources': files('tests/test_cover_generator.cpp', 'util/covergenerator.cpp'),
+            'moc_sources': files('tests/test_cover_generator.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
             'name': 'test_qt_redesign_folder_model',
             'sources': files('tests/test_redesign_folder_model.cpp', 'util/redesign_folder_model.cpp'),
             'moc_sources': files('tests/test_redesign_folder_model.cpp'),

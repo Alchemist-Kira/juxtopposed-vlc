@@ -279,7 +279,9 @@ private:
                 generator.setSplit((CoverGenerator::Split)data.split);
                 generator.setBlur(data.blur);
 
-                if (!data.defaultCover.isEmpty())
+                // The redesign draws its own theme-aware playlist placeholder
+                // below this image. Leave it visible until real covers exist.
+                if (!data.defaultCover.isEmpty() || data.id.type == VLC_ML_PARENT_PLAYLIST)
                     generator.setDefaultThumbnail(data.defaultCover);
 
                 ctx.img = generator.execute(thumbnails);

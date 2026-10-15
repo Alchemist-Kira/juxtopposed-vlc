@@ -74,6 +74,9 @@ typedef struct vlc_gl_sys_t
     struct wl_egl_window *window;
 #endif
     bool is_current;
+    /* The EGLDisplay is shared with the UI (Qt) and cannot be refcounted:
+     * terminating it would tear down the UI's EGL state too. */
+    bool skip_terminate;
 } vlc_gl_sys_t;
 
 static bool CheckAPI(EGLDisplay dpy, const char *api)
@@ -245,16 +248,23 @@ static EGLDisplay OpenDisplay(vlc_gl_t *gl)
 
     if (surface->type != VLC_WINDOW_TYPE_WAYLAND)
         return EGL_NO_DISPLAY;
-    if (!CheckClientExt("EGL_KHR_display_reference")) {
-        msg_Warn(gl, "EGL display reference counting not supported");
-        return EGL_NO_DISPLAY;
-    }
-
+    /* Neither Mesa nor NVIDIA (via glvnd) expose EGL_KHR_display_reference.
+     * Without it, share the display untracked and never terminate it. */
+    const EGLAttrib *attrs = NULL;
 # ifdef EGL_KHR_display_reference
-    static const EGLAttrib attrs[] = {
+    static const EGLAttrib ref_attrs[] = {
         EGL_TRACK_REFERENCES_KHR, EGL_TRUE,
         EGL_NONE
     };
+    if (CheckClientExt("EGL_KHR_display_reference"))
+        attrs = ref_attrs;
+# endif
+    if (attrs == NULL) {
+        msg_Warn(gl, "EGL display reference counting not supported, "
+                     "display will not be terminated");
+        vlc_gl_sys_t *sys = gl->sys;
+        sys->skip_terminate = true;
+    }
 
 #  if defined(EGL_VERSION_1_5)
 #   ifdef EGL_KHR_platform_wayland
@@ -268,7 +278,6 @@ static EGLDisplay OpenDisplay(vlc_gl_t *gl)
         return getPlatformDisplayEXT(EGL_PLATFORM_WAYLAND_EXT,
                                      surface->display.wl, attrs);
 #  endif
-# endif
     return EGL_NO_DISPLAY;
 }
 
@@ -693,7 +702,8 @@ static void Close(vlc_gl_t *gl)
         eglDestroySurface(sys->display, sys->surface);
         DestroySurface(gl);
     }
-    eglTerminate(sys->display);
+    if (!sys->skip_terminate)
+        eglTerminate(sys->display);
     ReleaseDisplay(gl);
     free (sys);
 }
@@ -736,6 +746,7 @@ static int Open(vlc_gl_t *gl, const struct gl_api *api,
 
     gl->sys = sys;
     sys->display = EGL_NO_DISPLAY;
+    sys->skip_terminate = false;
     sys->surface = EGL_NO_SURFACE;
     sys->context = EGL_NO_CONTEXT;
     sys->is_current = false;

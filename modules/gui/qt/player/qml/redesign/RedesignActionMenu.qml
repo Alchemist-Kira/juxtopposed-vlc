@@ -41,13 +41,14 @@ C.Menu {
                 spacing: root.theme.dp(10)
                 opacity: row.enabled ? 1 : 0.35
                 RedesignIcon {
+                    id: actionIcon
                     visible: !!row.modelData.icon
                     Layout.preferredWidth: root.theme.dp(24)
                     Layout.preferredHeight: root.theme.dp(24)
                     sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio)
                     name: row.modelData.icon || ""
-                    color: row.modelData.accent ? root.theme.accent : root.theme.foreground
-                    detailColor: root.theme.foreground
+                    color: row.modelData.accent && !actionIcon.hasDetail ? root.theme.accent : root.theme.foreground
+                    detailColor: row.modelData.accent ? root.theme.accent : root.theme.foreground
                 }
                 Text {
                     Layout.fillWidth: true

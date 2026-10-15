@@ -126,6 +126,17 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_preparser_fetcher_shutdown',
+    'sources' : files('preparser/fetcher_shutdown.c',
+        '../../src/preparser/art.c', '../../src/misc/interrupt.c',
+        '../../src/misc/objects.c', '../../src/misc/variables.c',
+        '../../src/input/item.c', '../../src/text/strings.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'include_directories' : include_directories('../../src'),
+}
+
+vlc_tests += {
     'name' : 'test_src_preparser_thumbnail',
     'sources' : files('preparser/thumbnail.c'),
     'suite' : ['src', 'test_src'],

@@ -49,6 +49,7 @@ struct input_fetcher_t {
 
     vlc_mutex_t lock;
     struct vlc_list submitted_tasks; /**< list of struct task */
+    bool closing; /**< no stage may be submitted after cancellation begins */
 };
 
 struct task {
@@ -110,14 +111,6 @@ TaskDelete(struct task *task)
 }
 
 static void
-FetcherAddTask(input_fetcher_t *fetcher, struct task *task)
-{
-    vlc_mutex_lock(&fetcher->lock);
-    vlc_list_append(&task->node, &fetcher->submitted_tasks);
-    vlc_mutex_unlock(&fetcher->lock);
-}
-
-static void
 FetcherRemoveTask(input_fetcher_t *fetcher, struct task *task)
 {
     vlc_mutex_lock(&fetcher->lock);
@@ -135,8 +128,18 @@ Submit(input_fetcher_t *fetcher, vlc_executor_t *executor, input_item_t *item,
     if (!task)
         return VLC_ENOMEM;
 
-    FetcherAddTask(fetcher, task);
+    vlc_mutex_lock(&fetcher->lock);
+    if (fetcher->closing)
+    {
+        vlc_mutex_unlock(&fetcher->lock);
+        TaskDelete(task);
+        return VLC_EGENERIC;
+    }
+    /* Publish and enqueue together: cancellation must never see a task whose
+     * runnable has not yet been submitted to its executor. */
+    vlc_list_append(&task->node, &fetcher->submitted_tasks);
     vlc_executor_Submit(task->executor, &task->runnable);
+    vlc_mutex_unlock(&fetcher->lock);
 
     return VLC_SUCCESS;
 }
@@ -476,6 +479,7 @@ input_fetcher_t* input_fetcher_New( vlc_object_t* owner,
 
     vlc_mutex_init(&fetcher->lock);
     vlc_list_init(&fetcher->submitted_tasks);
+    fetcher->closing = false;
 
     vlc_dictionary_init( &fetcher->album_cache, 0 );
 
@@ -503,6 +507,7 @@ static void
 CancelAllTasks(input_fetcher_t *fetcher)
 {
     vlc_mutex_lock(&fetcher->lock);
+    fetcher->closing = true;
 
     struct task *task;
     vlc_list_foreach(task, &fetcher->submitted_tasks, node)
@@ -514,7 +519,9 @@ CancelAllTasks(input_fetcher_t *fetcher)
             vlc_list_remove(&task->node);
             TaskDelete(task);
         }
-        /* Otherwise, the task will be finished and destroyed after run() */
+        else
+            /* Running stages finish without queuing a successor. */
+            vlc_interrupt_kill(&task->interrupt);
     }
 
     vlc_mutex_unlock(&fetcher->lock);

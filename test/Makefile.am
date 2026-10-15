@@ -61,6 +61,7 @@ check_PROGRAMS = \
 	test_src_input_stream \
 	test_src_input_stream_fifo \
 	test_src_preparser_cmp_internal_external \
+	test_src_preparser_fetcher_shutdown \
 	test_src_preparser_thumbnail \
 	test_src_preparser_thumbnail_to_files \
 	test_src_input_decoder \
@@ -271,6 +272,11 @@ test_src_input_stream_fifo_SOURCES = src/input/stream_fifo.c
 test_src_input_stream_fifo_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_preparser_cmp_internal_external_SOURCES = src/preparser/cmp_internal_external.c
 test_src_preparser_cmp_internal_external_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_preparser_fetcher_shutdown_SOURCES = src/preparser/fetcher_shutdown.c \
+    ../src/preparser/art.c ../src/misc/interrupt.c ../src/misc/objects.c \
+    ../src/misc/variables.c ../src/input/item.c ../src/text/strings.c
+test_src_preparser_fetcher_shutdown_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src
+test_src_preparser_fetcher_shutdown_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_preparser_thumbnail_SOURCES = src/preparser/thumbnail.c
 test_src_preparser_thumbnail_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_preparser_thumbnail_to_files_SOURCES = src/preparser/thumbnail_to_files.c

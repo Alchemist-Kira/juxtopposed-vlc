@@ -754,6 +754,46 @@ private slots:
         QCOMPARE(writes, 0); // Opening, scanning and cancelling do not create media records.
     }
 
+    void testTrackDropSources()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QVERIFY(QDir(directory.path()).mkpath("Subs/Show_S01E02"));
+        for (const auto& name : {"Show_S01E10.en.srt", "Subs/Show_S01E02/English.srt", "captions.IDX", "captions.sub", "sound.wav", "video.mkv"}) {
+            QFile file(directory.filePath(name)); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("Keep this file");
+        }
+        const auto url = [&](const QString& name) { return QUrl::fromLocalFile(directory.filePath(name)); };
+        auto prepare = [&](const QList<QUrl>& urls, bool subtitles = true) {
+            engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+            m_medialib->prepareTrackDrop(urls, subtitles, engine.evaluate("(function(value) { answer = value; })"));
+            if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
+                qFatal("Dropped track preparation did not finish");
+            return engine.globalObject().property("answer");
+        };
+        int writes = 0;
+        m_env->mediaControl = [&](int, va_list) { ++writes; return VLC_EGENERIC; };
+        auto result = prepare({QUrl::fromLocalFile(directory.path()), url("captions.sub"), url("Show_S01E10.en.srt"),
+            url("missing.srt"), url("video.mkv"), QUrl("https://example.test/subtitle.srt")});
+        QVERIFY(result.property("success").toBool());
+        QCOMPARE(result.property("skipped").toInt(), 3);
+        QCOMPARE(result.property("sources").property("length").toInt(), 3);
+        QCOMPARE(result.property("folder").toString(), QUrl::fromLocalFile(directory.path()).toString());
+        QVERIFY(!result.property("error").toString().isEmpty());
+        result = prepare({url("captions.sub")});
+        QVERIFY(result.property("success").toBool());
+        QVERIFY(result.property("sources").property(0).property("url").toString().endsWith("captions.IDX"));
+        result = prepare({url("sound.wav"), url("captions.IDX")}, false);
+        QVERIFY(result.property("success").toBool()); QCOMPARE(result.property("sources").property("length").toInt(), 1);
+        result = prepare({url("video.mkv")}); QVERIFY(!result.property("success").toBool());
+        QCOMPARE(result.property("sources").property("length").toInt(), 0);
+        QFile disk(directory.filePath("captions.sub")); QVERIFY(disk.open(QIODevice::ReadOnly));
+        QCOMPARE(disk.readAll(), QByteArray("Keep this file")); QCOMPARE(writes, 0);
+    }
+
     void testTrackAssignmentSave()
     {
         QQmlEngine engine;

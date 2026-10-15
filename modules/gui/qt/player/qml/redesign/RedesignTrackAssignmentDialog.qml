@@ -27,6 +27,8 @@ C.Dialog {
     property bool matchSavedSources: false
     property bool matching: false
     property int matchRequestId: 0
+    property bool loadingDrop: false
+    property int dropRequestId: 0
     property bool saving: false
     property string errorMessage: ""
     readonly property bool fileMode: scopeIndex === 0
@@ -47,6 +49,7 @@ C.Dialog {
     signal sourcesRequested(url folder, bool subtitles, int request)
     signal matchRequested(var media, var tracks, bool includeSaved, int request)
     signal matchingCanceled()
+    signal droppedSourcesRequested(var urls, bool subtitles, int request, string target)
     signal filesRequested(string target)
     signal folderRequested()
     signal saveRequested(var rows, bool subtitles, int request)
@@ -80,6 +83,7 @@ C.Dialog {
     }
     function cancelMatching() { ++matchRequestId; matching = false; matchingCanceled() }
     function requestRows() {
+        ++dropRequestId; loadingDrop = false
         cancelMatching()
         ++requestId; loading = true; errorMessage = ""; selectedRows = ({})
         const target = scopeIndex === 0 ? {scope: "file", url: anchorFile}
@@ -109,6 +113,7 @@ C.Dialog {
         else performMatching()
     }
     function requestSources(includeSaved = false) {
+        ++dropRequestId; loadingDrop = false
         cancelMatching()
         matchSavedSources = includeSaved
         ++sourceRequestId; loadingSources = true
@@ -152,24 +157,43 @@ C.Dialog {
         setTracks(url, selected.includes(track) ? selected.filter(item => item !== track) : selected.concat([track]))
     }
     function addFiles(files, target) {
-        if (!files.length) return
+        addSources(files.map(value => ({url: String(value), name: fileName(value)})), target)
+    }
+    function addSources(items, target) {
+        if (!items.length) return
         const next = sources.slice()
-        for (const value of files) {
-            const url = String(value)
-            if (!next.some(item => item.url === url)) next.push({url: url, name: fileName(url)})
-        }
+        for (const item of items) if (!next.some(source => source.url === item.url)) next.push(item)
         sources = next
         const url = target || (fileMode ? anchorFile : "")
-        if (url) setTracks(url, tracks(url).concat(files.map(value => String(value))))
+        if (url) setTracks(url, tracks(url).concat(items.map(item => item.url)))
         else performMatching(true)
     }
+    function dropSources(urls, target = "") {
+
+        if (!visible || saving || loading || loadingDrop) return false
+        if (!urls.length) { errorMessage = qsTr("VLC could not read these files. Try again."); return false }
+        cancelMatching(); ++sourceRequestId; loadingSources = false
+        ++dropRequestId; loadingDrop = true; errorMessage = ""
+        droppedSourcesRequested(urls, subtitles, dropRequestId, target)
+        return true
+    }
+    function loadDroppedSources(request, result, target = "") {
+
+        if (!visible || request !== dropRequestId) return
+        loadingDrop = false
+        if (result.success) {
+            if (result.folder) sourceFolder = String(result.folder)
+            addSources(result.sources || [], target)
+        }
+        errorMessage = result.error || ""
+    }
     function selectScope(index) {
-        if (index === scopeIndex || !scopes[index].enabled || saving) return
+        if (index === scopeIndex || !scopes[index].enabled || saving || loadingDrop) return
         scopeIndex = index; picker.close(); requestRows()
     }
     function chooseRow(url) { picker.targetUrl = url; picker.open() }
     function submit() {
-        if (saving || loading || loadingSources || matching || !changedRows.length) return
+        if (saving || loading || loadingSources || loadingDrop || matching || !changedRows.length) return
         saving = true; picker.close(); errorMessage = ""
         saveRequested(changedRows, subtitles, requestId)
     }
@@ -185,7 +209,7 @@ C.Dialog {
         else errorMessage = (result.error || qsTr("VLC cannot save these tracks. Try again."))
             + (completed.length ? "\n" + qsTr("VLC kept the changes that it saved. Try Save again for the other files.") : "")
     }
-    onClosed: { cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
+    onClosed: { ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
     Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: root.visible && !root.saving; onActivated: root.submit() }
 
     header: Item {
@@ -214,7 +238,7 @@ C.Dialog {
                 Layout.preferredWidth: Math.min(root.theme.dp(200), root.width * 0.23); Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 model: root.scopes; textRole: "text"; restrictChoices: true
-                currentIndex: root.scopeIndex; enabled: !root.loading && !root.saving
+                currentIndex: root.scopeIndex; enabled: !root.loading && !root.loadingDrop && !root.saving
                 onModelChanged: Qt.callLater(() => scopeChoice.currentIndex = root.scopeIndex)
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 onActivated: index => root.selectScope(index)
@@ -224,7 +248,7 @@ C.Dialog {
                 Layout.preferredWidth: Math.min(root.theme.dp(200), root.width * 0.23); Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 caption: qsTr("From Computer"); text: qsTr("Select track files"); leftAligned: true
-                enabled: !root.loading && !root.saving
+                enabled: !root.loading && !root.loadingDrop && !root.saving
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 onClicked: root.filesRequested("")
             }
@@ -233,7 +257,7 @@ C.Dialog {
                 Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; text: root.sourceFolder || qsTr("Select track folder"); leftAligned: true
-                enabled: !root.saving
+                enabled: !root.saving && !root.loadingDrop
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 contentItem: RowLayout {
                     spacing: root.theme.dp(12)
@@ -245,6 +269,29 @@ C.Dialog {
         }
     }
     contentItem: Item {
+        DropArea {
+            id: fileDrop
+            objectName: "trackAssignmentDropArea"
+            anchors.fill: parent
+            enabled: root.visible && !root.saving && !root.loading && !root.loadingDrop
+            onEntered: drag => drag.accepted = drag.hasUrls
+            onDropped: drop => {
+                drop.accepted = false
+                if (drop.hasUrls && root.dropSources(drop.urls)) drop.accept(Qt.CopyAction)
+            }
+        }
+        Rectangle {
+            anchors.fill: parent; anchors.margins: root.theme.dp(12); z: 4
+            visible: fileDrop.containsDrag
+            color: Qt.alpha(root.theme.field, 0.95); radius: root.theme.dp(8)
+            border.color: root.theme.accent; border.width: root.theme.dp(2)
+            Text {
+                anchors.centerIn: parent; width: parent.width - root.theme.dp(40); wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                text: root.subtitles ? qsTr("Drop subtitle files or folders here") : qsTr("Drop audio files or folders here")
+                color: root.theme.foreground; font.pixelSize: root.theme.dp(18)
+            }
+        }
         C.ScrollView {
             anchors.fill: parent; anchors.topMargin: root.theme.dp(20); anchors.leftMargin: root.theme.dp(20); anchors.rightMargin: root.theme.dp(20)
             clip: true; contentWidth: availableWidth
@@ -263,7 +310,18 @@ C.Dialog {
                     enabled: !root.saving; padding: root.theme.dp(10)
                     highlighted: root.fileMode && root.tracks(root.anchorFile).includes(modelData.url)
                     Accessible.name: modelData.name
-                    background: Rectangle { radius: root.theme.dp(5); color: entry.highlighted ? root.theme.field : entry.hovered ? root.theme.hover : "transparent"; border.color: entry.visualFocus ? root.theme.accent : "transparent" }
+                    background: Rectangle { radius: root.theme.dp(5); color: entry.highlighted ? root.theme.field : entry.hovered ? root.theme.hover : "transparent"; border.color: entry.visualFocus || rowDrop.containsDrag ? root.theme.accent : "transparent" }
+                    DropArea {
+                        id: rowDrop
+                        objectName: "trackAssignmentRowDrop_" + entry.index
+                        anchors.fill: parent
+                        enabled: !root.fileMode && !root.saving && !root.loadingDrop
+                        onEntered: drag => drag.accepted = drag.hasUrls
+                        onDropped: drop => {
+                            drop.accepted = false
+                            if (drop.hasUrls && root.dropSources(drop.urls, entry.modelData.url)) drop.accept(Qt.CopyAction)
+                        }
+                    }
                     onClicked: root.fileMode ? root.toggle(root.anchorFile, modelData.url) : root.chooseRow(modelData.url)
                     contentItem: RowLayout {
                         spacing: root.theme.dp(18)
@@ -310,8 +368,8 @@ C.Dialog {
         }
         Text {
             anchors.centerIn: parent; width: parent.width - root.theme.dp(40); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
-            visible: root.loading || root.loadingSources || root.matching || (!list.count && !root.errorMessage)
-            text: root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources ? qsTr("Loading files…") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
+            visible: root.loading || root.loadingSources || root.loadingDrop || root.matching || (!list.count && !root.errorMessage)
+            text: root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources || root.loadingDrop ? qsTr("Loading files…") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
             color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
         }
     }
@@ -346,7 +404,7 @@ C.Dialog {
             implicitWidth: root.theme.dp(100); implicitHeight: root.theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.saving ? qsTr("Saving…") : qsTr("Save"); text: caption
-            enabled: !root.saving && !root.loading && !root.loadingSources && !root.matching && root.changedRows.length > 0
+            enabled: !root.saving && !root.loading && !root.loadingSources && !root.loadingDrop && !root.matching && root.changedRows.length > 0
             foreground: root.theme.accent
             background: Rectangle { radius: root.theme.dp(5); color: root.theme.progress; border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : 0.4 }
             onClicked: root.submit()
@@ -367,6 +425,16 @@ C.Dialog {
             ListView {
                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                 model: root.visibleSources
+                DropArea {
+                    objectName: "trackAssignmentPickerDropArea"
+                    anchors.fill: parent
+                    enabled: picker.visible && !root.saving && !root.loadingDrop
+                    onEntered: drag => drag.accepted = drag.hasUrls
+                    onDropped: drop => {
+                        drop.accepted = false
+                        if (drop.hasUrls && root.dropSources(drop.urls, picker.targetUrl)) drop.accept(Qt.CopyAction)
+                    }
+                }
                 C.ScrollBar.vertical: C.ScrollBar {}
                 delegate: C.ItemDelegate {
                     required property var modelData

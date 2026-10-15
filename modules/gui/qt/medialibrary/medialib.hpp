@@ -69,6 +69,7 @@ public:
     Q_INVOKABLE void playlistState(const MLItemId& id, QJSValue callback);
     Q_INVOKABLE void playlistTrackTargets(const MLItemId& id, QJSValue callback);
     Q_INVOKABLE void trackAssignmentRows(const QVariantMap& target, bool subtitles, QJSValue callback);
+    Q_INVOKABLE void prepareTrackDrop(const QList<QUrl>& urls, bool subtitles, QJSValue callback);
     Q_INVOKABLE void trackAssignmentSources(const QUrl& folder, bool subtitles, QJSValue callback);
     QVariantMap matchTrackAssignments(const QList<QUrl>& media, const QList<QUrl>& tracks) const;
     Q_INVOKABLE void requestTrackMatches(const QList<QUrl>& media, const QList<QUrl>& tracks, QJSValue callback);

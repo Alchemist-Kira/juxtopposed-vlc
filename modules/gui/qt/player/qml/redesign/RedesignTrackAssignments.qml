@@ -20,6 +20,7 @@ RedesignTrackAssignmentDialog {
     onSourcesRequested: (folder, subtitles, request) => MediaLib.trackAssignmentSources(folder, subtitles, result => root.loadSources(request, result))
     onMatchRequested: (media, tracks, includeSaved, request) => MediaLib.requestTrackMatches(media, tracks, matches => root.loadMatches(request, matches, includeSaved))
     onMatchingCanceled: MediaLib.cancelTrackMatching()
+    onDroppedSourcesRequested: (urls, subtitles, request, target) => MediaLib.prepareTrackDrop(urls, subtitles, result => root.loadDroppedSources(request, result, target))
     onFilesRequested: target => root.addFiles(DialogsProvider.selectTrackFiles(root.subtitles, root.sourceFolder), target)
     onFolderRequested: {
         const folder = DialogsProvider.selectTrackFolder(root.sourceFolder)

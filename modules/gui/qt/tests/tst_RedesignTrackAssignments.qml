@@ -19,6 +19,7 @@ TestCase {
         }
     }
     SignalSpy { id: saveSpy; target: dialog; signalName: "saveRequested" }
+    SignalSpy { id: dropSpy; target: dialog; signalName: "droppedSourcesRequested" }
     SignalSpy { id: rowSpy; target: dialog; signalName: "rowsRequested" }
     function rows() { return [{url:first,name:"Show_S01E01.mkv",baseline:[]},{url:second,name:"Show_S01E02.mkv",baseline:[]}] }
     function load(items) {
@@ -29,7 +30,7 @@ TestCase {
         finishMatching=true
         width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
         dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
-        saveSpy.clear(); rowSpy.clear()
+        saveSpy.clear(); rowSpy.clear(); dropSpy.clear()
         verify(dialog.begin({scope:"file",url:first,urls:[first,second]},true))
         tryCompare(dialog,"opened",true); load([rows()[0]])
     }
@@ -156,6 +157,42 @@ TestCase {
         dialog.submit(); compare(saveSpy.count,1)
         compare(saveSpy.signalArguments[0][0][0].baseline.length,0)
         compare(saveSpy.signalArguments[0][0][0].tracks.length,2)
+    }
+    function test_dropSelectsFilesWithoutSaving() {
+        verify(dialog.dropSources([english,spanish]))
+        verify(dialog.loadingDrop); compare(dropSpy.count,1)
+        verify(!findChild(dialog,"trackAssignmentSave").enabled)
+        verify(!dialog.dropSources([english]))
+        dialog.loadDroppedSources(dialog.dropRequestId,{success:true,sources:[{url:english,name:"English.srt"},{url:spanish,name:"Spanish.srt"}],error:""})
+        verify(!dialog.loadingDrop); compare(dialog.tracks(first).length,2)
+        compare(saveSpy.count,0); compare(dialog.changedRows.length,1)
+        dialog.reject(); compare(saveSpy.count,0)
+    }
+    function test_dropOnBatchRowKeepsItsTargetAndExistingChoice() {
+        dialog.selectScope(1); load(rows()); dialog.setTracks(first,[english])
+        verify(dialog.dropSources([spanish],second))
+        compare(dropSpy.signalArguments[0][3],second)
+        dialog.loadDroppedSources(dialog.dropRequestId,{success:true,sources:[{url:spanish,name:"Spanish.srt"}],folder:"file:///tracks/",error:""},second)
+        compare(dialog.sourceFolder,"file:///tracks/")
+        compare(dialog.tracks(first)[0],english); compare(dialog.tracks(second)[0],spanish)
+        compare(dialog.changedRows.length,2); compare(saveSpy.count,0)
+    }
+    function test_emptyDropShowsAnError() {
+        verify(!dialog.dropSources([]))
+        verify(dialog.errorMessage.length>0); verify(!dialog.loadingDrop)
+        compare(dropSpy.count,0); compare(dialog.changedRows.length,0)
+    }
+    function test_failedOrLateDropsDoNotChangeDrafts() {
+        dialog.setTracks(first,[english])
+        verify(dialog.dropSources(["file:///wrong.mkv"]))
+        dialog.loadDroppedSources(dialog.dropRequestId,{success:false,sources:[],error:"Select track files."})
+        compare(dialog.tracks(first)[0],english); verify(dialog.errorMessage.length>0)
+        verify(dialog.dropSources([spanish]))
+        const request=dialog.dropRequestId
+        dialog.reject()
+        dialog.loadDroppedSources(request,{success:true,sources:[{url:spanish,name:"Spanish.srt"}]})
+        compare(dialog.rows.length,0); compare(dialog.sources.length,0); compare(Object.keys(dialog.drafts).length,0)
+        compare(saveSpy.count,0)
     }
     function test_scaledAndSmallWindow_data() {
         return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]

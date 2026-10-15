@@ -675,11 +675,16 @@ private slots:
         m_env->mediaGet = [](int, va_list) -> void* { return nullptr; };
         int writes = 0;
         m_env->mediaControl = [&](int, va_list) { ++writes; return VLC_EGENERIC; };
+        QVariantMap runtime;
         auto request = [&](bool sources, const QUrl& folder) {
             engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
             auto callback = engine.evaluate("(function(value) { answer = value; })");
             if (sources) m_medialib->trackAssignmentSources(folder, true, callback);
-            else m_medialib->trackAssignmentRows({{"scope", "folder"}, {"folder", folder}}, true, callback);
+            else {
+                auto target = runtime;
+                target.insert("scope", "folder"); target.insert("folder", folder);
+                m_medialib->trackAssignmentRows(target, true, callback);
+            }
             if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
                 qFatal("Track assignment read did not finish");
             return engine.globalObject().property("answer");
@@ -712,6 +717,14 @@ private slots:
         QVERIFY(names.contains("Subs/captions.sub")); // The index in another folder is not its VobSub pair.
         QVERIFY(names.contains("Subtitles/Show_S01E10/French.srt"));
         QVERIFY(!names.contains("Other/unrelated.srt"));
+        const auto loaded = QUrl::fromLocalFile(directory.filePath("loaded & captions.srt"));
+        runtime = {{"runtimeUrl", QUrl::fromLocalFile(directory.filePath("Show_S01E02.mkv"))},
+            {"runtimeTracks", QVariantList{loaded, loaded}}};
+        result = request(false, folder);
+        QCOMPARE(result.property("rows").property(0).property("baseline").property("length").toInt(), 0);
+        QCOMPARE(result.property("rows").property(0).property("initialTracks").property("length").toInt(), 1);
+        QCOMPARE(result.property("rows").property(0).property("initialTracks").property(0).toString(), loaded.toString(QUrl::FullyEncoded));
+        QCOMPARE(result.property("rows").property(1).property("initialTracks").property("length").toInt(), 0);
         m_env->mediaGet = [&](int query, va_list args) -> void* {
             if (query != VLC_ML_GET_MEDIA_BY_MRL) return nullptr;
             const auto uri = QUrl(QString::fromUtf8(va_arg(args, const char*)));
@@ -732,6 +745,8 @@ private slots:
         };
         result = request(false, folder);
         QVERIFY(result.property("rows").property(0).property("explicitSelection").toBool());
+        QCOMPARE(result.property("rows").property(0).property("initialTracks").property("length").toInt(), 1);
+        QVERIFY(!result.property("rows").property(0).property("initialTracks").property(0).toString().contains("loaded"));
         QCOMPARE(result.property("rows").property(0).property("baseline").property("length").toInt(), 1);
         QVERIFY(result.property("rows").property(0).property("baseline").property(0).toString().endsWith("Show_S01E02.en.srt"));
         QVERIFY(!request(true, QUrl("https://example.test/folder")).property("success").toBool());
@@ -826,6 +841,18 @@ private slots:
         result = save({row(first, selected, {})});
         QVERIFY(result.property("success").toBool()); QVERIFY(assignments[11].isEmpty());
         QCOMPARE(assignments[12], QStringList{encoded(subtitle)});
+        auto loadedOnly = row(first, {}, {});
+        loadedOnly.insert("initialTracks", QStringList{encoded(subtitle)});
+        const int beforeClear = writes;
+        result = save({loadedOnly});
+        QVERIFY(result.property("success").toBool()); QCOMPARE(writes, beforeClear + 1);
+        QCOMPARE(result.property("saved").property("length").toInt(), 1);
+        QCOMPARE(result.property("saved").property(0).property("initialTracks").property(0).toString(), encoded(subtitle));
+        // A loaded source can be retained even if it is now offline.
+        loadedOnly = row(first, {}, {offline, encoded(subtitle)});
+        loadedOnly.insert("initialTracks", QStringList{offline});
+        result = save({loadedOnly}); QVERIFY(result.property("success").toBool());
+        QCOMPARE(assignments[11], QStringList({offline, encoded(subtitle)}));
         QFile disk(subtitle.toLocalFile()); QVERIFY(disk.open(QIODevice::ReadOnly));
         QCOMPARE(disk.readAll(), QByteArray("Keep this file"));
     }

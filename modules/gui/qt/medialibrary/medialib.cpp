@@ -353,7 +353,7 @@ bool sameTracks(QStringList left, QStringList right)
 QStringList trackStrings(const QVariant& value)
 {
     QStringList result;
-    for (const auto& item : value.toList()) result.append(item.toString());
+    for (const auto& item : value.toList()) result.append(item.toUrl().toString(QUrl::FullyEncoded));
     return result;
 }
 }
@@ -408,10 +408,17 @@ void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJ
                 auto name = url.fileName();
                 if (name.isEmpty() && media) name = qfu(media->psz_title);
                 if (name.isEmpty()) name = url.toDisplayString();
+                const bool explicitSelection = media && (subtitles ? media->b_subtitle_track_selection : media->b_soundtrack_track_selection);
+                const auto baseline = selectedTracks(media.get(), type);
+                auto initial = baseline;
+                if (!explicitSelection && url == target.value("runtimeUrl").toUrl()) {
+                    initial.append(trackStrings(target.value("runtimeTracks")));
+                    initial.removeDuplicates();
+                }
                 rows.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", name},
                     {"location", url.toDisplayString(QUrl::PreferLocalFile)},
-                    {"explicitSelection", media && (subtitles ? media->b_subtitle_track_selection : media->b_soundtrack_track_selection)},
-                    {"baseline", selectedTracks(media.get(), type)}});
+                    {"explicitSelection", explicitSelection}, {"initialTracks", initial},
+                    {"baseline", baseline}});
             }
             result.insert("success", true); result.insert("error", QString()); result.insert("rows", rows);
         },
@@ -523,7 +530,7 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
             QVariantList saved;
             result = {{"success", false}, {"error", QString()}, {"saved", saved}};
             const auto type = subtitles ? VLC_ML_FILE_TYPE_SUBTITLE : VLC_ML_FILE_TYPE_SOUNDTRACK;
-            struct Edit { QUrl url; QStringList before; QStringList after; };
+            struct Edit { QUrl url; QStringList before; QStringList after; QStringList initial; };
             QList<Edit> edits;
             QSet<QUrl> seen;
             // Validate the whole draft before writing any media. Each later
@@ -533,6 +540,7 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                 const auto url = row.value("url").toUrl();
                 auto before = trackStrings(row.value("baseline"));
                 auto after = trackStrings(row.value("tracks"));
+                const auto initial = trackStrings(row.value("initialTracks", row.value("baseline")));
                 before.removeDuplicates(); after.removeDuplicates();
                 if (!url.isValid() || url.scheme().isEmpty() || seen.contains(url)) {
                     result["error"] = qtr("VLC cannot save this selection. Select the files again."); return;
@@ -558,13 +566,14 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                             }
                         }
                     }
-                    if (before.contains(text)) continue; // An unchanged offline track may be retained.
+                    // Keep an unchanged saved or already loaded source, including an offline file.
+                    if (before.contains(text) || initial.contains(text)) continue;
                     QFile file(track.toLocalFile());
                     if (!track.isLocalFile() || !QFileInfo(file).isFile() || !file.open(QIODevice::ReadOnly)) {
                         result["error"] = qtr("VLC cannot read this track: %1").arg(track.toDisplayString()); return;
                     }
                 }
-                if (!sameTracks(before, after)) edits.append({url, before, after});
+                if (!sameTracks(before, after) || !sameTracks(initial, after)) edits.append({url, before, after, initial});
             }
             for (const auto& edit : edits) {
                 const auto uri = edit.url.toEncoded();
@@ -586,7 +595,7 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                     return;
                 }
                 saved.append(QVariantMap{{"url", edit.url.toString(QUrl::FullyEncoded)},
-                    {"baseline", edit.before}, {"tracks", edit.after}});
+                    {"baseline", edit.before}, {"initialTracks", edit.initial}, {"tracks", edit.after}});
                 result["saved"] = saved;
             }
             result["success"] = true;

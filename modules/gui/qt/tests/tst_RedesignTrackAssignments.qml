@@ -135,6 +135,28 @@ TestCase {
         compare(Object.keys(dialog.drafts).length,0)
         verify(!dialog.matching)
     }
+    function test_loadedTrackCanBeClearedWithoutChangingTheSavedBaseline() {
+        dialog.loadRows(dialog.requestId,{success:true,rows:[{url:first,name:"Episode.mkv",baseline:[],initialTracks:[english]}]})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"}]})
+        compare(dialog.tracks(first)[0],english)
+        compare(dialog.changedRows.length,0)
+        dialog.setTracks(first,[])
+        compare(dialog.changedRows.length,1)
+        dialog.submit(); compare(saveSpy.count,1)
+        const row=saveSpy.signalArguments[0][0][0]
+        compare(row.baseline.length,0); compare(row.initialTracks[0],english); compare(row.tracks.length,0)
+    }
+    function test_loadedTrackIsRetainedWhenAnotherTrackIsAdded() {
+        dialog.loadRows(dialog.requestId,{success:true,rows:[{url:first,name:"Episode.mkv",baseline:[],initialTracks:[english]}]})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"},{url:spanish,name:"Spanish.srt"}]})
+        dialog.toggle(first,spanish)
+        compare(dialog.tracks(first).length,2)
+        dialog.selectScope(1); load(rows())
+        verify(dialog.tracks(first).includes(english)); verify(dialog.tracks(first).includes(spanish))
+        dialog.submit(); compare(saveSpy.count,1)
+        compare(saveSpy.signalArguments[0][0][0].baseline.length,0)
+        compare(saveSpy.signalArguments[0][0][0].tracks.length,2)
+    }
     function test_scaledAndSmallWindow_data() {
         return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]
     }

@@ -35,7 +35,7 @@ C.Dialog {
         {text: qsTr("To Folder"), enabled: targetFolder.length > 0},
         {text: qsTr("To Playlist"), enabled: !!context.key || (context.urls || []).length > 0}
     ]
-    readonly property var changedRows: Object.keys(drafts).map(url => drafts[url]).filter(row => !same(row.baseline, row.tracks))
+    readonly property var changedRows: Object.keys(drafts).map(url => drafts[url]).filter(row => !same(row.initialTracks, row.tracks))
     readonly property var visibleSources: {
         const result = sources.slice()
         const seen = result.map(item => item.url)
@@ -85,6 +85,8 @@ C.Dialog {
         const target = scopeIndex === 0 ? {scope: "file", url: anchorFile}
             : scopeIndex === 1 ? {scope: "folder", folder: targetFolder}
             : context.key ? {scope: "playlist", key: context.key} : {scope: "queue", urls: context.urls || []}
+        target.runtimeUrl = context.runtimeUrl
+        target.runtimeTracks = context.runtimeTracks
         rowsRequested(target, subtitles, requestId)
     }
     function loadRows(request, result) {
@@ -93,8 +95,10 @@ C.Dialog {
         if (!result.success) { rows = []; errorMessage = result.error || qsTr("VLC cannot read these files. Try again."); return }
         rows = result.rows || []
         const next = Object.assign({}, drafts)
-        for (const row of rows) if (!next[row.url] || same(next[row.url].baseline, next[row.url].tracks)) next[row.url] = {
-            url: row.url, baseline: Array.from(row.baseline || []), tracks: Array.from(row.baseline || []),
+        for (const row of rows) if (!next[row.url] || same(next[row.url].initialTracks, next[row.url].tracks)) next[row.url] = {
+            url: row.url, baseline: Array.from(row.baseline || []),
+            initialTracks: Array.from(row.initialTracks || row.baseline || []),
+            tracks: Array.from(row.initialTracks || row.baseline || []),
             explicitSelection: !!row.explicitSelection, manual: false
         }
         drafts = next
@@ -133,7 +137,7 @@ C.Dialog {
         for (const row of rows) {
             const draft = next[row.url]
             if (draft && !draft.manual && (!draft.explicitSelection || includeSaved)) next[row.url] = Object.assign({}, draft,
-                {tracks: [...new Set(draft.baseline.concat(matches[row.url] || []))]})
+                {tracks: [...new Set(draft.initialTracks.concat(matches[row.url] || []))]})
         }
         drafts = next
     }
@@ -174,7 +178,7 @@ C.Dialog {
         saving = false
         const completed = result.saved || []
         const next = Object.assign({}, drafts)
-        for (const row of completed) if (next[row.url]) next[row.url] = Object.assign({}, next[row.url], {baseline: Array.from(row.tracks), explicitSelection: true})
+        for (const row of completed) if (next[row.url]) next[row.url] = Object.assign({}, next[row.url], {baseline: Array.from(row.tracks), initialTracks: Array.from(row.tracks), tracks: Array.from(row.tracks), explicitSelection: true})
         drafts = next
         if (completed.length) saved(completed, subtitles)
         if (result.success) accept()

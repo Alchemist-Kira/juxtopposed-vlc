@@ -1212,6 +1212,24 @@ void DialogsProvider::showTrackAssignments(const QVariantMap& target, bool subti
             context.insert("url", QUrl(qfu(uri))); free(uri);
         }
     }
+    {
+        vlc_player_locker lock {p_intf->p_player};
+        if (auto* media = vlc_player_GetCurrentMedia(p_intf->p_player)) {
+            char* uri = input_item_GetURI(media);
+            context.insert("runtimeUrl", QUrl(qfu(uri))); free(uri);
+            QVariantList tracks;
+            const auto category = subtitles ? SPU_ES : AUDIO_ES;
+            QSet<QUrl> seen;
+            for (size_t i = 0; i < vlc_player_GetTrackCount(p_intf->p_player, category); ++i) {
+                const auto* track = vlc_player_GetTrackAt(p_intf->p_player, category, i);
+                const char* source = vlc_es_id_GetSourceUri(track->es_id);
+                if (!source) continue;
+                const QUrl url(qfu(source));
+                if (!seen.contains(url)) { seen.insert(url); tracks.append(url.toString(QUrl::FullyEncoded)); }
+            }
+            context.insert("runtimeTracks", tracks);
+        }
+    }
     QVariantList queue;
     vlc_playlist_Lock(p_intf->p_playlist);
     for (size_t i = 0; i < vlc_playlist_Count(p_intf->p_playlist); ++i) {
@@ -1227,8 +1245,10 @@ void DialogsProvider::showTrackAssignments(const QVariantMap& target, bool subti
 
 QStringList DialogsProvider::selectTrackFiles(bool subtitles, const QUrl& folder)
 {
-    return showSimpleOpen(subtitles ? qtr("Select subtitle files") : qtr("Select audio files"),
+    auto files = showSimpleOpen(subtitles ? qtr("Select subtitle files") : qtr("Select audio files"),
         subtitles ? EXT_FILTER_SUBTITLE : EXT_FILTER_AUDIO, folder);
+    for (auto& file : files) file = QUrl(file).toString(QUrl::FullyEncoded);
+    return files;
 }
 
 QUrl DialogsProvider::selectTrackFolder(const QUrl& folder)
@@ -1244,7 +1264,8 @@ bool DialogsProvider::applySavedTrackAssignments(const QVariantList& saved, bool
     for (const auto& value : saved) {
         const auto row = value.toMap();
         QSet<QUrl> before, after;
-        for (const auto& track : row.value("baseline").toList()) before.insert(track.toUrl());
+        const auto initial = row.value("initialTracks", row.value("baseline"));
+        for (const auto& track : initial.toList()) before.insert(track.toUrl());
         for (const auto& track : row.value("tracks").toList()) after.insert(track.toUrl());
         Change change {before - after, {}};
         for (const auto& value : row.value("tracks").toList()) {

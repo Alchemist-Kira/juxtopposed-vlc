@@ -258,3 +258,33 @@ vlc_tests += {
     'link_with' : [libvlc, libvlccore],
     'module_depends' : vlc_plugins_targets.keys()
 }
+
+if pipewire_dep.found()
+    vlc_tests += {
+        'name': 'test_modules_audio_output_pipewire_devices',
+        'sources': files('audio_output/pipewire_devices.c'),
+        'suite': ['modules', 'test_modules'],
+        'dependencies': [pipewire_dep, m_lib],
+        'link_with': [libvlccore, libvlc_pipewire],
+        'c_args': ['-ffunction-sections', '-fdata-sections'],
+        'link_args': ['-Wl,--gc-sections'],
+    }
+endif
+
+if have_wayland and egl_dep.found()
+    foreach variant, variant_args : {
+        'modern': [],
+        'ext': ['-DTEST_EGL14'],
+        'no_reference_headers': ['-DTEST_NO_REFERENCE_HEADERS'],
+    }
+        vlc_tests += {
+            'name': 'test_modules_video_output_egl_display_' + variant,
+            'sources': files('video_output/egl_display.c'),
+            'suite': ['modules', 'test_modules'],
+            'dependencies': [egl_dep, wayland_deps],
+            'link_with': [libvlccore],
+            'c_args': variant_args + ['-ffunction-sections', '-fdata-sections', '-Werror=incompatible-pointer-types'],
+            'link_args': ['-Wl,--gc-sections'],
+        }
+    endforeach
+endif

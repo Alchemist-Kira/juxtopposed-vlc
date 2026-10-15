@@ -57,6 +57,8 @@ TestCase {
     }
     ListModel {
         id: tracks
+        property int refreshCount: 0
+        function refresh() { refreshCount++ }
         ListElement { display: "English"; checked: true }
         ListElement { display: "Japanese"; checked: false }
     }
@@ -107,6 +109,7 @@ TestCase {
     }
 
     function init() {
+        tracks.refreshCount = 0
         consumeVideoHover = false
         settingControl.visible = false
         settingControl.currentValue = 0
@@ -335,6 +338,21 @@ TestCase {
         compare(field.displayText, "25.000 fps")
         compare(field.contentItem.text, "25.000 fps")
         compare(settingSpy.count, 0)
+    }
+    function test_deviceListRefreshesOnlyWhileAudioIsOpen() {
+        trackPicker.page = "audio"
+        trackPicker.open()
+        tryCompare(trackPicker, "opened", true)
+        compare(tracks.refreshCount, 1)
+        tryVerify(() => tracks.refreshCount >= 2, 2500)
+        trackPicker.page = "subtitles"
+        const before = tracks.refreshCount
+        wait(2100)
+        compare(tracks.refreshCount, before)
+        trackPicker.close()
+        trackPicker.page = "audio"
+        wait(2100)
+        compare(tracks.refreshCount, before)
     }
     function test_trackPickerSelectsAndDisablesTracks() {
         trackPicker.open()

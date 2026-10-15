@@ -23,12 +23,11 @@
 
 extern "C" {
 
-static void on_player_aout_device_changed(audio_output_t *,const char *device, void *data)
+static void on_player_aout_device_changed(audio_output_t *, const char *, void *data)
 {
     AudioDeviceModel* that = static_cast<AudioDeviceModel*>(data);
-    QMetaObject::invokeMethod(that, [that, device=QString::fromUtf8(device)](){
+    QMetaObject::invokeMethod(that, [that](){
         that->refresh();
-        that->updateCurrent(device);
     }, Qt::QueuedConnection);
 }
 
@@ -82,9 +81,9 @@ AudioDeviceModel::~AudioDeviceModel()
         aout_Release(m_aout);
 }
 
-Qt::ItemFlags AudioDeviceModel::flags(const QModelIndex &) const
+Qt::ItemFlags AudioDeviceModel::flags(const QModelIndex &index) const
 {
-    return Qt::ItemIsUserCheckable;
+    return index.isValid() ? Qt::ItemFlags(Qt::ItemIsUserCheckable) : Qt::NoItemFlags;
 }
 
 int AudioDeviceModel::rowCount(const QModelIndex &parent) const

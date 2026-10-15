@@ -68,6 +68,7 @@ check_PROGRAMS = \
 	test_src_input_overlay_opacity \
 	test_src_input_subtitle_ass_text \
 	test_src_input_item_update \
+	test_src_playlist_export \
 	test_src_interface_dialog \
 	test_src_media_source \
 	test_src_misc_bits \
@@ -279,6 +280,8 @@ test_src_input_subtitle_duration_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_input_subtitle_ass_text_SOURCES = src/input/subtitle_ass_text.c
 test_src_input_item_update_SOURCES = src/input/item_update.c
 test_src_input_item_update_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_playlist_export_SOURCES = src/playlist/export.c
+test_src_playlist_export_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_player_discontinuities_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/discontinuities.c
 test_src_player_discontinuities_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)

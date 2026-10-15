@@ -208,6 +208,14 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_playlist_export',
+    'sources' : files('playlist/export.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlccore, libvlc],
+    'module_depends' : ['export'],
+}
+
+vlc_tests += {
     'name' : 'test_src_input_item_update',
     'sources' : files('input/item_update.c'),
     'suite' : ['test_src'],

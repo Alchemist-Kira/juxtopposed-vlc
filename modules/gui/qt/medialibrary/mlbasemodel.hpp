@@ -186,8 +186,19 @@ public:
         MLOp(MLItemId parentId, QString searchPattern, vlc_ml_sorting_criteria_t sort, bool sort_desc, bool fav_only);
         inline MLOp(const MLBaseModel& model)
             : MLOp(model.parentId(), model.searchPattern(), model.getMLSortingCriteria(), model.getSortOrder() == Qt::SortOrder::DescendingOrder, model.getFavoriteOnly())
-        {}
+        { m_sortName = model.getSortCriteria(); }
         virtual ~MLOp() = default;
+
+        struct SortKey {
+            QString title;
+            QString uri;
+            unsigned track = 0;
+            unsigned disc = 0;
+            bool played = false;
+        };
+        static bool isCustomSort(const QString& name);
+        QString sortName() const { return m_sortName; }
+        virtual SortKey sortKey(vlc_medialibrary_t* ml, const MLItem& item) const;
 
         vlc_ml_query_params_t getQueryParams(size_t index = 0, size_t count = 0) const;
 
@@ -200,6 +211,7 @@ public:
         vlc_ml_sorting_criteria_t m_sort;
         bool m_sortDesc;
         bool m_favoriteOnly;
+        QString m_sortName;
     };
 
 public:

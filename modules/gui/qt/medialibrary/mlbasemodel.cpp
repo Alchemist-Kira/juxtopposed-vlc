@@ -17,6 +17,7 @@
  *****************************************************************************/
 
 #include <cassert>
+#include <mutex>
 #include "medialib.hpp"
 #include <vlc_cxx_helpers.hpp>
 
@@ -25,6 +26,7 @@
 // MediaLibrary includes
 #include "mlbasemodel.hpp"
 #include "mlhelper.hpp"
+#include "mlmedia.hpp"
 
 #include "util/base_model_p.hpp"
 #include "util/asynctask.hpp"
@@ -361,6 +363,8 @@ void MLBaseModel::addAndPlay(const QModelIndexList &list, const QStringList &opt
 vlc_ml_sorting_criteria_t MLBaseModel::getMLSortingCriteria() const
 {
     Q_D(const MLBaseModel);
+    if (MLListCacheLoader::MLOp::isCustomSort(d->m_sortCriteria))
+        return VLC_ML_SORTING_ALPHA;
     return nameToCriteria(d->m_sortCriteria.toUtf8());
 }
 
@@ -543,6 +547,10 @@ void MLBaseModel::updateItemInCache(const MLItemId&)
 
 void MLBaseModel::deleteItemInCache(const MLItemId& mlid)
 {
+    if (MLListCacheLoader::MLOp::isCustomSort(getSortCriteria())) {
+        emit resetRequested();
+        return;
+    }
     Q_D(MLBaseModel);
     if (!d->m_cache)
     {
@@ -601,11 +609,89 @@ void MLBaseModel::deleteRangeInCache(int first, int last)
 
 //-------------------------------------------------------------------------------------------------
 
+namespace {
+// The database API has no URI/disc sort, and its TrackNumber criterion counts
+// tracks in a collection rather than sorting songs by their track number.
+// Build the order on the ML worker, then keep only IDs for the normal lazy cache.
+class CustomSortOp final : public MLListCacheLoader::MLOp
+{
+public:
+    explicit CustomSortOp(std::shared_ptr<MLOp> source)
+        : MLOp(*source), m_source(std::move(source)) {}
+
+    size_t count(vlc_medialibrary_t* ml, const vlc_ml_query_params_t* query) const override
+    { return m_source->count(ml, query); }
+
+    std::unique_ptr<MLItem> loadItemById(vlc_medialibrary_t* ml, MLItemId id) const override
+    { return m_source->loadItemById(ml, id); }
+
+    std::vector<std::unique_ptr<MLItem>> load(vlc_medialibrary_t* ml,
+        const vlc_ml_query_params_t* query) const override
+    {
+        const auto& ids = orderedIds(ml);
+        const size_t start = std::min(ids.size(), size_t(query->i_offset));
+        const size_t end = query->i_nbResults
+            ? start + std::min(ids.size() - start, size_t(query->i_nbResults)) : ids.size();
+        std::vector<std::unique_ptr<MLItem>> result;
+        result.reserve(end - start);
+        for (size_t i = start; i < end; ++i)
+            result.push_back(m_source->loadItemById(ml, ids[i]));
+        return result;
+    }
+
+private:
+    const std::vector<MLItemId>& orderedIds(vlc_medialibrary_t* ml) const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_ids) return *m_ids;
+        struct Entry { MLItemId id; SortKey key; };
+        std::vector<Entry> entries;
+        auto query = getQueryParams(0, 256);
+        query.i_sort = VLC_ML_SORTING_ALPHA;
+        query.b_desc = false;
+        const auto total = m_source->count(ml, &query);
+        entries.reserve(total);
+        while (query.i_offset < total) {
+            auto page = m_source->load(ml, &query);
+            if (page.empty()) break;
+            for (const auto& item : page)
+                if (item) entries.push_back({item->getId(), m_source->sortKey(ml, *item)});
+            query.i_offset += page.size();
+        }
+        std::stable_sort(entries.begin(), entries.end(), [this](const Entry& a, const Entry& b) {
+            int primary = 0;
+            if (m_sortName == "uri") primary = QString::compare(a.key.uri, b.key.uri);
+            else {
+                const auto av = m_sortName == "played" ? unsigned(a.key.played)
+                    : m_sortName == "track_number" ? a.key.track : a.key.disc;
+                const auto bv = m_sortName == "played" ? unsigned(b.key.played)
+                    : m_sortName == "track_number" ? b.key.track : b.key.disc;
+                primary = av < bv ? -1 : av > bv ? 1 : 0;
+            }
+            if (primary) return m_sortDesc ? primary > 0 : primary < 0;
+            const int title = QString::compare(a.key.title, b.key.title, Qt::CaseInsensitive);
+            return title ? title < 0 : a.id < b.id;
+        });
+        std::vector<MLItemId> ids;
+        ids.reserve(entries.size());
+        for (const auto& entry : entries) ids.push_back(entry.id);
+        m_ids = std::move(ids);
+        return *m_ids;
+    }
+
+    std::shared_ptr<MLOp> m_source;
+    mutable std::mutex m_mutex;
+    mutable std::optional<std::vector<MLItemId>> m_ids;
+};
+}
+
 MLListCacheLoader::MLListCacheLoader(MediaLib* medialib, std::shared_ptr<MLListCacheLoader::MLOp> op, QObject* parent)
     : QObject(parent)
     , m_medialib(medialib)
     , m_op(op)
 {
+    if (MLOp::isCustomSort(m_op->sortName()))
+        m_op = std::make_shared<CustomSortOp>(m_op);
 }
 
 void MLListCacheLoader::cancelTask(size_t taskId)
@@ -760,6 +846,37 @@ MLListCacheLoader::MLOp::MLOp(MLItemId parentId, QString searchPattern, vlc_ml_s
     , m_sortDesc(sort_desc)
     , m_favoriteOnly(fav_only)
 {
+}
+
+bool MLListCacheLoader::MLOp::isCustomSort(const QString& name)
+{
+    return name == "uri" || name == "track_number" || name == "disc_number" || name == "played";
+}
+
+MLListCacheLoader::MLOp::SortKey MLListCacheLoader::MLOp::sortKey(
+    vlc_medialibrary_t* ml, const MLItem& item) const
+{
+    SortKey result;
+    if (const auto media = dynamic_cast<const MLMedia*>(&item)) {
+        result.title = media->title();
+        result.uri = media->mrl();
+        result.played = media->playCount() > 0;
+        result.track = media->trackNumber();
+        result.disc = media->discNumber();
+        return result;
+    }
+    if (item.getId().type != VLC_ML_PARENT_UNKNOWN) return result;
+    ml_unique_ptr<vlc_ml_media_t> media{vlc_ml_get_media(ml, item.getId().id)};
+    if (!media) return result;
+    result.title = qfu(media->psz_title);
+    result.played = media->i_playcount > 0;
+    for (const auto& file : ml_range_iterate<vlc_ml_file_t>(media->p_files))
+        if (file.i_type == VLC_ML_FILE_TYPE_MAIN) { result.uri = qfu(file.psz_mrl); break; }
+    if (media->i_subtype == VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK) {
+        result.track = std::max(0, media->album_track.i_track_nb);
+        result.disc = std::max(0, media->album_track.i_disc_nb);
+    }
+    return result;
 }
 
 vlc_ml_query_params_t MLListCacheLoader::MLOp::getQueryParams(size_t offset, size_t limit) const

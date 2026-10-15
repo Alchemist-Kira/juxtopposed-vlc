@@ -23,8 +23,6 @@
 
 MLAudio::MLAudio(vlc_medialibrary_t* _ml, const vlc_ml_media_t *_data)
     : MLMedia( _data )
-    , m_trackNumber( _data->album_track.i_track_nb )
-    , m_discNumber ( _data->album_track.i_disc_nb )
 {
     assert( _data );
     assert( _data->i_type == VLC_ML_MEDIA_TYPE_AUDIO );

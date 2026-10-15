@@ -38,7 +38,5 @@ public:
 private:
     QString m_albumTitle;
     QString m_artist;
-    unsigned int m_trackNumber;
-    unsigned int m_discNumber;
     int64_t m_albumId = INVALID_MLITEMID_ID;
 };

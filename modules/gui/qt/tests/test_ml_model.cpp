@@ -21,6 +21,7 @@
 #endif
 
 #include "../medialibrary/mlbasemodel.hpp"
+#include "../medialibrary/mlmedia.hpp"
 #include "vlc_stub_modules.hpp"
 
 #include <memory>
@@ -59,6 +60,14 @@ public:
         updateItemInCache(itemId);
     }
 
+    std::unique_ptr<MLListCacheLoader> selectionLoader() const { return createMLLoader(); }
+
+    MLListCacheLoader::MLOp::SortKey nativeSortKey(const MLItem& item) const
+    {
+        Loader loader(*this, *this);
+        return loader.MLListCacheLoader::MLOp::sortKey(nullptr, item);
+    }
+
 
 protected:
     std::unique_ptr<MLListCacheLoader> createMLLoader() const override
@@ -89,11 +98,11 @@ protected:
 
             uint32_t offset = queryParams->i_offset;
             uint32_t count = queryParams->i_nbResults;
-            size_t maxIndex = std::min(
+            size_t maxIndex = count ? std::min(
                 static_cast<size_t>(offset + count),
-                m_mlTestModel.m_items.size() - 1);
+                m_mlTestModel.m_items.size()) : m_mlTestModel.m_items.size();
             std::vector<std::unique_ptr<MLItem>> ret;
-            for (size_t i = offset; i <= maxIndex; ++i) {
+            for (size_t i = offset; i < maxIndex; ++i) {
                 ret.emplace_back(std::make_unique<MLItem>(m_mlTestModel.m_items[i]));
             }
             return ret;
@@ -103,6 +112,18 @@ protected:
         {
             VLC_UNUSED(ml);
             return std::make_unique<MLItem>(itemId);
+        }
+
+        SortKey sortKey(vlc_medialibrary_t*, const MLItem& item) const override
+        {
+            const auto id = item.getId().id;
+            SortKey key;
+            key.title = QString("Title %1").arg(id, 3, 10, QChar('0'));
+            key.uri = QString("file://server/%1").arg(1000 - id);
+            key.track = id % 3 == 1 ? 10 : id % 3 == 2 ? 2 : 1;
+            key.disc = id <= 6 ? 2 : 1;
+            key.played = id % 2;
+            return key;
         }
 
         const MLTestModel& m_mlTestModel;
@@ -137,6 +158,103 @@ private slots:
     void cleanup() {
         m_model.reset();
         m_medialib.reset();
+    }
+
+    void testCustomSort_data()
+    {
+        QTest::addColumn<QString>("criterion");
+        QTest::addColumn<Qt::SortOrder>("order");
+        QTest::addColumn<QList<int>>("expected");
+        QTest::newRow("track-ascending") << QString("track_number") << Qt::AscendingOrder << QList<int>{3,6,9,12,2,5,8,11,1,4,7,10};
+        QTest::newRow("track-descending") << QString("track_number") << Qt::DescendingOrder << QList<int>{1,4,7,10,2,5,8,11,3,6,9,12};
+        QTest::newRow("disc-ascending") << QString("disc_number") << Qt::AscendingOrder << QList<int>{7,8,9,10,11,12,1,2,3,4,5,6};
+        QTest::newRow("disc-descending") << QString("disc_number") << Qt::DescendingOrder << QList<int>{1,2,3,4,5,6,7,8,9,10,11,12};
+        QTest::newRow("uri-ascending") << QString("uri") << Qt::AscendingOrder << QList<int>{12,11,10,9,8,7,6,5,4,3,2,1};
+        QTest::newRow("uri-descending") << QString("uri") << Qt::DescendingOrder << QList<int>{1,2,3,4,5,6,7,8,9,10,11,12};
+        QTest::newRow("unwatched-first") << QString("played") << Qt::AscendingOrder << QList<int>{2,4,6,8,10,12,1,3,5,7,9,11};
+        QTest::newRow("watched-first") << QString("played") << Qt::DescendingOrder << QList<int>{1,3,5,7,9,11,2,4,6,8,10,12};
+    }
+
+    void testSortKeysUseLoadedMediaMetadata_data()
+    {
+        QTest::addColumn<bool>("audio");
+        QTest::addColumn<int>("track");
+        QTest::addColumn<unsigned>("expectedTrack");
+        QTest::newRow("audio-track") << true << 10 << 10u;
+        QTest::newRow("unknown-track") << true << -1 << 0u;
+        QTest::newRow("video-has-no-track-number") << false << 10 << 0u;
+    }
+
+    void testSortKeysUseLoadedMediaMetadata()
+    {
+        QFETCH(bool, audio);
+        QFETCH(int, track);
+        QFETCH(unsigned, expectedTrack);
+        auto files = std::unique_ptr<vlc_ml_file_list_t, decltype(&free)>(
+            static_cast<vlc_ml_file_list_t*>(calloc(1, sizeof(vlc_ml_file_list_t) + sizeof(vlc_ml_file_t))), free);
+        QVERIFY(files);
+        char title[] = "A title";
+        char filename[] = "A B.mkv";
+        char uri[] = "file://server/Media/A%20B.mkv";
+        files->i_nb_items = 1;
+        files->p_items[0].i_type = VLC_ML_FILE_TYPE_MAIN;
+        files->p_items[0].psz_mrl = uri;
+        vlc_ml_media_t media{};
+        media.i_id = 42;
+        media.psz_title = title;
+        media.psz_filename = filename;
+        media.p_files = files.get();
+        media.i_type = audio ? VLC_ML_MEDIA_TYPE_AUDIO : VLC_ML_MEDIA_TYPE_VIDEO;
+        media.i_subtype = audio ? VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK : VLC_ML_MEDIA_SUBTYPE_UNKNOWN;
+        media.album_track.i_track_nb = track;
+        media.album_track.i_disc_nb = 2;
+        media.i_playcount = 3;
+        MLMedia item(&media);
+        // A null library proves this path uses the metadata already loaded.
+        const auto key = m_model->nativeSortKey(item);
+        QCOMPARE(key.title, QString(title));
+        QCOMPARE(key.uri, QString(uri));
+        QCOMPARE(key.track, expectedTrack);
+        QCOMPARE(key.disc, audio ? 2u : 0u);
+        QVERIFY(key.played);
+    }
+
+    void testCustomSort()
+    {
+        QFETCH(QString, criterion);
+        QFETCH(Qt::SortOrder, order);
+        QFETCH(QList<int>, expected);
+        m_model->setSortCriteria(criterion);
+        m_model->setSortOrder(order);
+        m_model->appendRange(1, 12);
+        m_model->componentComplete();
+        QVERIFY(QTest::qWaitFor([this] { return !m_model->loading(); }));
+        QCOMPARE(m_model->getCount(), 12u);
+        for (int row = 0; row < expected.size(); ++row) {
+            const auto value = m_model->data(m_model->index(row), Qt::DisplayRole);
+            QCOMPARE(value.value<MLItemId>().id, expected[row]);
+        }
+        QList<int64_t> selected;
+        auto loader = m_model->selectionLoader();
+        loader->loadItemsTask(0, {0, 11}, [&selected](quint64, std::vector<std::unique_ptr<MLItem>>& items) {
+            for (const auto& item : items) selected.push_back(item->getId().id);
+        });
+        QVERIFY(QTest::qWaitFor([&selected] { return selected.size() == 2; }));
+        QCOMPARE(selected, (QList<int64_t>{expected.first(), expected.last()}));
+    }
+
+    void testCustomSortAcrossCachePages()
+    {
+        m_model->setSortCriteria("track_number");
+        m_model->appendRange(1, 300);
+        m_model->componentComplete();
+        QVERIFY(QTest::qWaitFor([this] { return !m_model->loading(); }));
+        for (const auto& pair : QList<QPair<int, int>>{{0,3},{99,300},{100,2},{199,299},{200,1},{299,298}}) {
+            QVERIFY(QTest::qWaitFor([&] {
+                return m_model->data(m_model->index(pair.first), Qt::DisplayRole).isValid();
+            }));
+            QCOMPARE(m_model->data(m_model->index(pair.first), Qt::DisplayRole).value<MLItemId>().id, pair.second);
+        }
     }
 
     /**

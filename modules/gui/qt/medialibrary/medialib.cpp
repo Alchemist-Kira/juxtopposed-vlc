@@ -429,22 +429,41 @@ void MediaLib::trackAssignmentSources(const QUrl& folder, bool subtitles, QJSVal
             if (!folder.isLocalFile() || !QFileInfo(folder.toLocalFile()).isDir()) return;
             const auto filters = (subtitles ? QStringLiteral(EXTENSIONS_SUBTITLE)
                                            : QStringLiteral(EXTENSIONS_AUDIO)).split(QLatin1Char(';'));
-            auto files = QDir(folder.toLocalFile()).entryInfoList(filters, QDir::Files, QDir::NoSort);
+            const QDir root(folder.toLocalFile());
+            auto files = root.entryInfoList(filters, QDir::Files, QDir::NoSort);
+            if (subtitles) {
+                const auto subtitleFolder = [](const QString& name) {
+                    return name.compare("subs", Qt::CaseInsensitive) == 0 ||
+                           name.compare("sub", Qt::CaseInsensitive) == 0 ||
+                           name.compare("subtitles", Qt::CaseInsensitive) == 0;
+                };
+                const auto children = root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks);
+                for (const auto& child : children) {
+                    if (!subtitleFolder(root.dirName()) && !subtitleFolder(child.fileName())) continue;
+                    const QDir directory(child.absoluteFilePath());
+                    files.append(directory.entryInfoList(filters, QDir::Files, QDir::NoSort));
+                    // A nearby subtitle folder can contain one folder per episode.
+                    // Keep this search shallow so opening a media folder does not scan a drive.
+                    if (!subtitleFolder(child.fileName())) continue;
+                    for (const auto& episode : directory.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks))
+                        files.append(QDir(episode.absoluteFilePath()).entryInfoList(filters, QDir::Files, QDir::NoSort));
+                }
+            }
             QCollator collator; collator.setNumericMode(true); collator.setCaseSensitivity(Qt::CaseInsensitive);
             std::sort(files.begin(), files.end(), [&collator](const QFileInfo& a, const QFileInfo& b) {
-                return collator.compare(a.fileName(), b.fileName()) < 0;
+                return collator.compare(a.absoluteFilePath(), b.absoluteFilePath()) < 0;
             });
             QVariantList sources;
             QSet<QString> vobsubIndexes;
             for (const auto& file : files)
                 if (file.suffix().compare("idx", Qt::CaseInsensitive) == 0)
-                    vobsubIndexes.insert(file.completeBaseName().toCaseFolded());
+                    vobsubIndexes.insert(file.absolutePath() + "/" + file.completeBaseName().toCaseFolded());
             for (const auto& file : files) {
                 // A VobSub pair is opened through its index, not twice.
                 if (subtitles && file.suffix().compare("sub", Qt::CaseInsensitive) == 0
-                    && vobsubIndexes.contains(file.completeBaseName().toCaseFolded())) continue;
+                    && vobsubIndexes.contains(file.absolutePath() + "/" + file.completeBaseName().toCaseFolded())) continue;
                 const auto url = QUrl::fromLocalFile(file.absoluteFilePath());
-                sources.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", file.fileName()}});
+                sources.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", root.relativeFilePath(file.absoluteFilePath())}});
             }
             result = {{"success", true}, {"error", QString()}, {"sources", sources}};
         },

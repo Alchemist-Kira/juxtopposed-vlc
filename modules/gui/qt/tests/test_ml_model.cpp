@@ -614,6 +614,25 @@ private slots:
             url("file:///other/thewand_S01E04.mkv")}, {url("file:///tracks/thewand_s01e04_English.srt")}).isEmpty());
     }
 
+    void testTrackMatchingEpisodeFolders()
+    {
+        const QUrl file("file:///show/The_Wand_S01E04.mkv");
+        const QUrl track("file:///show/Subs/The.Wand.Season1Episode4/English.srt");
+        const auto matches = m_medialib->matchTrackAssignments({file}, {track});
+        QCOMPARE(matches.value(file.toString()).toStringList(), QStringList{track.toString()});
+        QVERIFY(m_medialib->matchTrackAssignments({file},
+            {QUrl("file:///show/Subs/Other_Show_S01E04/English.srt")}).isEmpty());
+        QVERIFY(m_medialib->matchTrackAssignments({file},
+            {QUrl("file:///show/Subs/The_Wand_S02E04/English.srt")}).isEmpty());
+        QVERIFY(m_medialib->matchTrackAssignments({file},
+            {QUrl("file:///show/Subs/The_Wand_S01E04/Different_Film.srt")}).isEmpty());
+        QCOMPARE(m_medialib->matchTrackAssignments({QUrl("file:///movies/English.mkv")},
+            {QUrl("file:///tracks/English.srt")}).size(), 1);
+        const QUrl film("file:///movies/The_Wand.mkv"), captions("file:///movies/Subtitles/The.Wand/French.forced.srt");
+        QCOMPARE(m_medialib->matchTrackAssignments({film}, {captions}).size(), 1);
+        QVERIFY(m_medialib->matchTrackAssignments({file, QUrl("file:///other/The_Wand_S01E04.mkv")}, {track}).isEmpty());
+    }
+
     void testTrackMatchingAsync()
     {
         QQmlEngine engine;
@@ -677,6 +696,22 @@ private slots:
         QVERIFY(result.property("success").toBool());
         QCOMPARE(result.property("sources").property("length").toInt(), 2);
         QCOMPARE(result.property("sources").property(0).property("name").toString(), QStringLiteral("captions.IDX"));
+        QVERIFY(QDir(directory.path()).mkpath("Subs/Show_S01E02"));
+        QVERIFY(QDir(directory.path()).mkpath("Subtitles/Show_S01E10"));
+        QVERIFY(QDir(directory.path()).mkpath("Other"));
+        for (const auto& name : {"Subs/Show_S01E02/English.srt", "Subs/captions.sub", "Subtitles/Show_S01E10/French.srt", "Other/unrelated.srt"}) {
+            QFile file(directory.filePath(name)); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("fixture");
+        }
+        result = request(true, folder);
+        const auto found = result.property("sources");
+        QCOMPARE(found.property("length").toInt(), 5);
+        QStringList names;
+        for (int i = 0; i < found.property("length").toInt(); ++i)
+            names.append(found.property(i).property("name").toString());
+        QVERIFY(names.contains("Subs/Show_S01E02/English.srt"));
+        QVERIFY(names.contains("Subs/captions.sub")); // The index in another folder is not its VobSub pair.
+        QVERIFY(names.contains("Subtitles/Show_S01E10/French.srt"));
+        QVERIFY(!names.contains("Other/unrelated.srt"));
         m_env->mediaGet = [&](int query, va_list args) -> void* {
             if (query != VLC_ML_GET_MEDIA_BY_MRL) return nullptr;
             const auto uri = QUrl(QString::fromUtf8(va_arg(args, const char*)));

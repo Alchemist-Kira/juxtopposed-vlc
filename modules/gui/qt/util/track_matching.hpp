@@ -7,14 +7,19 @@
 #include <QSet>
 #include <QUrl>
 #include <atomic>
+#include <algorithm>
 
 namespace TrackMatching {
-inline QString stem(const QUrl& url)
+inline QString normalize(const QString& name)
 {
     static const QRegularExpression separators(QStringLiteral("[^\\p{L}\\p{N}]+"));
-    return QFileInfo(url.fileName()).completeBaseName()
-        .normalized(QString::NormalizationForm_KC).toCaseFolded()
+    return name.normalized(QString::NormalizationForm_KC).toCaseFolded()
         .replace(separators, QStringLiteral(" ")).trimmed();
+}
+
+inline QString stem(const QUrl& url)
+{
+    return normalize(QFileInfo(url.fileName()).completeBaseName());
 }
 
 struct Episode {
@@ -26,12 +31,27 @@ struct Episode {
 inline Episode episode(const QString& name)
 {
     static const QRegularExpression pattern(QStringLiteral(
-        "(?:^| )(?:(?:s(\\d{1,3}) ?e(\\d{1,4}))|(?:(\\d{1,3})x(\\d{1,4})))(?: |$)"));
+        "(?:^| )(?:(?:s(?:eason)? ?(\\d{1,3}) ?e(?:pisode)? ?(\\d{1,4}))|(?:(\\d{1,3})x(\\d{1,4})))(?: |$)"));
     const auto match = pattern.match(name);
     if (!match.hasMatch()) return {};
     const bool longForm = !match.captured(1).isEmpty();
     return {name.left(match.capturedStart()).trimmed(),
         match.captured(longForm ? 1 : 3).toInt(), match.captured(longForm ? 2 : 4).toInt()};
+}
+
+inline const QSet<QString>& labels()
+{
+    static const QSet<QString> labels = [] {
+        const auto words = QStringLiteral("en eng english es spa spanish ja jpn japanese de deu ger german "
+            "nl nld dut dutch fr fra fre french ar ara arabic pt por portuguese br brazilian "
+            "hi hin hindi ko kor korean zh zho chi chinese ru rus russian pl pol polish "
+            "it ita italian uk ukr ukrainian sv swe swedish no nor norwegian da dan danish "
+            "fi fin finnish tr tur turkish cs ces cze czech ro ron rum romanian hu hun hungarian "
+            "forced sdh cc commentary default full signs songs subtitles subs audio stereo surround "
+            "0 1 2 5 7 ac3 eac3 dts flac opus aac mp3 wav atmos truehd").split(QLatin1Char(' '));
+        return QSet<QString>(words.cbegin(), words.cend());
+    }();
+    return labels;
 }
 
 struct Name {
@@ -42,9 +62,19 @@ struct Name {
     QStringList words;
 };
 
-inline Name parse(const QUrl& url)
+inline Name parse(const QUrl& url, bool track = false)
 {
-    const auto name = stem(url);
+    auto name = stem(url);
+    if (track && !name.isEmpty()) {
+        const auto words = name.split(QLatin1Char(' '));
+        const bool generic = std::all_of(words.cbegin(), words.cend(), [](const QString& word) {
+            return labels().contains(word);
+        });
+        if (generic && std::any_of(name.cbegin(), name.cend(), [](QChar c) { return c.isLetter(); })) {
+            const auto parent = url.adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash).fileName();
+            name = normalize(parent) + QLatin1Char(' ') + name;
+        }
+    }
     auto compact = name;
     compact.remove(QLatin1Char(' '));
     return {url, name, compact, episode(name), name.split(QLatin1Char(' '))};
@@ -75,18 +105,8 @@ inline int score(const Name& media, const Name& track)
     if (prefix != media.compact || titleWords == words.size()) return 0;
     // Only treat known track labels as suffixes. A short film title must not
     // silently match a different film whose name starts with the same words.
-    static const QSet<QString> labels = [] {
-        const auto words = QStringLiteral("en eng english es spa spanish ja jpn japanese de deu ger german "
-            "nl nld dut dutch fr fra fre french ar ara arabic pt por portuguese br brazilian "
-            "hi hin hindi ko kor korean zh zho chi chinese ru rus russian pl pol polish "
-            "it ita italian uk ukr ukrainian sv swe swedish no nor norwegian da dan danish "
-            "fi fin finnish tr tur turkish cs ces cze czech ro ron rum romanian hu hun hungarian "
-            "forced sdh cc commentary default full signs songs subtitles subs audio stereo surround "
-            "0 1 2 5 7 ac3 eac3 dts flac opus aac mp3 wav atmos truehd").split(QLatin1Char(' '));
-        return QSet<QString>(words.cbegin(), words.cend());
-    }();
     const auto suffix = words.mid(titleWords);
-    for (const auto& word : suffix) if (!labels.contains(word)) return 0;
+    for (const auto& word : suffix) if (!labels().contains(word)) return 0;
     return 80;
 }
 
@@ -106,12 +126,13 @@ inline QMap<QUrl, QList<QUrl>> match(const QList<QUrl>& media, const QList<QUrl>
         if (seen.contains(track)) continue;
         seen.insert(track);
         const auto source = parse(track);
+        const auto hint = parse(track, true);
         int best = 0;
         QSet<QUrl> targets;
         for (const auto& file : names) {
             if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};
             if (file.url == track) continue;
-            const int value = score(file, source);
+            const int value = std::max(score(file, source), score(file, hint));
             if (value > best) { best = value; targets.clear(); }
             if (value > 0 && value == best) targets.insert(file.url);
         }

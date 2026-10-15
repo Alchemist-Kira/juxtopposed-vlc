@@ -21,6 +21,7 @@
 #include "playlist/playlist_controller.hpp"
 #include "util/shared_input_item.hpp"
 #include "util/playlist_cover_store.hpp"
+#include "util/track_matching.hpp"
 #include <QScopeGuard>
 
 #include <utility>
@@ -34,6 +35,8 @@
 #include <QSaveFile>
 #include <QDir>
 #include <vlc_playlist.h>
+#include <vlc_interface.h>
+#include <QCollator>
 #include <algorithm>
 
 MediaLib::MediaLib(qt_intf_t *_intf, vlc::playlist::PlaylistController* playlistController, QObject *_parent)
@@ -324,6 +327,221 @@ void MediaLib::playlistTrackTargets(const MLItemId& id, QJSValue callback)
         [this, callback](quint64, const QVariantMap& result) mutable {
             if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
         }, "redesign-playlist-tracks");
+}
+
+namespace {
+QStringList externalTracks(const vlc_ml_media_t* media, vlc_ml_file_type_t type)
+{
+    QStringList tracks;
+    if (media && media->p_files) {
+        for (const auto& file : ml_range_iterate<vlc_ml_file_t>(media->p_files))
+            if (file.i_type == type && file.b_external)
+                tracks.append(QUrl(qfu(file.psz_mrl)).toString(QUrl::FullyEncoded));
+    }
+    tracks.removeDuplicates();
+    return tracks;
+}
+
+bool sameTracks(QStringList left, QStringList right)
+{
+    left.removeDuplicates(); right.removeDuplicates();
+    left.sort(); right.sort();
+    return left == right;
+}
+
+QStringList trackStrings(const QVariant& value)
+{
+    QStringList result;
+    for (const auto& item : value.toList()) result.append(item.toString());
+    return result;
+}
+}
+
+void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [target, subtitles](vlc_medialibrary_t* ml, QVariantMap& result) {
+            result = {{"success", false}, {"error", qtr("VLC cannot read these files. Select them again.")}};
+            QList<QUrl> urls;
+            const auto scope = target.value("scope").toString();
+            if (scope == "file") urls.append(target.value("url").toUrl());
+            else if (scope == "folder") {
+                const auto folder = target.value("folder", target.value("url")).toUrl();
+                if (!folder.isLocalFile() || !QFileInfo(folder.toLocalFile()).isDir()) return;
+                auto filters = QStringLiteral(EXTENSIONS_VIDEO ";" EXTENSIONS_AUDIO).split(QLatin1Char(';'));
+                const auto files = QDir(folder.toLocalFile()).entryInfoList(filters, QDir::Files, QDir::NoSort);
+                QCollator collator; collator.setNumericMode(true); collator.setCaseSensitivity(Qt::CaseInsensitive);
+                auto sorted = files;
+                std::sort(sorted.begin(), sorted.end(), [&collator](const QFileInfo& a, const QFileInfo& b) {
+                    return collator.compare(a.fileName(), b.fileName()) < 0;
+                });
+                for (const auto& file : sorted) urls.append(QUrl::fromLocalFile(file.absoluteFilePath()));
+            } else if (scope == "playlist") {
+                const auto id = deserializeMlItemIdFromString(target.value("key").toString());
+                if (id.type != VLC_ML_PARENT_PLAYLIST || id.id <= 0) return;
+                ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_get_playlist(ml, id.id));
+                if (!playlist) return;
+                auto query = vlc_ml_query_params_create();
+                ml_unique_ptr<vlc_ml_media_list_t> items(vlc_ml_list_playlist_media(ml, &query, id.id));
+                if (!items) return;
+                for (const auto& item : ml_range_iterate<vlc_ml_media_t>(items)) {
+                    if (!item.p_files) continue;
+                    for (const auto& file : ml_range_iterate<vlc_ml_file_t>(item.p_files)) {
+                        if (file.i_type != VLC_ML_FILE_TYPE_MAIN) continue;
+                        urls.append(QUrl(qfu(file.psz_mrl))); break;
+                    }
+                }
+                result.insert("name", qfu(playlist->psz_name));
+            } else if (scope == "queue") {
+                for (const auto& value : target.value("urls").toList()) urls.append(value.toUrl());
+            } else return;
+            const auto type = subtitles ? VLC_ML_FILE_TYPE_SUBTITLE : VLC_ML_FILE_TYPE_SOUNDTRACK;
+            QVariantList rows;
+            QSet<QUrl> seen;
+            for (const auto& url : urls) {
+                if (!url.isValid() || url.scheme().isEmpty() || seen.contains(url)) continue;
+                seen.insert(url);
+                const auto uri = url.toEncoded();
+                ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
+                auto name = url.fileName();
+                if (name.isEmpty() && media) name = qfu(media->psz_title);
+                if (name.isEmpty()) name = url.toDisplayString();
+                rows.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", name},
+                    {"location", url.toDisplayString(QUrl::PreferLocalFile)},
+                    {"baseline", externalTracks(media.get(), type)}});
+            }
+            result.insert("success", true); result.insert("error", QString()); result.insert("rows", rows);
+        },
+        [this, callback](quint64, const QVariantMap& result) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-track-targets");
+}
+
+void MediaLib::trackAssignmentSources(const QUrl& folder, bool subtitles, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [folder, subtitles](vlc_medialibrary_t*, QVariantMap& result) {
+            result = {{"success", false}, {"error", qtr("VLC cannot read this folder. Select it again.")}};
+            if (!folder.isLocalFile() || !QFileInfo(folder.toLocalFile()).isDir()) return;
+            const auto filters = (subtitles ? QStringLiteral(EXTENSIONS_SUBTITLE)
+                                           : QStringLiteral(EXTENSIONS_AUDIO)).split(QLatin1Char(';'));
+            auto files = QDir(folder.toLocalFile()).entryInfoList(filters, QDir::Files, QDir::NoSort);
+            QCollator collator; collator.setNumericMode(true); collator.setCaseSensitivity(Qt::CaseInsensitive);
+            std::sort(files.begin(), files.end(), [&collator](const QFileInfo& a, const QFileInfo& b) {
+                return collator.compare(a.fileName(), b.fileName()) < 0;
+            });
+            QVariantList sources;
+            QSet<QString> vobsubIndexes;
+            for (const auto& file : files)
+                if (file.suffix().compare("idx", Qt::CaseInsensitive) == 0)
+                    vobsubIndexes.insert(file.completeBaseName().toCaseFolded());
+            for (const auto& file : files) {
+                // A VobSub pair is opened through its index, not twice.
+                if (subtitles && file.suffix().compare("sub", Qt::CaseInsensitive) == 0
+                    && vobsubIndexes.contains(file.completeBaseName().toCaseFolded())) continue;
+                const auto url = QUrl::fromLocalFile(file.absoluteFilePath());
+                sources.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", file.fileName()}});
+            }
+            result = {{"success", true}, {"error", QString()}, {"sources", sources}};
+        },
+        [this, callback](quint64, const QVariantMap& result) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-track-sources");
+}
+
+QVariantMap MediaLib::matchTrackAssignments(const QList<QUrl>& media, const QList<QUrl>& tracks) const
+{
+    QVariantMap result;
+    const auto matches = TrackMatching::match(media, tracks);
+    for (auto it = matches.cbegin(); it != matches.cend(); ++it) {
+        QStringList values;
+        for (const auto& track : it.value()) values.append(track.toString(QUrl::FullyEncoded));
+        result.insert(it.key().toString(QUrl::FullyEncoded), values);
+    }
+    return result;
+}
+
+void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [rows, subtitles](vlc_medialibrary_t* ml, QVariantMap& result) {
+            QVariantList saved;
+            result = {{"success", false}, {"error", QString()}, {"saved", saved}};
+            const auto type = subtitles ? VLC_ML_FILE_TYPE_SUBTITLE : VLC_ML_FILE_TYPE_SOUNDTRACK;
+            struct Edit { QUrl url; QStringList before; QStringList after; };
+            QList<Edit> edits;
+            QSet<QUrl> seen;
+            // Validate the whole draft before writing any media. Each later
+            // write is atomic; report completed rows if another write fails.
+            for (const auto& value : rows) {
+                const auto row = value.toMap();
+                const auto url = row.value("url").toUrl();
+                auto before = trackStrings(row.value("baseline"));
+                auto after = trackStrings(row.value("tracks"));
+                before.removeDuplicates(); after.removeDuplicates();
+                if (!url.isValid() || url.scheme().isEmpty() || seen.contains(url)) {
+                    result["error"] = qtr("VLC cannot save this selection. Select the files again."); return;
+                }
+                seen.insert(url);
+                const auto uri = url.toEncoded();
+                ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
+                if (!sameTracks(before, externalTracks(media.get(), type))) {
+                    result["error"] = qtr("The saved tracks changed. Close this window and select the files again."); return;
+                }
+                if (!media && (!url.isLocalFile() || !QFileInfo(url.toLocalFile()).isFile())) {
+                    result["error"] = qtr("VLC cannot read this media: %1").arg(url.toDisplayString()); return;
+                }
+                for (const auto& text : after) {
+                    const QUrl track(text);
+                    if (!track.isValid() || track.scheme().isEmpty() || track == url) {
+                        result["error"] = qtr("VLC cannot use this track: %1").arg(text); return;
+                    }
+                    if (media && media->p_files) {
+                        for (const auto& file : ml_range_iterate<vlc_ml_file_t>(media->p_files)) {
+                            if (QUrl(qfu(file.psz_mrl)) == track && (file.i_type != type || !file.b_external)) {
+                                result["error"] = qtr("VLC already uses this file for another track: %1").arg(track.fileName()); return;
+                            }
+                        }
+                    }
+                    if (before.contains(text)) continue; // An unchanged offline track may be retained.
+                    QFile file(track.toLocalFile());
+                    if (!track.isLocalFile() || !QFileInfo(file).isFile() || !file.open(QIODevice::ReadOnly)) {
+                        result["error"] = qtr("VLC cannot read this track: %1").arg(track.toDisplayString()); return;
+                    }
+                }
+                if (!sameTracks(before, after)) edits.append({url, before, after});
+            }
+            for (const auto& edit : edits) {
+                const auto uri = edit.url.toEncoded();
+                ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
+                if (!sameTracks(edit.before, externalTracks(media.get(), type))) {
+                    result["error"] = qtr("The saved tracks changed. Close this window and select the files again."); return;
+                }
+                if (!media) media.reset(vlc_ml_new_external_media(ml, uri.constData()));
+                QList<QByteArray> encoded;
+                std::vector<const char*> pointers;
+                for (const auto& track : edit.after) encoded.append(QUrl(track).toEncoded());
+                for (const auto& track : encoded) pointers.push_back(track.constData());
+                const int status = media ? vlc_ml_media_set_external_mrls(ml, media->i_id, type,
+                    pointers.data(), pointers.size()) : VLC_EGENERIC;
+                if (status != VLC_SUCCESS) {
+                    result["error"] = status == VLC_ENOTSUP
+                        ? qtr("This VLC build cannot replace saved tracks.")
+                        : qtr("VLC could not save the tracks for %1. Try again.").arg(edit.url.fileName());
+                    return;
+                }
+                saved.append(QVariantMap{{"url", edit.url.toString(QUrl::FullyEncoded)},
+                    {"baseline", edit.before}, {"tracks", edit.after}});
+                result["saved"] = saved;
+            }
+            result["success"] = true;
+        },
+        [this, callback](quint64, const QVariantMap& result) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-track-save");
 }
 
 void MediaLib::requestPlaylistState(const MLItemId& id, bool update, bool favorite, QJSValue callback)

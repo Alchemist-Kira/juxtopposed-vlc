@@ -67,6 +67,10 @@ public:
     Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
     Q_INVOKABLE void playlistState(const MLItemId& id, QJSValue callback);
     Q_INVOKABLE void playlistTrackTargets(const MLItemId& id, QJSValue callback);
+    Q_INVOKABLE void trackAssignmentRows(const QVariantMap& target, bool subtitles, QJSValue callback);
+    Q_INVOKABLE void trackAssignmentSources(const QUrl& folder, bool subtitles, QJSValue callback);
+    Q_INVOKABLE QVariantMap matchTrackAssignments(const QList<QUrl>& media, const QList<QUrl>& tracks) const;
+    Q_INVOKABLE void saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback);
     Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
     Q_INVOKABLE void savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback);
     Q_INVOKABLE void shuffleAndPlay(const MLItemId& id);

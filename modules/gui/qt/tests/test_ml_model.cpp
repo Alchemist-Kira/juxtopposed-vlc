@@ -580,6 +580,161 @@ private slots:
         QCOMPARE(links.last().second, int(VLC_ML_FILE_TYPE_SOUNDTRACK));
     }
 
+    void testTrackMatching()
+    {
+        const auto url = [](const char* name) { return QUrl(QString::fromUtf8(name)); };
+        const QList<QUrl> media = {url("file:///show/The_Wand_S01E01.mp4"),
+            url("file:///show/The_Wand_S01E02.mp4"), url("file:///show/The_Wand_S01E10.mp4")};
+        const auto english = url("file:///tracks/The_Wand_S01E01_English.srt");
+        const auto spanish = url("file:///tracks/The.Wand.1x01.Spanish.srt");
+        const auto second = url("file:///tracks/S01E02.srt");
+        const auto otherShow = url("file:///tracks/Other_Show_S01E01.srt");
+        auto matches = m_medialib->matchTrackAssignments(media, {english, spanish, second, otherShow, english});
+        QCOMPARE(matches.value(media[0].toString(QUrl::FullyEncoded)).toStringList(),
+            QStringList({english.toString(QUrl::FullyEncoded), spanish.toString(QUrl::FullyEncoded)}));
+        QCOMPARE(matches.value(media[1].toString(QUrl::FullyEncoded)).toStringList(),
+            QStringList({second.toString(QUrl::FullyEncoded)}));
+        QVERIFY(!matches.contains(media[2].toString(QUrl::FullyEncoded)));
+        // No arbitrary assignment between two locations with the same filename.
+        QVERIFY(m_medialib->matchTrackAssignments({media[0], url("file:///other/The_Wand_S01E01.mp4")}, {english}).isEmpty());
+        QCOMPARE(m_medialib->matchTrackAssignments({media[0], media[0]}, {english}).size(), 1);
+        QVERIFY(m_medialib->matchTrackAssignments({media[1], url("file:///other/Other_Show_S01E02.mp4")}, {second}).isEmpty());
+        QVERIFY(m_medialib->matchTrackAssignments({url("file:///movie/Up.mkv")}, {url("file:///tracks/Up_in_the_Air.srt")}).isEmpty());
+        QCOMPARE(m_medialib->matchTrackAssignments({url("file:///movie/Up.mkv")}, {url("file:///tracks/Up.English.srt")}).size(), 1);
+        QCOMPARE(m_medialib->matchTrackAssignments({url("file:///movie/FRAN%C3%87AIS.mkv")}, {url("file:///tracks/fran%C3%A7ais.srt")}).size(), 1);
+    }
+
+    void testTrackAssignmentRead()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        for (const auto& name : {"Show_S01E10.mkv", "Show_S01E02.mkv", "Show_S01E02.en.srt", "captions.IDX", "captions.sub"}) {
+            QFile file(directory.filePath(name)); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("fixture");
+        }
+        m_env->mediaGet = [](int, va_list) -> void* { return nullptr; };
+        int writes = 0;
+        m_env->mediaControl = [&](int, va_list) { ++writes; return VLC_EGENERIC; };
+        auto request = [&](bool sources, const QUrl& folder) {
+            engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+            auto callback = engine.evaluate("(function(value) { answer = value; })");
+            if (sources) m_medialib->trackAssignmentSources(folder, true, callback);
+            else m_medialib->trackAssignmentRows({{"scope", "folder"}, {"folder", folder}}, true, callback);
+            if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
+                qFatal("Track assignment read did not finish");
+            return engine.globalObject().property("answer");
+        };
+        const auto folder = QUrl::fromLocalFile(directory.path());
+        auto result = request(false, folder);
+        QVERIFY(result.property("success").toBool());
+        const auto rows = result.property("rows");
+        QCOMPARE(rows.property("length").toInt(), 2);
+        QCOMPARE(rows.property(0).property("name").toString(), QStringLiteral("Show_S01E02.mkv"));
+        QCOMPARE(rows.property(1).property("name").toString(), QStringLiteral("Show_S01E10.mkv"));
+        QCOMPARE(rows.property(0).property("baseline").property("length").toInt(), 0);
+        result = request(true, folder);
+        QVERIFY(result.property("success").toBool());
+        QCOMPARE(result.property("sources").property("length").toInt(), 2);
+        QCOMPARE(result.property("sources").property(0).property("name").toString(), QStringLiteral("captions.IDX"));
+        QVERIFY(!request(true, QUrl("https://example.test/folder")).property("success").toBool());
+        QVERIFY(!request(false, QUrl::fromLocalFile(directory.filePath("missing"))).property("success").toBool());
+        QCOMPARE(writes, 0); // Opening, scanning and cancelling do not create media records.
+    }
+
+    void testTrackAssignmentSave()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        auto create = [&](const QString& name) {
+            const auto path = directory.filePath(name);
+            QFile file(path);
+            if (!file.open(QIODevice::WriteOnly)) return QUrl();
+            file.write("Keep this file");
+            return QUrl::fromLocalFile(path);
+        };
+        const auto first = create("first.mkv"), second = create("second.mkv");
+        const auto subtitle = create(QStringLiteral("captions & français.srt"));
+        const auto audio = create("sound.wav");
+        const QString offline = QStringLiteral("file:///offline/keep.srt");
+        const auto encoded = [](const QUrl& value) { return value.toString(QUrl::FullyEncoded); };
+        QMap<int64_t, QStringList> assignments{{11, {offline}}, {12, {}}};
+        int writes = 0;
+        bool rejectSecond = false;
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            if (query != VLC_ML_GET_MEDIA_BY_MRL) return nullptr;
+            const QUrl url(QString::fromUtf8(va_arg(args, const char*)));
+            const int64_t id = url == first ? 11 : url == second ? 12 : 0;
+            if (!id) return nullptr;
+            auto* item = static_cast<vlc_ml_media_t*>(calloc(1, sizeof(vlc_ml_media_t)));
+            item->i_id = id;
+            item->p_files = static_cast<vlc_ml_file_list_t*>(calloc(1,
+                sizeof(vlc_ml_file_list_t) + (assignments[id].size() + 2) * sizeof(vlc_ml_file_t)));
+            item->p_files->i_nb_items = assignments[id].size() + 2;
+            auto* files = item->p_files->p_items;
+            files[0].i_type = VLC_ML_FILE_TYPE_MAIN;
+            files[0].psz_mrl = strdup(url.toEncoded().constData());
+            files[1].i_type = VLC_ML_FILE_TYPE_SOUNDTRACK; files[1].b_external = true;
+            files[1].psz_mrl = strdup(audio.toEncoded().constData());
+            for (int i = 0; i < assignments[id].size(); ++i) {
+                files[i + 2].i_type = VLC_ML_FILE_TYPE_SUBTITLE; files[i + 2].b_external = true;
+                files[i + 2].psz_mrl = strdup(assignments[id][i].toUtf8().constData());
+            }
+            return item;
+        };
+        m_env->mediaControl = [&](int query, va_list args) {
+            if (query != VLC_ML_MEDIA_SET_EXTERNAL_MRLS) return VLC_EGENERIC;
+            const auto id = va_arg(args, int64_t);
+            const auto type = va_arg(args, int);
+            const auto tracks = va_arg(args, const char* const*);
+            const auto count = va_arg(args, size_t);
+            if (type != VLC_ML_FILE_TYPE_SUBTITLE) return VLC_EGENERIC;
+            ++writes;
+            if (rejectSecond && id == 12) return VLC_EGENERIC;
+            assignments[id].clear();
+            for (size_t i = 0; i < count; ++i) assignments[id].append(QString::fromUtf8(tracks[i]));
+            return VLC_SUCCESS;
+        };
+        auto row = [&](const QUrl& url, const QStringList& before, const QStringList& after) {
+            return QVariantMap{{"url", encoded(url)}, {"baseline", before}, {"tracks", after}};
+        };
+        auto save = [&](const QVariantList& rows) {
+            engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+            m_medialib->saveTrackAssignments(rows, true, engine.evaluate("(function(value) { answer = value; })"));
+            if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
+                qFatal("Track assignment save did not finish");
+            return engine.globalObject().property("answer");
+        };
+        const auto selected = QStringList{offline, encoded(subtitle)};
+        auto result = save({row(first, {offline}, selected), row(second, {}, {"file:///missing.srt"})});
+        QVERIFY(!result.property("success").toBool()); QCOMPARE(writes, 0);
+        result = save({row(first, {offline}, {encoded(audio)})});
+        QVERIFY(!result.property("success").toBool()); QCOMPARE(writes, 0);
+        rejectSecond = true;
+        result = save({row(first, {offline}, selected), row(second, {}, {encoded(subtitle)})});
+        QVERIFY(!result.property("success").toBool());
+        QCOMPARE(result.property("saved").property("length").toInt(), 1);
+        QCOMPARE(assignments[11], selected); QVERIFY(assignments[12].isEmpty());
+        rejectSecond = false;
+        result = save({row(second, {}, {encoded(subtitle), encoded(subtitle)})});
+        QVERIFY(result.property("success").toBool());
+        QCOMPARE(assignments[12], QStringList{encoded(subtitle)});
+        const int previous = writes;
+        result = save({row(first, {offline}, {})}); // A stale draft must not remove another edit.
+        QVERIFY(!result.property("success").toBool()); QCOMPARE(writes, previous);
+        result = save({row(first, selected, {})});
+        QVERIFY(result.property("success").toBool()); QVERIFY(assignments[11].isEmpty());
+        QCOMPARE(assignments[12], QStringList{encoded(subtitle)});
+        QFile disk(subtitle.toLocalFile()); QVERIFY(disk.open(QIODevice::ReadOnly));
+        QCOMPARE(disk.readAll(), QByteArray("Keep this file"));
+    }
+
     void testCustomSort_data()
     {
         QTest::addColumn<QString>("criterion");

@@ -37,7 +37,7 @@ Rectangle {
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         entries: pin ? [
             {action: "open", label: ["file", "media"].includes(pin.kind) ? qsTr("Play") : qsTr("Open"), icon: "play"},
-            {action: "queue", label: qsTr("Add to queue"), icon: "queue", enabled: pin.kind !== "section"},
+            {action: "queue", label: qsTr("Add to queue"), icon: "queue", enabled: !["section", "home"].includes(pin.kind)},
             {action: "remove", label: qsTr("Remove from sidebar"), icon: "remove"}
         ] : []
         onActionRequested: action => {
@@ -54,6 +54,8 @@ Rectangle {
         captionSpacing: 10
         captionMaximumWidth: root.theme.dp(130)
         selectedForeground: root.theme.bright
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         onActiveFocusChanged: if (activeFocus) root.reveal(this)
         background: Rectangle {
             radius: root.theme.dp(6)
@@ -84,7 +86,7 @@ Rectangle {
                     required property int index
                     required property string modelData
                     objectName: "libraryCategory" + index
-                    iconName: [root.category === 0 ? "home-active" : "home", "videos", "music", "network", "playlist", "history"][index]
+                    iconName: [root.category === 0 && !root.selectedPinId ? "home-active" : "home", "videos", "music", "network", "playlist", "history"][index]
                     text: modelData; selected: !root.selectedPinId && root.category === index
                     caption: root.expanded ? [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network"), qsTr("Playlists"), qsTr("Recent")][index] : ""
                     onClicked: root.categoryRequested(index)
@@ -110,16 +112,17 @@ Rectangle {
                     contentItem: Item {
                         Item {
                             id: picture
+                            objectName: "libraryPinPicture" + shortcut.index
                             anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: root.expanded ? parent.left : undefined
-                            anchors.leftMargin: root.theme.dp(12)
-                            anchors.horizontalCenter: root.expanded ? undefined : parent.horizontalCenter
+                            x: root.expanded ? root.theme.dp(12) : (parent.width - width) / 2
                             width: root.theme.dp(24); height: width
                             RedesignLibraryArtwork {
                                 anchors.centerIn: parent
                                 width: root.theme.dp(28); height: width
                                 visible: !!shortcut.modelData.artwork
                                 source: shortcut.modelData.artwork || ""
+                                iconName: shortcut.modelData.icon
+                                surroundColor: shortcut.down ? root.theme.selected : shortcut.hovered ? root.theme.hover : root.color
                                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                                 cornerRadius: 4
                             }
@@ -131,6 +134,7 @@ Rectangle {
                             }
                         }
                         Text {
+                            objectName: "libraryPinLabel" + shortcut.index
                             visible: root.expanded
                             anchors.left: picture.right; anchors.leftMargin: root.theme.dp(10)
                             anchors.right: parent.right; anchors.rightMargin: root.theme.dp(8)

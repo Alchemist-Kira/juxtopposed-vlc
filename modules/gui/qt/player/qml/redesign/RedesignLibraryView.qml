@@ -18,6 +18,9 @@ Item {
     property var breadcrumbs: []
     property var pins: []
     property string selectedPinId: ""
+    property var locationPinTarget
+    property bool locationPinned: false
+    property var menuForItem: (index, section) => null
     property string searchText: ""
     property bool grid: false
     property bool expanded: false
@@ -56,6 +59,8 @@ Item {
     signal pinActivated(var pin)
     signal pinRemoved(var pin)
     signal pinEnqueueRequested(var pin)
+    signal pinLocationRequested()
+    signal itemActionRequested(var target, string action)
 
     function nameFromUrl(url) {
         const value = url.toString()
@@ -100,6 +105,20 @@ Item {
         })
         sortPopup.popup(anchor, 0, anchor.height)
     }
+    function openItemMenu(anchor, index, point, section) {
+        const context = menuForItem(index, section || "")
+        if (!context || !context.target || !context.entries.length) return
+        itemMenu.target = context.target
+        itemMenu.entries = context.entries
+        itemMenu.popup(anchor, point)
+    }
+    RedesignActionMenu {
+        id: itemMenu
+        objectName: "libraryItemMenu"
+        property var target
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        onActionRequested: action => root.itemActionRequested(target, action)
+    }
     RedesignActionMenu {
         id: moreMenu
         objectName: "libraryMoreMenu"
@@ -107,9 +126,11 @@ Item {
         entries: [
             { action: "add", label: root.addLabel, icon: "add" },
             { action: "settings", label: qsTr("Library settings"), icon: "settings" }
-        ].concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
+        ].concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Pin to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
+            .concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
         onActionRequested: action => {
             if (action === "add") root.addMedia()
+            else if (action === "pin") root.pinLocationRequested()
             else if (action === "compact") root.fullLibraryRequested()
             else root.preferencesRequested()
         }
@@ -287,6 +308,7 @@ Item {
             onActivated: (section, index) => root.homeActivated(section, index)
             onEnqueueRequested: (section, index) => root.homeEnqueueRequested(section, index)
             onSectionRequested: section => root.homeSectionRequested(section)
+            onContextRequested: (section, index, anchor, point) => root.openItemMenu(anchor, index, point, section)
         }
         GridView {
             id: mediaView
@@ -321,6 +343,13 @@ Item {
                     text: delegate.displayTitle
                     selected: mediaView.currentIndex === delegate.index
                     onClicked: { mediaView.currentIndex = delegate.index; root.activated(delegate.index) }
+                    Keys.onMenuPressed: root.openItemMenu(this, delegate.index, Qt.point(0, height), "")
+                    Keys.onPressed: event => {
+                        if (event.key === Qt.Key_F10 && event.modifiers & Qt.ShiftModifier) {
+                            root.openItemMenu(this, delegate.index, Qt.point(0, height), ""); event.accepted = true
+                        } else event.accepted = false
+                    }
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: event => root.openItemMenu(mediaButton, delegate.index, event.position, "") }
                     contentItem: Item {
                         RedesignLibraryArtwork {
                             id: thumbnail

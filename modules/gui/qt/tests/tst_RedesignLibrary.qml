@@ -57,6 +57,8 @@ TestCase {
     SignalSpy { id: pinSpy; target: library; signalName: "pinActivated" }
     SignalSpy { id: pinRemoveSpy; target: library; signalName: "pinRemoved" }
     SignalSpy { id: pinQueueSpy; target: library; signalName: "pinEnqueueRequested" }
+    SignalSpy { id: itemActionSpy; target: library; signalName: "itemActionRequested" }
+    SignalSpy { id: pinLocationSpy; target: library; signalName: "pinLocationRequested" }
     function init() {
         testCase.width = 427
         testCase.Window.window.width = 427
@@ -75,6 +77,10 @@ TestCase {
         library.breadcrumbs = []
         library.pins = []
         library.selectedPinId = ""
+        library.locationPinTarget = undefined
+        library.locationPinned = false
+        library.menuForItem = (index, section) => null
+        itemActionSpy.clear(); pinLocationSpy.clear()
         library.forceActiveFocus()
         findChild(library, "libraryNavigationScroll").contentY = 0
         pinSpy.clear(); pinRemoveSpy.clear(); pinQueueSpy.clear()
@@ -87,7 +93,7 @@ TestCase {
         wait(20)
     }
     function cleanup() {
-        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu", "libraryAncestorMenu", "libraryPinMenu"]) {
+        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu", "libraryAncestorMenu", "libraryPinMenu", "libraryItemMenu"]) {
             const menu = findChild(library, name)
             if (menu) { menu.close(); tryVerify(() => !menu || !menu.visible) }
         }
@@ -174,6 +180,15 @@ TestCase {
         expandLibrary()
         compare(findChild(library, "libraryPin0").text, "Shows")
         verify(findChild(library, "libraryPin0").selected)
+        const picture = findChild(library, "libraryPinPicture0")
+        const label = findChild(library, "libraryPinLabel0")
+        compare(picture.width, 24)
+        compare(picture.x, 12)
+        verify(label.visible && label.width > 0)
+        compare(label.text, "Shows")
+        library.expanded = false
+        compare(picture.width, 24)
+        compare(picture.x, (picture.parent.width - 24) / 2)
     }
     function test_manyPinsKeepAddAndKeyboardFocusInView() {
         const pins = []
@@ -191,6 +206,57 @@ TestCase {
         compare(addSpy.count, 1)
         library.pins = []
         tryCompare(scroll, "contentY", 0)
+    }
+    function test_itemContextMenuKeepsItsTargetAndDoesNotActivateOnRightClick() {
+        const records = [{key: "original"}]
+        library.menuForItem = (index, section) => ({target: {key: records[index].key}, entries: [{action: "pin", label: "Pin to sidebar"}]})
+        const button = findChild(library, "libraryMediaItem0")
+        mouseClick(button, 10, 10, Qt.RightButton)
+        const menu = findChild(library, "libraryItemMenu")
+        tryCompare(menu, "opened", true)
+        compare(activateSpy.count, 0)
+        records[0].key = "replacement"
+        const pin = findChild(menu, "libraryAction_pin")
+        verify(waitForRendering(pin))
+        mouseClick(pin)
+        compare(itemActionSpy.count, 1)
+        compare(itemActionSpy.signalArguments[0][0].key, "original")
+        compare(itemActionSpy.signalArguments[0][1], "pin")
+        button.forceActiveFocus()
+        keyClick(Qt.Key_F10, Qt.ShiftModifier)
+        tryCompare(menu, "opened", true)
+        compare(menu.target.key, "replacement")
+    }
+    function test_homeContextMenuUsesItsSection() {
+        library.category = 0
+        library.homeSections = [{key: "folders", title: "Folders", model: homeItems, icon: "folder", emptyText: "None"}]
+        library.menuForItem = (index, section) => ({target: {key: index.toString(), section: section}, entries: [{action: "pin", label: "Pin to sidebar"}]})
+        const button = findChild(library, "homeItem_folders_0")
+        tryVerify(() => button.visible)
+        verify(waitForRendering(button))
+        mouseClick(button, 10, 10, Qt.RightButton)
+        const menu = findChild(library, "libraryItemMenu")
+        tryCompare(menu, "opened", true)
+        compare(menu.target.section, "folders")
+        compare(menu.target.key, "0")
+        compare(homeSpy.count, 0)
+    }
+    function test_currentLocationCanBePinnedFromMoreMenu() {
+        library.locationPinTarget = {kind: "folder", key: "shows", name: "Shows"}
+        const button = findChild(library, "libraryMoreButton")
+        mouseClick(button)
+        const menu = findChild(library, "libraryMoreMenu")
+        tryCompare(menu, "opened", true)
+        let pin = findChild(menu, "libraryAction_pin")
+        verify(waitForRendering(pin))
+        compare(pin.text, "Pin to sidebar")
+        mouseClick(pin)
+        compare(pinLocationSpy.count, 1)
+        library.locationPinned = true
+        mouseClick(button)
+        tryCompare(menu, "opened", true)
+        pin = findChild(menu, "libraryAction_pin")
+        compare(pin.text, "Remove from sidebar")
     }
     function test_sortMenuRestrictsChoicesToFolderData() {
         library.sortFields = ["title", "insertion", "uri"]
@@ -253,7 +319,8 @@ TestCase {
             {tag: "longest-root", url: "file:///media/Shows/The%20Wand/S01", roots: ["file:///media/Shows", "file:///media/Shows/The Wand"], expected: ["file:///media/Shows/The%20Wand", "file:///media/Shows/The%20Wand/S01"]},
             {tag: "segment-boundary", url: "file:///Shows2/S01", roots: ["file:///Shows"], expected: ["file:///", "file:///Shows2", "file:///Shows2/S01"]},
             {tag: "raw-special-characters", url: "/media/20% off/Cat #1", roots: ["/media"], expected: ["file:///media", "file:///media/20%25%20off", "file:///media/20%25%20off/Cat%20%231"]},
-            {tag: "drive", url: "C:\\Movies\\Cat #1\\", roots: [], expected: ["file:///C:", "file:///C:/Movies", "file:///C:/Movies/Cat%20%231"]},
+            {tag: "drive", url: "C:\\Movies\\Cat #1\\", roots: [], expected: ["file:///C:/", "file:///C:/Movies", "file:///C:/Movies/Cat%20%231"]},
+            {tag: "drive-root", url: "C:\\", roots: [], expected: ["file:///C:/"]},
             {tag: "drive-root-case", url: "file:///C:/Movies/Cat", roots: ["file:///c:/movies/"], expected: ["file:///C:/Movies", "file:///C:/Movies/Cat"]},
             {tag: "unc-share", url: "\\\\OtherPC\\Movies\\Cat", roots: [], expected: ["file://otherpc/Movies", "file://otherpc/Movies/Cat"]},
             {tag: "unc-root", url: "file://OtherPC/Movies/Cat", roots: ["\\\\OtherPC\\Movies"], expected: ["file://otherpc/Movies", "file://otherpc/Movies/Cat"]},

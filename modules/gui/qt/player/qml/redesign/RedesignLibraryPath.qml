@@ -37,7 +37,12 @@ QtObject {
     }
     function location(value) {
         const path = split(value)
-        return path ? path.prefix + "/" + path.parts.join("/") : value.toString()
+        return path ? urlFor(path, path.parts.length) : value.toString()
+    }
+    function urlFor(path, length) {
+        // A Windows drive needs its trailing slash to refer to the drive root.
+        const driveRoot = length === 1 && /^[a-z]:$/i.test(path.parts[0])
+        return path.prefix + "/" + path.parts.slice(0, length).join("/") + (driveRoot ? "/" : "")
     }
     function trail(value, roots) {
         if (!value) return []
@@ -54,7 +59,7 @@ QtObject {
         }
         const result = []
         for (let length = start; length <= path.parts.length; ++length)
-            result.push(path.prefix + "/" + path.parts.slice(0, length).join("/"))
+            result.push(urlFor(path, length))
         return result
     }
 }

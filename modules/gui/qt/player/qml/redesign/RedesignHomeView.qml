@@ -13,6 +13,7 @@ Flickable {
     signal activated(string section, int index)
     signal enqueueRequested(string section, int index)
     signal sectionRequested(string section)
+    signal contextRequested(string section, int index, Item anchor, point point)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     contentWidth: width
     contentHeight: groups.height
@@ -84,6 +85,13 @@ Flickable {
                                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                                     text: entry.displayTitle
                                     onClicked: root.activated(section.modelData.key, entry.index)
+                                    Keys.onMenuPressed: root.contextRequested(section.modelData.key, entry.index, this, Qt.point(0, height))
+                                    Keys.onPressed: event => {
+                                        if (event.key === Qt.Key_F10 && event.modifiers & Qt.ShiftModifier) {
+                                            root.contextRequested(section.modelData.key, entry.index, this, Qt.point(0, height)); event.accepted = true
+                                        } else event.accepted = false
+                                    }
+                                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: event => root.contextRequested(section.modelData.key, entry.index, button, event.position) }
                                     property int mediaIndex: entry.index
                                     property QtObject libraryView: QtObject {
                                         function enqueueRequested(index) { root.enqueueRequested(section.modelData.key, index) }

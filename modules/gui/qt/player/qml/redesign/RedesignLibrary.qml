@@ -19,6 +19,37 @@ RedesignLibraryView {
     property string selectedName: ""
     property var backStack: []
     property var forwardStack: []
+    pins: pinStore.entries
+    readonly property var currentPinTarget: {
+        if (currentFolder) return pinTarget("folder", currentFolder, nameFromUrl(currentFolder), category, "folder", "", "")
+        if (selectedPlaylist) return pinTarget("playlist", selectedPlaylist.toString(), selectedName, 4, "playlist", "", "")
+        if (selectedCollection) return pinTarget("collection", selectedCollection.toString(), selectedName, 2, musicSection === "Artists" ? "artist" : "music", "", musicSection)
+        if (musicSection) return pinTarget("section", musicSection, qsTr(musicSection), 2, "music", "", "")
+        if (homeSection) return pinTarget("home", homeSection, homeTitles[homeSection], 0, homeSections.find(section => section.key === homeSection).icon, "", "")
+        return null
+    }
+    locationPinTarget: currentPinTarget
+    locationPinned: pinStore.contains(currentPinTarget)
+    selectedPinId: locationPinned ? pinStore.identity(currentPinTarget) : ""
+    menuForItem: (index, section) => {
+        const target = targetForItem(index, section || homeSection)
+        if (!target) return null
+        const navigate = ["folder", "section", "home"].includes(target.kind)
+        return {target: target, entries: [
+            {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play"},
+            {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Pin to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
+        ].concat(["section", "home"].includes(target.kind) ? [] : [{action: "queue", label: qsTr("Add to queue"), icon: "queue"}])}
+    }
+    onItemActionRequested: (target, action) => {
+        if (action === "pin") pinStore.toggle(target)
+        else if (action === "queue") enqueueTarget(target)
+        else if (action === "open") openTarget(target)
+        else playTarget(target)
+    }
+    onPinLocationRequested: if (currentPinTarget) pinStore.toggle(currentPinTarget)
+    onPinActivated: target => openTarget(target)
+    onPinRemoved: target => pinStore.remove(target)
+    onPinEnqueueRequested: target => enqueueTarget(target)
     settingsContext: MainCtx
     sortScope: homeSection ? "home/" + homeSection : currentFolder ? "folder/" + (category === 2 ? "audio" : "video")
         : selectedPlaylist ? "playlist-media" : selectedCollection ? "audio-tracks"
@@ -76,6 +107,77 @@ RedesignLibraryView {
     emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
     RedesignLibraryPath { id: folderPath }
+    RedesignLibraryPins { id: pinStore; ctx: MainCtx }
+    function pinTarget(kind, key, name, category, icon, artwork, section) {
+        return pinStore.normalize({kind: kind, key: key, name: name, category: category, icon: icon, artwork: artwork ? artwork.toString() : "", section: section})
+    }
+    function mediaTarget(item, defaultCategory) {
+        const category = item.isVideo === false ? 2 : item.isVideo === true ? 1 : defaultCategory
+        const url = (item.mrl || item.url || "").toString()
+        const local = url.startsWith("file:")
+        return pinTarget(local ? "file" : "media", local ? folderPath.location(url) : item.id.toString(),
+            item.title || item.name || nameFromUrl(url), category, category === 3 ? "network" : category === 2 ? "music" : "video",
+            item.thumbnail || item.small_cover || item.cover || "", "")
+    }
+    function targetForItem(index, section) {
+        if (section) {
+            const item = homeItem(section, index)
+            if (section === "folders") return pinTarget("folder", folderPath.location(item.key), item.name, 1, "folder", "", "")
+            if (section === "playlists") return pinTarget("playlist", item.key, item.name, 4, "playlist", "", "")
+            if (section === "artists") return pinTarget("collection", item.id.toString(), item.name, 2, "artist", item.small_cover || item.cover || "", "Artists")
+            return mediaTarget(item, section === "listening" ? 2 : 1)
+        }
+        if (currentFolder) {
+            const folder = folderLoader.item
+            if (!folder) return null
+            const url = folder.get(index, "fileUrl")
+            if (!url) return null
+            const isDirectory = folder.get(index, "fileIsDir")
+            return pinTarget(isDirectory ? "folder" : "file", folderPath.location(url), folder.get(index, "fileName"), category, isDirectory ? "folder" : category === 2 ? "music" : "video", "", "")
+        }
+        if (category === 1) {
+            const item = folderEntries.get(index)
+            return item ? pinTarget("folder", folderPath.location(item.fileUrl), item.fileName, 1, "folder", "", "") : null
+        }
+        if (category === 2 && !musicSection) {
+            const section = ["Songs", "Albums", "Artists", "Genres"][index]
+            return section ? pinTarget("section", section, qsTr(section), 2, "music", "", "") : null
+        }
+        const item = activeModel.getDataAt(index)
+        if (!item || !item.id) return null
+        const name = item.title || item.name || nameFromUrl(item.url || "")
+        const artwork = item.thumbnail || item.small_cover || item.cover || ""
+        if (category === 4 && !selectedPlaylist) return pinTarget("playlist", item.id.toString(), name, 4, "playlist", artwork, "")
+        if (category === 2 && !selectedCollection && musicSection !== "Songs")
+            return pinTarget("collection", item.id.toString(), name, 2, musicSection === "Artists" ? "artist" : "music", artwork, musicSection)
+        return mediaTarget(item, category)
+    }
+    function resetLocation(newCategory) {
+        category = newCategory
+        homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined
+        currentFolder = ""; musicSection = ""; selectedName = ""; searchText = ""
+    }
+    function openTarget(target) {
+        if (target.kind === "folder") { openFolder(target.key, target.category); return }
+        if (["media", "file"].includes(target.kind)) { playTarget(target); return }
+        remember()
+        resetLocation(target.category)
+        if (target.kind === "playlist") {
+            selectedPlaylist = MediaLib.deserializeMlItemIdFromString(target.key); selectedName = target.name
+            visits.record("playlists", target.key, target.name)
+        } else if (target.kind === "collection") {
+            musicSection = target.section; selectedCollection = MediaLib.deserializeMlItemIdFromString(target.key); selectedName = target.name
+        } else if (target.kind === "section") musicSection = target.key
+        else if (target.kind === "home") homeSection = target.key
+    }
+    function enqueueTarget(target) {
+        if (["folder", "file"].includes(target.kind)) MediaLib.addToPlaylist(Qt.resolvedUrl(target.key))
+        else if (!["section", "home"].includes(target.kind)) MediaLib.addToPlaylist(MediaLib.deserializeMlItemIdFromString(target.key))
+    }
+    function playTarget(target) {
+        if (target.kind === "file") MediaLib.addAndPlay(Qt.resolvedUrl(target.key))
+        else MediaLib.addAndPlay(MediaLib.deserializeMlItemIdFromString(target.key))
+    }
     function snapshot() { return { category: category, homeSection: homeSection, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, musicSection: musicSection, name: selectedName, search: searchText } }
     function remember() { backStack = [...backStack, snapshot()]; forwardStack = [] }
     function restore(state) { category = state.category; homeSection = state.homeSection || ""; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; musicSection = state.musicSection; selectedName = state.name; searchText = state.search; if (currentFolder) visits.record("folders", currentFolder, nameFromUrl(currentFolder)); else if (selectedPlaylist) visits.record("playlists", selectedPlaylist.toString(), selectedName) }
@@ -103,7 +205,7 @@ RedesignLibraryView {
             remember(); selectedCollection = undefined; selectedName = ""; searchText = ""
         }
     }
-    onCategoryRequested: newCategory => { remember(); homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
+    onCategoryRequested: newCategory => { remember(); resetLocation(newCategory) }
     onBackRequested: { const stack = backStack.slice(); const state = stack.pop(); forwardStack = [...forwardStack, snapshot()]; backStack = stack; restore(state) }
     onForwardRequested: { const stack = forwardStack.slice(); const state = stack.pop(); backStack = [...backStack, snapshot()]; forwardStack = stack; restore(state) }
     onActivated: index => {

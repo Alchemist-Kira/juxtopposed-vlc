@@ -322,6 +322,7 @@ libqt_plugin_la_SOURCES = \
 	util/workerthreadset.hpp util/workerthreadset.cpp \
 	util/base_model.hpp util/base_model_p.hpp util/base_model.cpp \
 	util/color_scheme_model.cpp util/color_scheme_model.hpp \
+	util/redesign_widget_theme.cpp util/redesign_widget_theme.hpp \
 	util/ui_notifier.cpp util/ui_notifier.hpp \
 	util/color_svg_image_provider.cpp util/color_svg_image_provider.hpp \
 	util/vlcaccess_image_provider.cpp util/vlcaccess_image_provider.hpp \
@@ -2063,6 +2064,8 @@ check_PROGRAMS += qml_test
 EXTRA_DIST += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 EXTRA_DIST += tests/tst_RedesignSubtitleTimeline.qml
 EXTRA_DIST += tests/tst_RedesignQueue.qml
+EXTRA_DIST += tests/tst_RedesignLibrary.qml
+TESTS += tests/tst_RedesignLibrary.qml
 TESTS += tests/tst_RedesignQueue.qml
 EXTRA_DIST += tests/tst_RedesignNetwork.qml
 TESTS += tests/tst_RedesignNetwork.qml

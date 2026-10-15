@@ -35,6 +35,7 @@
 #include <vlc_cxx_helpers.hpp>
 
 #include "qt.hpp"
+#include <functional>
 
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 4, 0)
@@ -70,6 +71,8 @@ struct VLCTestingEnv
 
     //if set to false no render discovery will be found
     bool renderDiscoveryProbeEnabled = true;
+    std::function<void*(int, va_list)> mediaGet;
+    std::function<int(int, va_list)> mediaControl;
 };
 
 #endif /* QT_VLC_STUB_MODULES */

@@ -29,6 +29,8 @@
 
 #include <QCoreApplication>
 #include <QTest>
+#include <QTemporaryDir>
+#include <QFile>
 
 struct vlc_medialibrary_t;
 
@@ -160,6 +162,94 @@ private slots:
     void cleanup() {
         m_model.reset();
         m_medialib.reset();
+        m_env->mediaGet = {};
+        m_env->mediaControl = {};
+    }
+
+    void testAssociatedTracks()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        auto create = [&](const QString& name) {
+            const QString path = directory.filePath(name);
+            QFile file(path);
+            if (!file.open(QIODevice::WriteOnly)) return QUrl();
+            file.write("test track");
+            return QUrl::fromLocalFile(path);
+        };
+        const auto media = create("video.mkv");
+        const auto first = create(QStringLiteral("captions & français.srt"));
+        const auto second = create("other.srt");
+        QVERIFY(!media.isEmpty() && !first.isEmpty() && !second.isEmpty());
+        QList<QPair<QUrl, int>> links;
+        int lookups = 0, writes = 0;
+        bool rejectSecond = true;
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            if (query != VLC_ML_GET_MEDIA_BY_MRL) return nullptr;
+            ++lookups;
+            if (QUrl(QString::fromUtf8(va_arg(args, const char*))) != media) return nullptr;
+            auto* item = static_cast<vlc_ml_media_t*>(calloc(1, sizeof(vlc_ml_media_t)));
+            item->i_id = 42;
+            item->p_files = static_cast<vlc_ml_file_list_t*>(calloc(1,
+                sizeof(vlc_ml_file_list_t) + (links.size() + 1) * sizeof(vlc_ml_file_t)));
+            item->p_files->i_nb_items = links.size() + 1;
+            item->p_files->p_items[0].psz_mrl = strdup(media.toEncoded().constData());
+            item->p_files->p_items[0].i_type = VLC_ML_FILE_TYPE_MAIN;
+            for (int i = 0; i < links.size(); ++i) {
+                item->p_files->p_items[i + 1].psz_mrl = strdup(links[i].first.toEncoded().constData());
+                item->p_files->p_items[i + 1].i_type = static_cast<vlc_ml_file_type_t>(links[i].second);
+            }
+            return item;
+        };
+        m_env->mediaControl = [&](int query, va_list args) {
+            if (query != VLC_ML_MEDIA_ADD_EXTERNAL_MRL) return VLC_EGENERIC;
+            const auto id = va_arg(args, int64_t);
+            const auto uri = QUrl(QString::fromUtf8(va_arg(args, const char*)));
+            const auto type = va_arg(args, int);
+            if (id != 42) return VLC_EGENERIC;
+            ++writes;
+            if (uri == second && rejectSecond) return VLC_EGENERIC;
+            links.push_back({uri, type});
+            return VLC_SUCCESS;
+        };
+        auto add = [&](const QList<QUrl>& tracks, bool subtitles) {
+            bool done = false;
+            MediaLib::TrackAddition result;
+            m_medialib->addMediaTracks(media, tracks, subtitles, this,
+                [&](const MediaLib::TrackAddition& value) { result = value; done = true; });
+            if (!QTest::qWaitFor([&] { return done; }))
+                qFatal("Track request did not finish");
+            return result;
+        };
+        auto result = add({first, first, second}, true);
+        QCOMPARE(result.added, QList<QUrl>{first});
+        QVERIFY(!result.error.isEmpty());
+        QCOMPARE(links.size(), 1);
+        rejectSecond = false;
+        result = add({first, second}, true);
+        QVERIFY(result.error.isEmpty());
+        QCOMPARE(result.added, QList<QUrl>{second});
+        QCOMPARE(links.size(), 2);
+        const int previousWrites = writes;
+        result = add({first, second}, true);
+        QVERIFY(result.error.isEmpty());
+        QVERIFY(result.added.isEmpty());
+        QCOMPARE(writes, previousWrites);
+        result = add({first}, false);
+        QVERIFY(!result.error.isEmpty());
+        QCOMPARE(writes, previousWrites);
+        const int previousLookups = lookups;
+        result = add({QUrl("missing.srt")}, true);
+        QVERIFY(!result.error.isEmpty());
+        QCOMPARE(lookups, previousLookups);
+        result = add({media}, false);
+        QVERIFY(!result.error.isEmpty());
+        QCOMPARE(lookups, previousLookups);
+        const auto sound = create("sound.wav");
+        result = add({sound}, false);
+        QVERIFY(result.error.isEmpty());
+        QCOMPARE(result.added, QList<QUrl>{sound});
+        QCOMPARE(links.last().second, int(VLC_ML_FILE_TYPE_SOUNDTRACK));
     }
 
     void testCustomSort_data()

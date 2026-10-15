@@ -135,7 +135,7 @@ Item {
         objectName: "libraryItemMenu"
         property var target
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-        onActionRequested: action => root.itemActionRequested(target, action)
+        onActionRequested: action => { itemMenu.close(); root.itemActionRequested(target, action) }
     }
     RedesignActionMenu {
         id: moreMenu

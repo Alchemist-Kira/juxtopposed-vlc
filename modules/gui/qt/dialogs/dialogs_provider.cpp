@@ -56,6 +56,8 @@
 #include "dialogs/plugins/plugins.hpp"
 #include "dialogs/epg/epg.hpp"
 #include "dialogs/playlists/playlists.hpp"
+#include "medialibrary/medialib.hpp"
+#include "util/redesign_widget_theme.hpp"
 
 #include <vlc_url.h>
 
@@ -63,10 +65,18 @@
 #include <QApplication>
 #include <QSignalMapper>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QUrl>
 #include <QInputDialog>
 #include <QPointer>
 #include <QMessageBox>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QComboBox>
+#include <QListView>
+#include <QScreen>
+#include <QScopeGuard>
+#include <algorithm>
 
 #define I_OP_DIR_WINTITLE I_DIR_OR_FOLDER( N_("Open Directory"), \
                                            N_("Open Folder") )
@@ -490,6 +500,7 @@ bool DialogsProvider::questionDialog(const QString& text, const QString &title) 
     messageBox.setDefaultButton(QMessageBox::No);
 
     QVLCDialog::setWindowTransientParent(&messageBox, nullptr, p_intf);
+    applyRedesignWidgetTheme(&messageBox, p_intf->p_mi);
 
     int result = messageBox.exec();
     return result == QMessageBox::Yes;
@@ -695,6 +706,12 @@ QStringList DialogsProvider::showSimpleOpen( const QString& help,
                                              int filters,
                                              const QUrl& path )
 {
+    const QPointer<MainCtx> context = p_intf->p_mi;
+    const bool shortcuts = context->getUseGlobalShortcuts();
+    context->setUseGlobalShortcuts(false);
+    const auto restoreShortcuts = qScopeGuard([context, shortcuts] {
+        if (context) context->setUseGlobalShortcuts(shortcuts);
+    });
     QString fileTypes = "";
     if( filters & EXT_FILTER_MEDIA ) {
         ADD_EXT_FILTER( fileTypes, EXTENSIONS_MEDIA );
@@ -715,10 +732,31 @@ QStringList DialogsProvider::showSimpleOpen( const QString& help,
     fileTypes.replace( ";*", " *");
     fileTypes.chop(2); //remove trailing ";;"
 
-    QList<QUrl> urls = QFileDialog::getOpenFileUrls( NULL,
-        help.isEmpty() ? qfut(I_OP_SEL_FILES ) : help,
-        path.isEmpty() ? p_intf->p_mi->getDialogFilePath() : path,
-        fileTypes );
+    QFileDialog dialog(nullptr, help.isEmpty() ? qfut(I_OP_SEL_FILES) : help);
+    dialog.setFileMode(QFileDialog::ExistingFiles);
+    const QUrl initial = path.isEmpty() ? p_intf->p_mi->getDialogFilePath() : path;
+    if (initial.isLocalFile() && QFileInfo(initial.toLocalFile()).isFile()) {
+        dialog.setDirectoryUrl(initial.adjusted(QUrl::RemoveFilename));
+        if (!path.isEmpty()) dialog.selectUrl(initial);
+    } else {
+        dialog.setDirectoryUrl(initial);
+    }
+    dialog.setNameFilter(fileTypes);
+    if (auto *buttons = dialog.findChild<QDialogButtonBox*>())
+        if (auto *open = buttons->button(QDialogButtonBox::Open))
+            open->setProperty("redesignPrimary", true);
+    applyRedesignWidgetTheme(&dialog, p_intf->p_mi);
+    for (auto *combo : dialog.findChildren<QComboBox*>()) {
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        combo->setMinimumContentsLength(16);
+    }
+    const auto dp = [this](int value) { return qRound(value * p_intf->p_mi->getIntfScaleFactor()); };
+    if (auto *sidebar = dialog.findChild<QListView*>(QStringLiteral("sidebar")))
+        sidebar->setMinimumWidth(dp(160));
+    QVLCDialog::setWindowTransientParent(&dialog, nullptr, p_intf);
+    const auto available = dialog.screen()->availableGeometry().size();
+    dialog.resize(std::min(dp(800), available.width() - 40), std::min(dp(560), available.height() - 40));
+    const QList<QUrl> urls = dialog.exec() == QDialog::Accepted ? dialog.selectedUrls() : QList<QUrl>();
 
     if( !urls.isEmpty() )
         p_intf->p_mi->setDialogFilePath(urls.last());
@@ -1062,6 +1100,36 @@ void DialogsProvider::loadAudioFile()
 void DialogsProvider::loadVideoFile()
 {
     loadMediaFile( VIDEO_ES, EXT_FILTER_VIDEO, qtr( "Open video..." ) );
+}
+
+void DialogsProvider::addMediaTracksDialog(const QUrl& media, bool subtitles)
+{
+    if (!p_intf->p_mi || !p_intf->p_mi->hasMediaLibrary()) return;
+    const auto files = showSimpleOpen(subtitles ? qtr("Add Subtitle Tracks") : qtr("Add Audio Tracks"),
+                                     subtitles ? EXT_FILTER_SUBTITLE : EXT_FILTER_AUDIO,
+                                     media.isLocalFile() ? media.adjusted(QUrl::RemoveFilename) : QUrl());
+    QList<QUrl> tracks;
+    for (const auto& file : files) tracks.push_back(QUrl(file));
+    if (tracks.isEmpty()) return;
+    p_intf->p_mi->getMediaLibrary()->addMediaTracks(media, tracks, subtitles, this,
+        [this, media, subtitles](const MediaLib::TrackAddition& result) {
+            const SharedInputItem current { THEMIM->getInput() };
+            if (current) {
+                char *uri = input_item_GetURI(current.get());
+                const bool same = uri && QUrl(qfu(uri)) == media;
+                free(uri);
+                if (same) {
+                    for (const auto& track : result.added)
+                        THEMIM->AddAssociatedMedia(subtitles ? SPU_ES : AUDIO_ES,
+                            track.toString(QUrl::FullyEncoded), false, false, false);
+                }
+            }
+            if (!result.error.isEmpty()) {
+                const auto message = result.error + (result.added.isEmpty() ? QString() :
+                    QStringLiteral("\n\n") + qtr("VLC kept the tracks that it saved. Select the other files again."));
+                messageDialog(message, qtr("VLC Media Player"));
+            }
+        });
 }
 
 

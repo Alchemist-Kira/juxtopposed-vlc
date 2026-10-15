@@ -268,6 +268,7 @@ public slots:
     void loadSubtitlesFile();
     void loadAudioFile();
     void loadVideoFile();
+    void addMediaTracksDialog(const QUrl& media, bool subtitles);
 
     void quit();
 

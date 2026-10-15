@@ -64,6 +64,12 @@ public:
     Q_INVOKABLE void mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback);
     Q_INVOKABLE void mediaState(const QUrl& url, bool create, QJSValue callback);
     Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
+    struct TrackAddition {
+        QList<QUrl> added;
+        QString error;
+    };
+    void addMediaTracks(const QUrl& media, const QList<QUrl>& tracks, bool subtitles,
+                        QObject* receiver, std::function<void(const TrackAddition&)> callback);
 
     inline bool idle() const { return m_idle; }
     inline int discoveryPending() const { return m_discoveryPending; }

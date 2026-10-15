@@ -462,6 +462,8 @@ qt_plugin_sources = files(
     'util/base_model_p.hpp',
     'util/color_scheme_model.cpp',
     'util/color_scheme_model.hpp',
+    'util/redesign_widget_theme.cpp',
+    'util/redesign_widget_theme.hpp',
     'util/ui_notifier.cpp',
     'util/ui_notifier.hpp',
     'util/color_svg_image_provider.cpp',
@@ -1032,6 +1034,7 @@ qml_modules += {
 qml_tests = {
     'tst_FSM': files('tests/tst_FSM.qml'),
     'tst_Redesign': files('tests/tst_Redesign.qml'),
+    'tst_RedesignLibrary': files('tests/tst_RedesignLibrary.qml'),
     'tst_RedesignQueue': files('tests/tst_RedesignQueue.qml'),
     'tst_RedesignNetwork': files('tests/tst_RedesignNetwork.qml'),
     'tst_RedesignPlaylist': files('tests/tst_RedesignPlaylist.qml'),

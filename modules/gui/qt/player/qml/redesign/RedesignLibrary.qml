@@ -76,6 +76,8 @@ RedesignLibraryView {
                     if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
                 })
         } else if (action === "stream" || action === "convert") DialogsProvider.streamingDialog([Qt.resolvedUrl(target.url || target.key)], action === "convert")
+        else if (action === "subtitle-tracks" || action === "audio-tracks")
+            DialogsProvider.addMediaTracksDialog(Qt.resolvedUrl(target.url || target.key), action === "subtitle-tracks")
         else if (action === "explorer") Qt.openUrlExternally(folderPath.parentFolder(target.url || target.key))
         else if (action === "source") {
             const url = target.url || target.key
@@ -168,6 +170,8 @@ RedesignLibraryView {
             {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true}
         ].concat(target.kind === "file" ? [{action: "explorer", label: qsTr("Show in File Explorer"), icon: "folder", accent: true}] : [])
             .concat([{action: "source", label: qsTr("Go to Source"), icon: "source", accent: true},
+                {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles", accent: true},
+                {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio", accent: true},
                 {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"},
                 {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"}])
             .concat(playlistEditing && target.playlistKey === playlistKey ? [

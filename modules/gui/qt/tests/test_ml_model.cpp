@@ -175,6 +175,32 @@ private slots:
         m_env->mediaList = {};
     }
 
+    void testFolderResyncQueuesOnlyTheChosenUrl()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(),QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(),engine.rootContext());engine.newQObject(m_medialib.get());
+        QList<QByteArray> requests;bool reject=false;
+        m_env->mediaControl=[&](int query,va_list args) {
+            if(query!=VLC_ML_RELOAD_FOLDER) return VLC_EGENERIC;
+            const char* uri=va_arg(args,const char*);
+            if(!uri) return VLC_EGENERIC; // A folder action must not request a full-library scan.
+            requests.push_back(uri);return reject ? VLC_EGENERIC : VLC_SUCCESS;
+        };
+        auto request=[&](const QUrl& url) {
+            engine.globalObject().setProperty("answer",QJSValue(QJSValue::NullValue));
+            m_medialib->resyncFolder(url,engine.evaluate("(function(value){answer=value;})"));
+            if(!QTest::qWaitFor([&]{return !engine.globalObject().property("answer").isNull();}))qFatal("Folder resync callback did not finish");
+            return engine.globalObject().property("answer");
+        };
+        const QUrl folder(QStringLiteral("file:///library/Movies%20%26%20fran%C3%A7ais"));
+        QVERIFY(request(folder).property("success").toBool());
+        QCOMPARE(requests,QList<QByteArray>{folder.toEncoded()});
+        reject=true;QVERIFY(!request(folder).property("success").toBool());
+        QVERIFY(!request(QUrl("relative")).property("success").toBool());
+        QCOMPARE(requests.size(),2);
+    }
+
     void testPlaylistFavoriteAndState()
     {
         vlc_ml_event_t event{};

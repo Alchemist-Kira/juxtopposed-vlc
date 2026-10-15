@@ -183,6 +183,77 @@ private slots:
         QVERIFY(QFile::remove(dir.filePath("match.mp4")));
         QTRY_COMPARE(model.count(), 0);
     }
+    void infoCountsUnfilteredDirectContentsAndDoesNotNavigate() {
+        QTemporaryDir temporary;
+        QDir base(temporary.path());
+        QVERIFY(base.mkdir(QStringLiteral("Folder & français")));
+        const auto path = base.filePath(QStringLiteral("Folder & français"));
+        QDir directory(path);
+        QVERIFY(directory.mkdir("nested"));
+        for (const auto& pair : QList<QPair<QString,QByteArray>>{{"visible.txt","abc"},{".hidden","xy"},{"nested/inside.mp4","not counted"}}) {
+            QFile file(directory.filePath(pair.first));
+            QVERIFY(file.open(QIODevice::WriteOnly)); QCOMPARE(file.write(pair.second), pair.second.size());
+        }
+        RedesignFolderModel model;
+        model.setNameFilters({"*.mp4"}); model.setSearchPattern("unmatched");
+        const auto original = model.folder();
+        QSignalSpy ready(&model, &RedesignFolderModel::infoReady);
+        const auto request = model.requestInfo(QUrl::fromLocalFile(path));
+        QTRY_COMPARE(ready.count(), 1);
+        QCOMPARE(ready.at(0).at(0).toULongLong(), request);
+        const auto info = ready.at(0).at(1).toMap();
+        QVERIFY(info.value("success").toBool());
+        QCOMPARE(info.value("files").toInt(), 2);
+        QCOMPARE(info.value("folders").toInt(), 1);
+        QCOMPARE(info.value("size").toULongLong(), quint64(5));
+        QCOMPARE(info.value("name").toString(), QStringLiteral("Folder & français"));
+        QCOMPARE(info.value("url").toString(), QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded));
+        QCOMPARE(info.value("location").toString(), QDir::toNativeSeparators(path));
+        QVERIFY(info.value("modified").toLongLong() > 0);
+        QCOMPARE(model.folder(), original);
+        QCOMPARE(model.count(), 0);
+        ready.clear();
+        model.requestInfo(QUrl(path)); // Raw absolute library paths use the same normalization.
+        QTRY_COMPARE(ready.count(), 1);
+        QVERIFY(ready.at(0).at(1).toMap().value("success").toBool());
+    }
+    void infoRejectsMissingOrNonFolderLocations() {
+        QTemporaryDir temporary;
+        touch(QDir(temporary.path()).filePath("file.mp4"));
+        RedesignFolderModel model;
+        QSignalSpy ready(&model, &RedesignFolderModel::infoReady);
+        for (const auto& url : QList<QUrl>{QUrl::fromLocalFile(temporary.path()+"/missing"),
+            QUrl::fromLocalFile(temporary.path()+"/file.mp4"), QUrl("https://example.invalid/media"), QUrl("relative")}) {
+            ready.clear(); model.requestInfo(url); QTRY_COMPARE(ready.count(),1);
+            const auto info=ready.at(0).at(1).toMap();
+            QVERIFY(!info.value("success").toBool());
+            QVERIFY(!info.value("location").toString().isEmpty());
+        }
+    }
+    void refreshPreservesFiltersAndReleasesOldArtworkRequests() {
+        QTemporaryDir temporary;
+        QDir directory(temporary.path());
+        touch(directory.filePath("match.mp4")); touch(directory.filePath("hidden.txt"));
+        RedesignFolderModel model;
+        model.setNameFilters({"*.mp4"}); model.setSearchPattern("match");
+        model.setSortCriteria("uri"); model.setSortReversed(true);
+        model.setFolder(QUrl::fromLocalFile(temporary.path()));
+        QTRY_COMPARE(model.count(),1);
+        QSignalSpy requested(&model,&RedesignFolderModel::artworkRequested);
+        model.get(0,"thumbnail"); // This queued request must be invalidated by refresh.
+        QSignalSpy reset(&model,&QAbstractItemModel::modelReset);
+        model.refresh(); QTRY_VERIFY(reset.count()>0);
+        QCOMPARE(requested.count(),0);
+        QCOMPARE(model.nameFilters(),QStringList{"*.mp4"});
+        QCOMPARE(model.searchPattern(),QStringLiteral("match"));
+        QCOMPARE(model.sortCriteria(),QStringLiteral("uri")); QVERIFY(model.sortReversed());
+        model.get(0,"thumbnail"); QTRY_COMPARE(requested.count(),1);
+        const auto url=model.get(0,"fileUrl").toUrl();model.setArtwork(url,"old.png");
+        QCOMPARE(model.get(0,"thumbnail").toString(),QStringLiteral("old.png"));
+        reset.clear();model.refresh();QTRY_VERIFY(reset.count()>0);
+        QCOMPARE(model.get(0,"thumbnail").toString(),QString());
+        QTRY_COMPARE(requested.count(),2);
+    }
     void directoryCountChangesAtConstantRowCount() {
         QTemporaryDir directory;
         QDir dir(directory.path());

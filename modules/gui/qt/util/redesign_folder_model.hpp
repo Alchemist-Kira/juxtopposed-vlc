@@ -9,6 +9,7 @@
 #include <QVector>
 #include <QHash>
 #include <QSet>
+#include <QVariantMap>
 #include <memory>
 
 class RedesignFolderScanResult : public QObject
@@ -18,6 +19,7 @@ public:
     using QObject::QObject;
 signals:
     void ready(quint64 serial, const QFileInfoList& entries);
+    void infoReady(quint64 serial, const QVariantMap& info);
 };
 
 /** Flat folder contents backed by Qt's asynchronous filesystem watcher. */
@@ -51,6 +53,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     Q_INVOKABLE QVariant get(int row, const QString& role) const;
     Q_INVOKABLE void setArtwork(const QUrl& url, const QString& artwork);
+    Q_INVOKABLE void refresh();
+    Q_INVOKABLE quint64 requestInfo(const QUrl& folder);
 signals:
     void folderChanged();
     void nameFiltersChanged();
@@ -59,6 +63,7 @@ signals:
     void countChanged();
     void searchPatternChanged();
     void artworkRequested(const QUrl& url);
+    void infoReady(quint64 serial, const QVariantMap& info);
 private:
     void scheduleRefresh();
     void scan();
@@ -75,6 +80,7 @@ private:
     mutable QSet<QUrl> m_artworkRequested;
     quint64 m_folderSerial = 0;
     quint64 m_serial = 0;
+    quint64 m_infoSerial = 0;
     bool m_sortReversed = false;
     bool m_refreshPending = false;
 };

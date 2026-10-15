@@ -263,6 +263,22 @@ void MediaLib::mediaState(const QUrl& url, bool create, QJSValue callback)
     requestMediaState(url, create ? MediaStateAction::Ensure : MediaStateAction::Read, false, callback);
 }
 
+void MediaLib::resyncFolder(const QUrl& url, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [url](vlc_medialibrary_t* ml, QVariantMap& result) {
+            result = {{"success", false}, {"error", qtr("VLC cannot rescan this folder. Check the folder and try again.")}};
+            if (!url.isValid() || url.scheme().isEmpty()) return;
+            const auto mrl = url.toEncoded();
+            if (vlc_ml_reload_folder(ml, mrl.constData()) == VLC_SUCCESS)
+                result = {{"success", true}, {"error", QString()}};
+        },
+        [this, callback](quint64, const QVariantMap& result) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-folder-resync");
+}
+
 void MediaLib::playlistState(const MLItemId& id, QJSValue callback)
 {
     requestPlaylistState(id, false, false, callback);

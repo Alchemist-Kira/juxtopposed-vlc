@@ -60,6 +60,7 @@ public:
     Q_INVOKABLE void insertIntoPlaylist(size_t index, const QVariantList &itemIds /*QList<MLParentId>*/, const QStringList &options = {});
 
     Q_INVOKABLE void reload();
+    Q_INVOKABLE void resyncFolder(const QUrl& url, QJSValue callback);
 
     Q_INVOKABLE void mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback);
     Q_INVOKABLE void mediaState(const QUrl& url, bool create, QJSValue callback);

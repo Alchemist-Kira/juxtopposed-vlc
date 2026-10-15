@@ -1218,6 +1218,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignPlaylistDialog.qml \
 	player/qml/redesign/RedesignPlaylistProperties.qml \
 	player/qml/redesign/RedesignPlaylistTrackTarget.qml \
+	player/qml/redesign/RedesignFolderInfo.qml \
 	player/qml/redesign/RedesignAddToPlaylistDialog.qml \
 	player/qml/redesign/RedesignAddToPlaylist.qml \
 	player/qml/redesign/RedesignNetworkStreams.qml \
@@ -2078,6 +2079,8 @@ EXTRA_DIST += tests/tst_RedesignPlaylistProperties.qml
 TESTS += tests/tst_RedesignPlaylistProperties.qml
 EXTRA_DIST += tests/tst_RedesignPlaylistTrackTarget.qml
 TESTS += tests/tst_RedesignPlaylistTrackTarget.qml
+EXTRA_DIST += tests/tst_RedesignFolderInfo.qml
+TESTS += tests/tst_RedesignFolderInfo.qml
 TESTS += tests/tst_RedesignSubtitleTimeline.qml
 TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 endif

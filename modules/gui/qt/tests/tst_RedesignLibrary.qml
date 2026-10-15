@@ -302,6 +302,16 @@ TestCase {
         pin = findChild(menu, "libraryAction_pin")
         compare(pin.text, "Remove from sidebar")
     }
+    function test_folderMoreMenuForwardsResyncAndInfoTarget() {
+        library.locationPinTarget={kind:"folder",key:"file:///Movies%20%26%20Shows",name:"Movies & Shows"}
+        const button=findChild(library,"libraryMoreButton"), menu=findChild(library,"libraryMoreMenu")
+        for(const action of ["resync","folder-info"]) {
+            mouseClick(button);tryCompare(menu,"opened",true)
+            const entry=findChild(menu,"libraryAction_"+action);verify(waitForRendering(entry));mouseClick(entry)
+            compare(itemActionSpy.signalArguments[itemActionSpy.count-1][0].key,"file:///Movies%20%26%20Shows")
+            compare(itemActionSpy.signalArguments[itemActionSpy.count-1][1],action)
+        }
+    }
     function test_sortMenuRestrictsChoicesToFolderData() {
         library.sortFields = ["title", "insertion", "uri"]
         library.sortState.select("title-asc")

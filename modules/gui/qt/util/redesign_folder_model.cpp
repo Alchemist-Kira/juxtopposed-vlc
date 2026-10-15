@@ -6,6 +6,24 @@
 #include <QThreadPool>
 #include <algorithm>
 
+namespace {
+QUrl normalizeFolderUrl(const QUrl& folder)
+{
+    if (folder.scheme().isEmpty()) {
+        QString path = folder.path();
+        if (!folder.host().isEmpty()) path.prepend("//" + folder.host());
+        if (QDir::isAbsolutePath(path)) return QUrl::fromLocalFile(path);
+    }
+#ifdef Q_OS_WIN
+    else if (folder.scheme().size() == 1) {
+        const QString path = folder.scheme() + ":" + folder.path();
+        if (QDir::isAbsolutePath(path)) return QUrl::fromLocalFile(path);
+    }
+#endif
+    return folder;
+}
+}
+
 RedesignFolderModel::RedesignFolderModel(QObject* parent)
     : QAbstractListModel(parent)
 {
@@ -17,27 +35,14 @@ RedesignFolderModel::RedesignFolderModel(QObject* parent)
             if (serial == m_serial)
                 replaceEntries(entries);
         });
+    connect(m_results.get(), &RedesignFolderScanResult::infoReady, this, &RedesignFolderModel::infoReady);
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this,
         &RedesignFolderModel::scheduleRefresh);
 }
 
 void RedesignFolderModel::setFolder(const QUrl& folder)
 {
-    QUrl normalized = folder;
-    if (folder.scheme().isEmpty()) {
-        QString path = folder.path();
-        if (!folder.host().isEmpty())
-            path.prepend("//" + folder.host());
-        if (QDir::isAbsolutePath(path))
-            normalized = QUrl::fromLocalFile(path);
-    }
-#ifdef Q_OS_WIN
-    else if (folder.scheme().size() == 1) {
-        const QString path = folder.scheme() + ":" + folder.path();
-        if (QDir::isAbsolutePath(path))
-            normalized = QUrl::fromLocalFile(path);
-    }
-#endif
+    const auto normalized = normalizeFolderUrl(folder);
     if (m_folder == normalized)
         return;
     m_folder = normalized;
@@ -52,6 +57,51 @@ void RedesignFolderModel::setFolder(const QUrl& folder)
     replaceEntries({});
     scheduleRefresh();
     emit folderChanged();
+}
+
+void RedesignFolderModel::refresh()
+{
+    ++m_folderSerial;
+    m_artwork.clear();
+    m_artworkRequested.clear();
+    scheduleRefresh();
+}
+
+quint64 RedesignFolderModel::requestInfo(const QUrl& folder)
+{
+    const auto serial = ++m_infoSerial;
+    const auto results = m_results;
+    const auto url = normalizeFolderUrl(folder);
+    QThreadPool::globalInstance()->start([results, url, serial] {
+        QVariantMap info {{"success", false}, {"url", url.toString(QUrl::FullyEncoded)},
+            {"location", url.isLocalFile() ? QDir::toNativeSeparators(url.toLocalFile()) : url.toDisplayString()}};
+        if (url.isLocalFile()) {
+            const QFileInfo directory(url.toLocalFile());
+            if (directory.isDir() && directory.isReadable()) {
+                quint64 size = 0;
+                int files = 0, folders = 0;
+                const auto entries = QDir(directory.absoluteFilePath()).entryInfoList(
+                    QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot, QDir::NoSort);
+                for (const auto& entry : entries) {
+                    if (entry.isDir()) ++folders;
+                    else {
+                        ++files;
+                        size += quint64(std::max(qint64(0), entry.size()));
+                    }
+                }
+                info = {{"success", true}, {"url", url.toString(QUrl::FullyEncoded)},
+                    {"name", directory.fileName().isEmpty() ? directory.absoluteFilePath() : directory.fileName()},
+                    {"location", QDir::toNativeSeparators(directory.absoluteFilePath())},
+                    {"files", files}, {"folders", folders}, {"size", QVariant::fromValue(size)},
+                    {"created", directory.birthTime().isValid() ? QVariant(directory.birthTime().toMSecsSinceEpoch()) : QVariant()},
+                    {"modified", directory.lastModified().isValid() ? QVariant(directory.lastModified().toMSecsSinceEpoch()) : QVariant()},
+                    {"readable", directory.isReadable()}, {"writable", directory.isWritable()},
+                    {"symbolicLink", directory.isSymLink()}};
+            }
+        }
+        emit results->infoReady(serial, info);
+    });
+    return serial;
 }
 
 void RedesignFolderModel::setNameFilters(const QStringList& filters)

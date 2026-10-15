@@ -63,6 +63,13 @@ RedesignLibraryView {
                 resolve(state.success ? {target: target, entries: mediaMenuEntries(target)} : null)
             }))
         }
+        if (target.kind === "folder") return {target: target, entries: [
+            {action: "open", label: qsTr("Open"), icon: "folder", accent: true},
+            {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true},
+            {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"},
+            {action: "resync", label: qsTr("Resync"), icon: "refresh-two-tone", accent: true},
+            {action: "folder-info", label: qsTr("Info"), icon: "info-two-tone", accent: true}
+        ]}
         const navigate = ["folder", "section", "home"].includes(target.kind)
         return {target: target, entries: [
             {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play-outline"},
@@ -76,7 +83,14 @@ RedesignLibraryView {
             ] : [])}
     }
     onItemActionRequested: (target, action) => {
-        if (action === "favorite" && target.kind === "playlist") {
+        if (action === "folder-info" && target.kind === "folder") {
+            folderInfo.begin(folderTools.requestInfo(Qt.resolvedUrl(target.key)))
+        } else if (action === "resync" && target.kind === "folder") {
+            MediaLib.resyncFolder(Qt.resolvedUrl(target.key), result => {
+                if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
+            })
+            if (folderLoader.item) { folderArtwork.clear(); folderLoader.item.refresh() }
+        } else if (action === "favorite" && target.kind === "playlist") {
             MediaLib.setPlaylistFavorite(MediaLib.deserializeMlItemIdFromString(target.key), !target.favorite, result => {
                 if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
             })
@@ -482,9 +496,18 @@ RedesignLibraryView {
             playlistTracks.finish()
         }
     }
+    RedesignFolderModel {
+        id: folderTools
+        onInfoReady: (serial, info) => folderInfo.load(serial, info)
+    }
+    RedesignFolderInfo {
+        id: folderInfo
+        parent: C.Overlay.overlay
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+    }
     Binding {
         target: MainCtx; property: "useGlobalShortcuts"; value: false
-        when: playlistProperties.visible || playlistTracks.visible; restoreMode: Binding.RestoreBindingOrValue
+        when: playlistProperties.visible || playlistTracks.visible || folderInfo.visible; restoreMode: Binding.RestoreBindingOrValue
     }
     Connections {
         target: MediaLib

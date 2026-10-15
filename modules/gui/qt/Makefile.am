@@ -323,6 +323,7 @@ libqt_plugin_la_SOURCES = \
 	util/base_model.hpp util/base_model_p.hpp util/base_model.cpp \
 	util/color_scheme_model.cpp util/color_scheme_model.hpp \
 	util/redesign_widget_theme.cpp util/redesign_widget_theme.hpp \
+	util/playlist_cover_store.hpp \
 	util/ui_notifier.cpp util/ui_notifier.hpp \
 	util/color_svg_image_provider.cpp util/color_svg_image_provider.hpp \
 	util/vlcaccess_image_provider.cpp util/vlcaccess_image_provider.hpp \
@@ -1215,6 +1216,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignConfirmationDialog.qml \
 	player/qml/redesign/RedesignNetworkDialog.qml \
 	player/qml/redesign/RedesignPlaylistDialog.qml \
+	player/qml/redesign/RedesignPlaylistProperties.qml \
 	player/qml/redesign/RedesignAddToPlaylistDialog.qml \
 	player/qml/redesign/RedesignAddToPlaylist.qml \
 	player/qml/redesign/RedesignNetworkStreams.qml \
@@ -2071,6 +2073,8 @@ EXTRA_DIST += tests/tst_RedesignNetwork.qml
 TESTS += tests/tst_RedesignNetwork.qml
 EXTRA_DIST += tests/tst_RedesignPlaylist.qml
 TESTS += tests/tst_RedesignPlaylist.qml
+EXTRA_DIST += tests/tst_RedesignPlaylistProperties.qml
+TESTS += tests/tst_RedesignPlaylistProperties.qml
 TESTS += tests/tst_RedesignSubtitleTimeline.qml
 TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 endif

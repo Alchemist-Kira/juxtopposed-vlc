@@ -66,6 +66,7 @@ public:
     Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
     Q_INVOKABLE void playlistState(const MLItemId& id, QJSValue callback);
     Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
+    Q_INVOKABLE void savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback);
     Q_INVOKABLE void shuffleAndPlay(const MLItemId& id);
     void exportPlaylist(const MLItemId& id, const QUrl& file, const QByteArray& format,
                         QObject* receiver, std::function<void(const QString&)> callback);
@@ -179,6 +180,7 @@ public:
     void cancelMLTask(const QObject* object, quint64 taskId);
 
 signals:
+    void playlistDetailsChanged(const MLItemId& id, const QString& name, const QUrl& cover);
     void discoveryStarted();
     void discoveryCompleted();
     void parsingProgressChanged( quint32 percent );

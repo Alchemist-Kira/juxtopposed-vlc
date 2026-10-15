@@ -33,16 +33,14 @@
 #include "mlhelper.hpp"
 #include "mlcustomcover.hpp"
 #include "mlplaylist.hpp"
+#include "util/playlist_cover_store.hpp"
 #include <vlc_configuration.h>
 #include <vlc_cxx_helpers.hpp>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QImageReader>
-#include <QSaveFile>
 #include <QScopeGuard>
 #include <QSettings>
-#include <QUuid>
 
 //-------------------------------------------------------------------------------------------------
 // Static variables
@@ -59,19 +57,15 @@ const int PLAYLIST_COVERY = 2;
 
 QString playlistCoverDirectory()
 {
-    const auto path = vlc::wrap_cptr(config_GetUserDir(VLC_USERDATA_DIR));
-    return path ? QDir(qfu(path.get())).filePath(QStringLiteral("playlist-covers")) : QString {};
-}
-
-QString playlistCoverKey(int64_t id, uint32_t date)
-{
-    return QString::number(id) + QLatin1Char('-') + QString::number(date);
+    return PlaylistCoverStore::directory();
 }
 
 void removePlaylistCover(int64_t id)
 {
     const auto directory = playlistCoverDirectory();
     if (directory.isEmpty()) return;
+    const auto writerLock = PlaylistCoverStore::lock();
+    if (!writerLock) return;
     QSettings covers(QDir(directory).filePath(QStringLiteral("covers.ini")), QSettings::IniFormat);
     const auto prefix = QString::number(id) + QLatin1Char('-');
     for (const auto& key : covers.allKeys()) {
@@ -115,7 +109,17 @@ void appendMediaIntoPlaylist(vlc_medialibrary_t* ml, int64_t playlistId, const s
 
 /* explicit */ MLPlaylistListModel::MLPlaylistListModel(QObject * parent)
     : MLBaseModel(parent)
-    , m_coverSize(MLPLAYLISTMODEL_COVER_WIDTH, MLPLAYLISTMODEL_COVER_HEIGHT) {}
+    , m_coverSize(MLPLAYLISTMODEL_COVER_WIDTH, MLPLAYLISTMODEL_COVER_HEIGHT)
+{
+    connect(this, &MLBaseModel::mlChanged, this, [this] {
+        disconnect(m_detailsConnection);
+        m_detailsConnection = connect(m_mediaLib, &MediaLib::playlistDetailsChanged, this,
+            [this](const MLItemId& id) {
+                if (m_transactionPending) m_resetAfterTransaction = true;
+                else updateItemInCache(id);
+            });
+    });
+}
 
 //-------------------------------------------------------------------------------------------------
 
@@ -163,20 +167,12 @@ void MLPlaylistListModel::createWithFiles(const QString& name, const QStringList
             QString coverPath;
             bool saved = false;
             const auto cleanup = qScopeGuard([&] { if (!saved && !coverPath.isEmpty()) QFile::remove(coverPath); });
-            const auto directory = playlistCoverDirectory();
             if (!cover.isEmpty()) {
-                if (!cover.isLocalFile() || directory.isEmpty()) return;
-                QImageReader reader(cover.toLocalFile());
-                reader.setAutoTransform(true);
-                const auto size = reader.size();
-                if (size.isValid() && (size.width() > 1024 || size.height() > 1024))
-                    reader.setScaledSize(size.scaled(QSize(1024, 1024), Qt::KeepAspectRatio));
-                const auto image = reader.read();
-                if (image.isNull()) { result.error = qtr("VLC cannot read this image. Select another image."); return; }
-                if (!QDir().mkpath(directory)) return;
-                coverPath = QDir(directory).filePath(QUuid::createUuid().toString(QUuid::WithoutBraces) + QStringLiteral(".png"));
-                QSaveFile output(coverPath);
-                if (!output.open(QIODevice::WriteOnly) || !image.save(&output, "PNG") || !output.commit()) return;
+                coverPath = PlaylistCoverStore::prepareImage(cover);
+                if (coverPath.isEmpty()) {
+                    result.error = qtr("VLC cannot read or save this image. Select another image.");
+                    return;
+                }
             }
             std::vector<int64_t> ids;
             for (const auto& text : urls) {
@@ -194,14 +190,10 @@ void MLPlaylistListModel::createWithFiles(const QString& name, const QStringList
             const auto rollback = qScopeGuard([&] { if (!saved) vlc_ml_playlist_delete(ml, playlist->i_id); });
             if (!ids.empty() && vlc_ml_playlist_append(ml, playlist->i_id, ids.data(), ids.size()) != VLC_SUCCESS) return;
             if (!coverPath.isEmpty()) {
-                QSettings covers(QDir(directory).filePath(QStringLiteral("covers.ini")), QSettings::IniFormat);
-                covers.setValue(playlistCoverKey(playlist->i_id, playlist->i_creation_date), QFileInfo(coverPath).fileName());
-                covers.sync();
-                if (covers.status() != QSettings::NoError) {
-                    covers.remove(playlistCoverKey(playlist->i_id, playlist->i_creation_date));
-                    covers.sync();
-                    return;
-                }
+                const auto writerLock = PlaylistCoverStore::lock();
+                if (!writerLock) return;
+                auto metadata = PlaylistCoverStore::stage(playlist->i_id, playlist->i_creation_date, coverPath);
+                if (!metadata || !metadata->commit()) return;
             }
             saved = true;
             result.id = MLItemId(playlist->i_id, VLC_ML_PARENT_PLAYLIST);
@@ -548,14 +540,10 @@ bool MLPlaylistListModel::setTransactionPending(const bool value)
 
 QString MLPlaylistListModel::getCover(const MLPlaylist * playlist) const
 {
-    const auto directory = playlistCoverDirectory();
-    if (!directory.isEmpty()) {
-        QSettings covers(QDir(directory).filePath(QStringLiteral("covers.ini")), QSettings::IniFormat);
-        const auto filename = covers.value(playlistCoverKey(playlist->getId().id, playlist->creationDate())).toString();
-        if (!filename.isEmpty() && filename == QFileInfo(filename).fileName())
-            return QUrl::fromLocalFile(QDir(directory).filePath(filename)).toString(QUrl::FullyEncoded);
-    }
+    const auto cover = PlaylistCoverStore::cover(playlist->getId().id, playlist->creationDate());
+    if (!cover.isEmpty()) return cover.toString(QUrl::FullyEncoded);
     if (!playlist->artwork().isEmpty()) return playlist->artwork();
+    if (playlist->getCount() == 0) return {};
     return MLCustomCover::url(playlist->getId()
                             , m_coverSize
                             , m_coverDefault

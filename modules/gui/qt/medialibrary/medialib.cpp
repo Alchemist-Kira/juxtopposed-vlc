@@ -20,6 +20,8 @@
 #include "mlhelper.hpp"
 #include "playlist/playlist_controller.hpp"
 #include "util/shared_input_item.hpp"
+#include "util/playlist_cover_store.hpp"
+#include <QScopeGuard>
 
 #include <utility>
 
@@ -287,11 +289,67 @@ void MediaLib::requestPlaylistState(const MLItemId& id, bool update, bool favori
             state = {{"success", true}, {"error", QString()}, {"id", id.toString()},
                 {"name", qfu(playlist->psz_name)}, {"favorite", update ? favorite : playlist->b_is_favorite},
                 {"count", playlist->i_nb_media}, {"duration", QVariant::fromValue(playlist->i_duration)},
-                {"readOnly", playlist->b_is_read_only}};
+                {"readOnly", playlist->b_is_read_only}, {"created", playlist->i_creation_date},
+                {"videoCount", playlist->i_nb_video}, {"audioCount", playlist->i_nb_audio},
+                {"unknownCount", playlist->i_nb_unknown}, {"missingCount", playlist->i_nb_media - std::min(playlist->i_nb_media, playlist->i_nb_present_media)},
+                {"unknownDurationCount", playlist->i_nb_duration_unknown}, {"source", qfu(playlist->psz_mrl)},
+                {"cover", PlaylistCoverStore::cover(id.id, playlist->i_creation_date).toString(QUrl::FullyEncoded)}};
         },
         [this, callback](quint64, const QVariantMap& state) mutable {
             if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(state)});
         }, "redesign-playlist-state");
+}
+
+void MediaLib::savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [id, name = name.trimmed(), cover](vlc_medialibrary_t* ml, QVariantMap& result) {
+            result = {{"success", false}, {"error", qtr("VLC cannot save this playlist. Try again.")}};
+            if (id.type != VLC_ML_PARENT_PLAYLIST || id.id <= 0 || name.isEmpty()) return;
+            ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_get_playlist(ml, id.id));
+            if (!playlist) return;
+            if (playlist->b_is_read_only) {
+                result["error"] = qtr("You cannot change this playlist.");
+                return;
+            }
+            const auto oldName = qfu(playlist->psz_name);
+            const auto writerLock = PlaylistCoverStore::lock();
+            if (!writerLock) return;
+            const auto oldCover = PlaylistCoverStore::cover(id.id, playlist->i_creation_date);
+            const bool changeCover = cover != oldCover;
+            QString image;
+            bool saved = false;
+            const auto cleanup = qScopeGuard([&] { if (!saved && !image.isEmpty()) QFile::remove(image); });
+            std::unique_ptr<QSaveFile> metadata;
+            if (changeCover) {
+                if (!cover.isEmpty()) {
+                    image = PlaylistCoverStore::prepareImage(cover);
+                    if (image.isEmpty()) {
+                        result["error"] = qtr("VLC cannot read or save this image. Select another image.");
+                        return;
+                    }
+                }
+                metadata = PlaylistCoverStore::stage(id.id, playlist->i_creation_date, image);
+                if (!metadata) return;
+            }
+            const bool changeName = oldName != name;
+            if (changeName && vlc_ml_playlist_rename(ml, id.id, qtu(name)) != VLC_SUCCESS) return;
+            if (metadata && !metadata->commit()) {
+                if (changeName && vlc_ml_playlist_rename(ml, id.id, qtu(oldName)) != VLC_SUCCESS)
+                    result["error"] = qtr("VLC saved the name but cannot save the thumbnail. Open the properties again to see the saved values.");
+                return;
+            }
+            saved = true;
+            if (changeCover && oldCover.isLocalFile()) QFile::remove(oldCover.toLocalFile());
+            result = {{"success", true}, {"error", QString()}, {"name", name},
+                      {"cover", PlaylistCoverStore::cover(id.id, playlist->i_creation_date)}};
+        },
+        [this, id, callback](quint64, const QVariantMap& result) mutable {
+            if (result.value("success").toBool())
+                emit playlistDetailsChanged(id, result.value("name").toString(), result.value("cover").toUrl());
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-playlist-details");
 }
 
 void MediaLib::shuffleAndPlay(const MLItemId& id)

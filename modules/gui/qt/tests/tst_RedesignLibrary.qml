@@ -687,6 +687,20 @@ TestCase {
         compare(visits.ranked("playlists", "")[0].name, "Renamed")
         compare(visits.ranked("playlists", "").length, 1)
     }
+    function test_visitRenamePreservesRankAndPersists() {
+        let visits = createTemporaryObject(visitsComponent, testCase)
+        visits.record("playlists", "PLAYLIST - 4", "Before")
+        visits.record("playlists", "PLAYLIST - 4", "Before")
+        const before = Object.assign({}, visits.entries[0])
+        visits.rename("playlists", "PLAYLIST - 4", "After")
+        compare(visits.entries[0].count, before.count)
+        compare(visits.entries[0].last, before.last)
+        visits.destroy()
+        visits = createTemporaryObject(visitsComponent, testCase)
+        compare(visits.entries[0].name, "After")
+        compare(visits.entries[0].count, 2)
+        compare(visits.entries[0].last, before.last)
+    }
     function test_savedVisitsAreRankedOnLoad() {
         settings.saved = JSON.stringify([
             {kind: "folders", key: "low", name: "Low", count: 1, last: 20},

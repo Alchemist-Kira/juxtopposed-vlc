@@ -852,8 +852,36 @@ QStringList DialogsProvider::selectPlaylistFiles()
 
 QUrl DialogsProvider::selectPlaylistCover()
 {
-    return QFileDialog::getOpenFileUrl(nullptr, qtr("Select playlist thumbnail"),
-        p_intf->p_mi->getDialogFilePath(), qtr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif);;All files (*)"));
+    const QPointer<MainCtx> context = p_intf->p_mi;
+    if (!context) return {};
+    const bool shortcuts = context->getUseGlobalShortcuts();
+    context->setUseGlobalShortcuts(false);
+    const auto restoreShortcuts = qScopeGuard([context, shortcuts] {
+        if (context) context->setUseGlobalShortcuts(shortcuts);
+    });
+    QFileDialog dialog(nullptr, qtr("Select playlist thumbnail"));
+    dialog.setFileMode(QFileDialog::ExistingFile);
+    dialog.setNameFilter(qtr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif);;All files (*)"));
+    auto directory = context->getDialogFilePath();
+    if (directory.isLocalFile() && QFileInfo(directory.toLocalFile()).isFile())
+        directory = directory.adjusted(QUrl::RemoveFilename);
+    dialog.setDirectoryUrl(directory);
+    if (auto *buttons = dialog.findChild<QDialogButtonBox*>())
+        if (auto *open = buttons->button(QDialogButtonBox::Open)) open->setProperty("redesignPrimary", true);
+    applyRedesignWidgetTheme(&dialog, context);
+    for (auto *combo : dialog.findChildren<QComboBox*>()) {
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        combo->setMinimumContentsLength(16);
+    }
+    QVLCDialog::setWindowTransientParent(&dialog, nullptr, p_intf);
+    const auto available = dialog.screen()->availableGeometry().size();
+    dialog.resize(std::min(qRound(800 * context->getIntfScaleFactor()), available.width() - 40),
+                  std::min(qRound(560 * context->getIntfScaleFactor()), available.height() - 40));
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedUrls().isEmpty()) return {};
+    const auto image = dialog.selectedUrls().first();
+    if (!image.isLocalFile()) return {};
+    context->setDialogFilePath(image);
+    return image;
 }
 
 QString DialogsProvider::getDirectoryDialog( qt_intf_t *p_intf )

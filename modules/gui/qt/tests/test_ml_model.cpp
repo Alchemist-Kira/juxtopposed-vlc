@@ -33,6 +33,12 @@
 #include <QFile>
 #include <QQmlEngine>
 #include <QQmlContext>
+#include <QImage>
+#include <QDir>
+#include <QSettings>
+#include <QScopeGuard>
+#include <QSignalSpy>
+#include "../util/playlist_cover_store.hpp"
 
 struct vlc_medialibrary_t;
 
@@ -228,6 +234,121 @@ private slots:
         QCOMPARE(writes, 2);
         QVERIFY(!request(MLItemId(42, VLC_ML_PARENT_UNKNOWN), false, false).property("success").toBool());
         QVERIFY(!request(MLItemId(99, VLC_ML_PARENT_PLAYLIST), false, false).property("success").toBool());
+    }
+
+    void testPlaylistPropertiesSaveAndFailure()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto previous = qgetenv("VLC_USERDATA_PATH");
+        qputenv("VLC_USERDATA_PATH", directory.path().toUtf8());
+        const auto restore = qScopeGuard([&] {
+            if (previous.isNull()) qunsetenv("VLC_USERDATA_PATH");
+            else qputenv("VLC_USERDATA_PATH", previous);
+        });
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        QString savedName = QStringLiteral("Original");
+        bool rejectRename = false, readOnly = false;
+        int renames = 0;
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            if (query != VLC_ML_GET_PLAYLIST || va_arg(args, int64_t) != 42) return nullptr;
+            auto* playlist = static_cast<vlc_ml_playlist_t*>(calloc(1, sizeof(vlc_ml_playlist_t)));
+            playlist->i_id = 42;
+            playlist->psz_name = strdup(qtu(savedName));
+            playlist->i_creation_date = 1234;
+            playlist->i_nb_media = 4;
+            playlist->i_nb_present_media = 3;
+            playlist->i_nb_video = 2;
+            playlist->i_nb_audio = 1;
+            playlist->i_nb_unknown = 1;
+            playlist->i_nb_duration_unknown = 1;
+            playlist->i_duration = 3723000;
+            playlist->b_is_read_only = readOnly;
+            playlist->psz_mrl = strdup("file:///saved%20list.m3u8");
+            return playlist;
+        };
+        m_env->mediaControl = [&](int query, va_list args) {
+            if (query != VLC_ML_PLAYLIST_RENAME || va_arg(args, int64_t) != 42) return VLC_EGENERIC;
+            const auto name = QString::fromUtf8(va_arg(args, const char*));
+            ++renames;
+            if (rejectRename) return VLC_EGENERIC;
+            savedName = name;
+            return VLC_SUCCESS;
+        };
+        auto request = [&](const QString& name, const QUrl& cover, bool save = true) {
+            engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+            auto callback = engine.evaluate("(function(value) { answer = value; })");
+            const MLItemId id(42, VLC_ML_PARENT_PLAYLIST);
+            if (save) m_medialib->savePlaylistDetails(id, name, cover, callback);
+            else m_medialib->playlistState(id, callback);
+            if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
+                qFatal("Playlist properties callback did not finish");
+            return engine.globalObject().property("answer");
+        };
+        QSignalSpy changes(m_medialib.get(), &MediaLib::playlistDetailsChanged);
+        auto state = request({}, {}, false);
+        QCOMPARE(state.property("missingCount").toInt(), 1);
+        QCOMPARE(state.property("videoCount").toInt(), 2);
+        QCOMPARE(state.property("duration").toInt(), 3723000);
+        QCOMPARE(state.property("created").toInt(), 1234);
+        QCOMPARE(state.property("source").toString(), QStringLiteral("file:///saved%20list.m3u8"));
+        const auto source = directory.filePath(QStringLiteral("source & cover.png"));
+        QImage image(2048, 1024, QImage::Format_RGB32);
+        image.fill(Qt::red); QVERIFY(image.save(source));
+        QVERIFY(request(QStringLiteral("  New name  "), QUrl::fromLocalFile(source)).property("success").toBool());
+        QCOMPARE(savedName, QStringLiteral("New name"));
+        QCOMPARE(changes.count(), 1);
+        QCOMPARE(changes.at(0).at(1).toString(), savedName);
+        const auto managed = PlaylistCoverStore::cover(42, 1234);
+        QVERIFY(managed.isLocalFile() && managed.toLocalFile() != source);
+        QCOMPARE(QImage(managed.toLocalFile()).size(), QSize(1024, 512));
+        QVERIFY(QFile::remove(source));
+        state = request({}, {}, false);
+        QCOMPARE(state.property("cover").toString(), managed.toString(QUrl::FullyEncoded));
+        QVERIFY(QFile::exists(managed.toLocalFile()));
+        // An unreadable image must not rename the playlist or replace its cover.
+        const auto count = renames;
+        QVERIFY(!request(QStringLiteral("Lost edit"), QUrl::fromLocalFile(source)).property("success").toBool());
+        QCOMPARE(renames, count);
+        QCOMPARE(PlaylistCoverStore::cover(42, 1234), managed);
+        image.fill(Qt::blue); QVERIFY(image.save(source));
+        const auto covers = PlaylistCoverStore::directory();
+        const auto imagesBefore = QDir(covers).entryList({QStringLiteral("*.png")}, QDir::Files);
+        rejectRename = true;
+        QVERIFY(!request(QStringLiteral("Rejected"), QUrl::fromLocalFile(source)).property("success").toBool());
+        QCOMPARE(savedName, QStringLiteral("New name"));
+        QCOMPARE(QDir(covers).entryList({QStringLiteral("*.png")}, QDir::Files), imagesBefore);
+        QCOMPARE(PlaylistCoverStore::cover(42, 1234), managed);
+        rejectRename = false;
+        // Failure to prepare metadata must leave the native name untouched.
+        const auto ini = QDir(covers).filePath(QStringLiteral("covers.ini"));
+        const auto permissions = QFile::permissions(ini);
+        QVERIFY(QFile::setPermissions(ini, QFile::ReadOwner));
+        const auto beforeStorageFailure = renames;
+        QVERIFY(!request(QStringLiteral("Storage failure"), QUrl::fromLocalFile(source)).property("success").toBool());
+        QCOMPARE(renames, beforeStorageFailure);
+        QVERIFY(QFile::setPermissions(ini, permissions));
+        QCOMPARE(PlaylistCoverStore::cover(42, 1234), managed);
+        readOnly = true;
+        QVERIFY(!request(QStringLiteral("Read only"), {}).property("success").toBool());
+        QCOMPARE(savedName, QStringLiteral("New name"));
+        QVERIFY(QFile::exists(managed.toLocalFile()));
+        readOnly = false;
+        // Editing this playlist must preserve another playlist's cover entry.
+        {
+            QSettings settings(ini, QSettings::IniFormat);
+            settings.setValue(QStringLiteral("99-1234"), QStringLiteral("other.png"));
+            settings.sync();
+        }
+        QVERIFY(request(QStringLiteral("Retry"), {}).property("success").toBool());
+        QCOMPARE(savedName, QStringLiteral("Retry"));
+        QVERIFY(!QFile::exists(managed.toLocalFile()));
+        QVERIFY(PlaylistCoverStore::cover(42, 1234).isEmpty());
+        QCOMPARE(PlaylistCoverStore::cover(99, 1234).fileName(), QStringLiteral("other.png"));
+        QCOMPARE(changes.count(), 2);
     }
 
     void testSavedPlaylistExport()

@@ -142,6 +142,7 @@ private: // Variables
 
     bool m_transactionPending = false;
     bool m_resetAfterTransaction = false;
+    QMetaObject::Connection m_detailsConnection;
 
 private:
     struct Loader : public MLListCacheLoader::MLOp

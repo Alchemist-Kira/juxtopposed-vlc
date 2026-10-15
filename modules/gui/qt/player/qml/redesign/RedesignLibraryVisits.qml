@@ -26,4 +26,11 @@ QtObject {
         return entries.filter(entry => entry.kind === kind && entry.name.toLocaleLowerCase().includes(pattern))
             .sort((a, b) => b.count - a.count || (b.last || 0) - (a.last || 0))
     }
+    function rename(kind, key, name) {
+        if (!name.length) return
+        const next = entries.map(entry => entry.kind === kind && entry.key === key
+            ? Object.assign({}, entry, {name: name}) : entry)
+        entries = next
+        ctx.setSettingValue(storageKey, JSON.stringify(entries))
+    }
 }

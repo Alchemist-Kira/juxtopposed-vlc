@@ -84,6 +84,9 @@ RedesignLibraryView {
             MediaLib.shuffleAndPlay(MediaLib.deserializeMlItemIdFromString(target.key))
         } else if (action === "export" && target.kind === "playlist") {
             DialogsProvider.exportLibraryPlaylistDialog(MediaLib.deserializeMlItemIdFromString(target.key), target.name)
+        } else if (action === "properties" && target.kind === "playlist") {
+            const request = playlistProperties.begin(target.key)
+            if (request >= 0) MediaLib.playlistState(MediaLib.deserializeMlItemIdFromString(target.key), result => playlistProperties.load(request, result))
         } else if (action === "watched" || action === "favorite") {
             MediaLib.setMediaState(Qt.resolvedUrl(target.url || target.key), action === "watched" ? "played" : "favorite",
                 action === "watched" ? !target.played : !target.favorite, result => {
@@ -181,6 +184,7 @@ RedesignLibraryView {
             {action: "export", label: qsTr("Export Playlist"), icon: "save", accent: true},
             {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true, enabled: target.count > 0},
             {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
+            {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"},
             {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"}
         ]
     }
@@ -454,6 +458,32 @@ RedesignLibraryView {
     MLAudioModel { id: collectionTracks; ml: MediaLib; parentId: root.selectedCollection || root.emptyParentId; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLRecentMediaModel { id: recent; ml: MediaLib; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder; searchPattern: root.searchText }
     MLPlaylistListModel { id: playlists; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
+    RedesignPlaylistProperties {
+        id: playlistProperties
+        parent: C.Overlay.overlay
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        onCoverRequested: {
+            const image = DialogsProvider.selectPlaylistCover()
+            if (image.toString().length) cover = image
+        }
+        onSaveRequested: (key, name, cover, request) => MediaLib.savePlaylistDetails(
+            MediaLib.deserializeMlItemIdFromString(key), name, cover, result => playlistProperties.finish(request, result))
+    }
+    Binding {
+        target: MainCtx; property: "useGlobalShortcuts"; value: false
+        when: playlistProperties.visible; restoreMode: Binding.RestoreBindingOrValue
+    }
+    Connections {
+        target: MediaLib
+        function onPlaylistDetailsChanged(id, name, cover) {
+            const key = id.toString()
+            if (root.selectedPlaylist && root.selectedPlaylist.toString() === key) root.selectedName = name
+            const pin = pinStore.entries.find(entry => entry.kind === "playlist" && entry.key === key)
+            if (pin) pinStore.add(Object.assign({}, pin, {name: name, artwork: cover.toString()}))
+            visits.rename("playlists", key, name)
+            root.refreshVisits()
+        }
+    }
     MLPlaylistModel { id: playlistMedia; ml: MediaLib; parentId: root.selectedPlaylist || root.emptyParentId; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     Connections {
         target: playlistMedia

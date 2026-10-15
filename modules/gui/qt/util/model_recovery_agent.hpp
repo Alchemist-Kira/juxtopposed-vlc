@@ -52,6 +52,7 @@ public:
     {
         assert(settings);
         assert(model);
+        const QPointer<T> modelGuard(model);
         settings->sync();
         if (settings->contains(m_key))
         {
@@ -69,12 +70,16 @@ public:
                 const QFileInfo fileInfo(m_recoveryFileName);
                 if (fileInfo.size() > 0)
                 {
-                    if (DialogsProvider::getInstance()->messageDialog(qtr("Do you want to restore the %1 model from %2?").arg(modelIdentifier.toLower(),
+                    const auto choice = DialogsProvider::getInstance()->messageDialog(qtr("Do you want to restore the %1 model from %2?").arg(modelIdentifier.toLower(),
                                                                                                                               fileInfo.lastModified().toString()),
                                                                       qtr("The application closed abruptly."),
                                                                       (QMessageBox::Yes | QMessageBox::No),
                                                                       QMessageBox::Yes,
-                                                                      QMessageBox::Question) == QMessageBox::Yes)
+                                                                      QMessageBox::Question);
+                    // The modal dialog runs a nested event loop. Shutdown can
+                    // destroy the controllers before it returns.
+                    if (!modelGuard || !m_settings) throw std::exception();
+                    if (choice == QMessageBox::Yes)
                     {
                         model->append(m_recoveryFileName);
                         m_conditionDismissInitialDirtiness = true;
@@ -102,6 +107,7 @@ public:
             settings->sync();
         }
 
+        if (!modelGuard || !m_settings) throw std::exception();
         m_timer.setInterval(10000); // 10 seconds
         m_timer.setSingleShot(true);
 

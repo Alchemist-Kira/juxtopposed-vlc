@@ -75,8 +75,10 @@ FocusScope {
     readonly property alias settingsItem: settingsLoader.item
     readonly property real positionSliderY: toolbar.y + seek.y
     readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable
-    readonly property bool topVisible: !minimalView && (!fullscreen || headerEdge.hovered || header.activeFocus || revealTimer.running || controlsLocked)
-    readonly property bool bottomVisible: !minimalView && (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool topVisible: !minimalView && (!fullscreen || pointerAtTop || header.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool bottomVisible: !minimalView && (!fullscreen || showFullscreenControls) && (!autoHideActive || pointerAtBottom || toolbar.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool pointerAtTop: chromePointer.hovered && chromePointer.point.position.y < theme.dp(48)
+    readonly property bool pointerAtBottom: chromePointer.hovered && chromePointer.point.position.y >= height - theme.dp(64)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     signal togglePlayback()
@@ -327,14 +329,9 @@ FocusScope {
     }
 
     // Fullscreen edges reveal independently; motion in the video stays unobtrusive.
-    Item {
-        anchors.top: parent.top; width: parent.width; height: theme.dp(48)
-        HoverHandler { id: headerEdge }
-    }
-    Item {
-        anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(64)
-        HoverHandler { id: bottomHover }
-    }
+    // Observe the whole player, including its child controls. A sibling edge
+    // detector loses hover when the revealed timeline takes the pointer.
+    HoverHandler { id: chromePointer; blocking: false }
 
     Rectangle {
         id: header

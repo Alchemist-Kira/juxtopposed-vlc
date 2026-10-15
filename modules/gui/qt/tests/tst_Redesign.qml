@@ -74,6 +74,7 @@ TestCase {
     SignalSpy { id: previewEndSpy; target: player; signalName: "seekPreviewEnded" }
     SignalSpy { id: audioSpy; target: player; signalName: "audioTracksRequested" }
     SignalSpy { id: subtitleSpy; target: player; signalName: "subtitleTracksRequested" }
+    SignalSpy { id: toolbarVisibilitySpy; target: player; signalName: "bottomVisibleChanged" }
 
     RedesignSettingSlider {
         id: settingControl
@@ -617,5 +618,34 @@ TestCase {
         verify(!player.bottomVisible)
         mouseMove(player, player.width / 2, player.height - 2)
         tryCompare(player, "bottomVisible", true)
+    }
+    function test_fullscreenTimelineBoundaryDoesNotFlicker() {
+        player.fullscreen = true
+        player.forceActiveFocus()
+        mouseMove(player, player.width / 2, player.height / 2)
+        wait(1900)
+        verify(!player.bottomVisible)
+        const seek = findChild(player, "seekBar")
+        verify(seek)
+        mouseMove(player, player.width / 2, player.height - 2)
+        tryCompare(player, "bottomVisible", true)
+        toolbarVisibilitySpy.clear()
+        for (let i = 0; i < 20; ++i) {
+            mouseMove(seek, seek.width / 2, -1)
+            wait(10)
+            mouseMove(seek, seek.width / 2, 1)
+            wait(10)
+            mouseMove(seek, seek.width / 2, seek.height - 1)
+            wait(10)
+            mouseMove(seek, seek.width / 2, seek.height + 1)
+            wait(10)
+        }
+        compare(toolbarVisibilitySpy.count, 0)
+        verify(player.bottomVisible)
+        mouseClick(findChild(player, "playButton"))
+        verify(player.playing)
+        player.forceActiveFocus()
+        mouseMove(player, player.width / 2, player.height / 2)
+        tryCompare(player, "bottomVisible", false)
     }
 }

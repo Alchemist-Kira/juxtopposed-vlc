@@ -9,6 +9,13 @@ RedesignNetworkDialog {
     scaleFactor: VLCStyle.scale
     lightTheme: !VLCStyle.palette.isDark
     accentColor: MainCtx.redesignAccent
+    Binding {
+        target: MainCtx
+        property: "useGlobalShortcuts"
+        value: false
+        when: root.visible
+        restoreMode: Binding.RestoreBindingOrValue
+    }
     onSaveRequested: (urls, name) => streams.openStreams(urls, name)
     MLUrlModel {
         id: streams

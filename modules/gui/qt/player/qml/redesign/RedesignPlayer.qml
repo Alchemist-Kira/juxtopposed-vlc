@@ -58,7 +58,7 @@ FocusScope {
     Binding {
         target: MainCtx
         property: "preferHotkeys"
-        value: !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible && !shortcutEditor.visible
+        value: MainCtx.useGlobalShortcuts && !view.controlsLocked && !tracksPopup.visible && !mediaMenu.visible && !shortcutEditor.visible
         restoreMode: Binding.RestoreBindingOrValue
     }
     Binding { target: Player; property: "seekPreviewEnabled"; value: MainCtx.redesignPlayerPreferences.seekPreview }

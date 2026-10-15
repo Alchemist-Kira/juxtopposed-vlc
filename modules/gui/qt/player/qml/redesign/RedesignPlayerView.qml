@@ -73,12 +73,10 @@ FocusScope {
     readonly property alias videoItem: videoLoader.item
     readonly property alias libraryItem: libraryLoader.item
     readonly property alias settingsItem: settingsLoader.item
-    readonly property real positionSliderY: toolbar.y + seek.y
+    readonly property real positionSliderY: bottomEdge.y + toolbar.y + seek.y
     readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable
-    readonly property bool topVisible: !minimalView && (!fullscreen || pointerAtTop || header.activeFocus || revealTimer.running || controlsLocked)
-    readonly property bool bottomVisible: !minimalView && (!fullscreen || showFullscreenControls) && (!autoHideActive || pointerAtBottom || toolbar.activeFocus || revealTimer.running || controlsLocked)
-    readonly property bool pointerAtTop: chromePointer.hovered && chromePointer.point.position.y < theme.dp(48)
-    readonly property bool pointerAtBottom: chromePointer.hovered && chromePointer.point.position.y >= height - theme.dp(64)
+    readonly property bool topVisible: !minimalView && (!fullscreen || headerHover.hovered || header.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool bottomVisible: !minimalView && (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     signal togglePlayback()
@@ -290,7 +288,8 @@ FocusScope {
         visible: reveal > 0
         width: root.libraryExpanded ? root.width : Math.min(theme.dp(427), root.width * (root.width < theme.dp(900) ? 0.48 : 0.38))
         x: (reveal - 1) * width
-        anchors.top: header.bottom; anchors.bottom: toolbar.top
+        anchors.top: parent.top; anchors.bottom: parent.bottom
+        anchors.topMargin: header.height; anchors.bottomMargin: toolbar.height
         color: theme.panel
         clip: true
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
@@ -309,7 +308,8 @@ FocusScope {
         z: 2
         visible: root.queueOpen || root.settingsPage.length > 0
         width: Math.min(theme.dp(400), root.width * 0.48)
-        anchors.top: header.bottom; anchors.bottom: toolbar.top; anchors.right: parent.right
+        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.right: parent.right
+        anchors.topMargin: header.height; anchors.bottomMargin: toolbar.height
         color: theme.panel
         border.color: theme.border
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
@@ -329,12 +329,22 @@ FocusScope {
     }
 
     // Fullscreen edges reveal independently; motion in the video stays unobtrusive.
-    // Observe the whole player, including its child controls. A sibling edge
-    // detector loses hover when the revealed timeline takes the pointer.
-    HoverHandler { id: chromePointer; blocking: false }
+    // Each detector contains the chrome it reveals. Hover on a child control
+    // must not hide the toolbar and then expose the detector again.
+    Item {
+        id: headerEdge
+        anchors.top: parent.top; width: parent.width; height: theme.dp(48)
+        HoverHandler { id: headerHover; blocking: false }
+    }
+    Item {
+        id: bottomEdge
+        anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(64)
+        HoverHandler { id: bottomHover; blocking: false }
+    }
 
     Rectangle {
         id: header
+        parent: headerEdge
         objectName: "redesignHeader"
         anchors.top: parent.top; width: parent.width; height: theme.dp(40)
         color: theme.background
@@ -418,6 +428,7 @@ FocusScope {
 
     Rectangle {
         id: toolbar
+        parent: bottomEdge
         objectName: "redesignToolbar"
         anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(54)
         color: theme.background

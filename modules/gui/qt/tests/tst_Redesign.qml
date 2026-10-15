@@ -11,6 +11,7 @@ TestCase {
     when: windowShown
     visible: true
     property var seekEventOrder: []
+    property bool consumeVideoHover: false
 
     RedesignPlayerView {
         id: player
@@ -31,6 +32,12 @@ TestCase {
         onSeekDragFinished: testCase.seekEventOrder.push("finish")
         onVolumeRequested: value => volume = value
         onMuteRequested: muted = !muted
+        // VideoSurface accepts hover events in the integrated player.
+        videoContent: MouseArea {
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+            enabled: testCase.consumeVideoHover
+        }
         libraryContent: RedesignLibraryView {
             scaleFactor: player.scaleFactor; lightTheme: player.lightTheme
             itemCount: 2
@@ -95,6 +102,7 @@ TestCase {
     }
 
     function init() {
+        consumeVideoHover = false
         settingControl.visible = false
         settingControl.currentValue = 0
         settingControl.resetValue = 0
@@ -619,7 +627,11 @@ TestCase {
         mouseMove(player, player.width / 2, player.height - 2)
         tryCompare(player, "bottomVisible", true)
     }
-    function test_fullscreenTimelineBoundaryDoesNotFlicker() {
+    function test_fullscreenTimelineBoundaryDoesNotFlicker_data() {
+        return [{tag: "plain", videoHover: false}, {tag: "video-surface-hover", videoHover: true}]
+    }
+    function test_fullscreenTimelineBoundaryDoesNotFlicker(data) {
+        consumeVideoHover = data.videoHover
         player.fullscreen = true
         player.forceActiveFocus()
         mouseMove(player, player.width / 2, player.height / 2)

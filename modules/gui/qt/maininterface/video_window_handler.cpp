@@ -70,7 +70,14 @@ void VideoWindowHandler::requestResizeVideo( unsigned i_width, unsigned i_height
 
 void VideoWindowHandler::requestVideoWindowed( )
 {
-   emit askVideoSetFullScreen( false );
+    /* The user left fullscreen from the video side (double-click, F, Esc): leave it
+     * entirely, also when it was entered from the interface (button, F11). Only this
+     * user path does it; disable() (the video closing) keeps interface fullscreen. */
+    QMetaObject::invokeMethod(this, [this]() {
+        setVideoFullScreen( false );
+        if (m_window)
+            WindowStateHolder::holdFullscreen( m_window, WindowStateHolder::INTERFACE, false );
+    }, Qt::QueuedConnection);
 }
 
 void VideoWindowHandler::requestVideoFullScreen(const char * )

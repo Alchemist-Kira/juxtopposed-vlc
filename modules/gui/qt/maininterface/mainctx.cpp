@@ -904,7 +904,11 @@ void MainCtx::toggleToolbarMenu()
 
 void MainCtx::toggleInterfaceFullScreen()
 {
-    emit setInterfaceFullScreen( m_windowVisibility != QWindow::FullScreen );
+    const bool fs = m_windowVisibility != QWindow::FullScreen;
+    emit setInterfaceFullScreen( fs );
+    /* Keep the video's fullscreen state in step, so leaving from either side
+     * (this toggle, or double-click/F/Esc on the video) always works. */
+    THEMIM->setFullscreen( fs );
 }
 
 void MainCtx::emitBoss()

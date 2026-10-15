@@ -250,9 +250,14 @@ static EGLDisplay OpenDisplay(vlc_gl_t *gl)
         return EGL_NO_DISPLAY;
     /* Neither Mesa nor NVIDIA (via glvnd) expose EGL_KHR_display_reference.
      * Without it, share the display untracked and never terminate it. */
-    const EGLAttrib *attrs = NULL;
+# if defined(EGL_VERSION_1_5)
+    typedef EGLAttrib platform_attrib_t;
+# else
+    typedef EGLint platform_attrib_t;
+# endif
+    const platform_attrib_t *attrs = NULL;
 # ifdef EGL_KHR_display_reference
-    static const EGLAttrib ref_attrs[] = {
+    static const platform_attrib_t ref_attrs[] = {
         EGL_TRACK_REFERENCES_KHR, EGL_TRUE,
         EGL_NONE
     };

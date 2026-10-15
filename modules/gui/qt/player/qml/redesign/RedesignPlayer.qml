@@ -135,7 +135,7 @@ FocusScope {
         onFullLibraryRequested: { libraryOpen = true; libraryExpanded = !libraryExpanded }
         onMediaFolderRequested: {
             const library = view.libraryItem ? view.libraryItem.item : null
-            if (library && rootPlayer.mediaFolderUrl) library.openFolder(rootPlayer.mediaFolderUrl)
+            if (library && rootPlayer.mediaFolderUrl) library.openFolder(rootPlayer.mediaFolderUrl, view.hasVideo ? 1 : 2)
         }
         onArtistRequested: {
             const library = view.libraryItem ? view.libraryItem.item : null

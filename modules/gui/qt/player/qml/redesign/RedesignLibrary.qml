@@ -13,7 +13,8 @@ RedesignLibraryView {
     property var selectedCollection
     property string homeSection: ""
     property string currentFolder: ""
-    property var folderTrail: []
+    property var registeredFolders: []
+    readonly property var folderTrail: folderPath.trail(currentFolder, registeredFolders)
     property string musicSection: ""
     property string selectedName: ""
     property var backStack: []
@@ -56,7 +57,16 @@ RedesignLibraryView {
     itemCount: homeSectionsVisible ? recentVideo.maximumCount + recentAudio.maximumCount + frequentFolders.count + frequentPlaylists.count + playedArtists.maximumCount : currentFolder ? (folderLoader.item ? folderLoader.item.count : 0) : activeModel && activeModel.count !== undefined ? activeModel.count : libraryMediaCount
     readonly property var activeModel: homeSection ? homeModels[homeSection] : currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : music) : category === 3 ? streams : category === 0 || category === 5 ? recent : folderEntries
     mediaModel: activeModel
-    heading: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category] + (homeSection ? " › " + homeTitles[homeSection] : "") + (musicSection ? " › " + qsTr(musicSection) : "") + (currentFolder ? " › " + folderTrail.map(url => nameFromUrl(url)).join(" › ") : selectedName ? " › " + selectedName : "")
+    breadcrumbs: {
+        const result = [{label: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category], kind: "category"}]
+        if (homeSection) result.push({label: homeTitles[homeSection], kind: "home"})
+        if (musicSection) result.push({label: qsTr(musicSection), kind: "music"})
+        if (currentFolder) {
+            for (const url of folderTrail) result.push({label: nameFromUrl(url), kind: "folder", url: url})
+        } else if (selectedName) result.push({label: selectedName, kind: "selection"})
+        return result
+    }
+    heading: breadcrumbs.map(entry => entry.label).join(" › ")
     canGoBack: backStack.length > 0
     canGoForward: forwardStack.length > 0
     defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 ? "playlist" : category === 2 ? "music" : "video"
@@ -65,15 +75,16 @@ RedesignLibraryView {
     canEnqueue: !(category === 2 && musicSection === "")
     emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
-    function snapshot() { return { category: category, homeSection: homeSection, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, folderTrail: folderTrail.slice(), musicSection: musicSection, name: selectedName, search: searchText } }
+    RedesignLibraryPath { id: folderPath }
+    function snapshot() { return { category: category, homeSection: homeSection, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, musicSection: musicSection, name: selectedName, search: searchText } }
     function remember() { backStack = [...backStack, snapshot()]; forwardStack = [] }
-    function restore(state) { category = state.category; homeSection = state.homeSection || ""; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; folderTrail = state.folderTrail || []; musicSection = state.musicSection; selectedName = state.name; searchText = state.search; if (currentFolder) visits.record("folders", currentFolder, nameFromUrl(currentFolder)); else if (selectedPlaylist) visits.record("playlists", selectedPlaylist.toString(), selectedName) }
-    function openFolder(url) {
+    function restore(state) { category = state.category; homeSection = state.homeSection || ""; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; musicSection = state.musicSection; selectedName = state.name; searchText = state.search; if (currentFolder) visits.record("folders", currentFolder, nameFromUrl(currentFolder)); else if (selectedPlaylist) visits.record("playlists", selectedPlaylist.toString(), selectedName) }
+    function openFolder(url, mediaCategory) {
         remember()
-        folderTrail = currentFolder ? [...folderTrail, url.toString()] : [url.toString()]
-        currentFolder = url.toString()
-        category = category === 2 ? 2 : 1
+        currentFolder = folderPath.location(url)
+        category = mediaCategory === 1 || mediaCategory === 2 ? mediaCategory : category === 2 ? 2 : 1
         homeSection = ""
+        selectedPlaylist = undefined; selectedCollection = undefined; musicSection = ""
         selectedName = nameFromUrl(url)
         visits.record("folders", currentFolder, selectedName)
         searchText = ""
@@ -81,9 +92,18 @@ RedesignLibraryView {
     function openArtistByName(name) {
         remember()
         category = 2; homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined
-        currentFolder = ""; folderTrail = []; musicSection = "Artists"; selectedName = ""; searchText = name
+        currentFolder = ""; musicSection = "Artists"; selectedName = ""; searchText = name
     }
-    onCategoryRequested: newCategory => { remember(); homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; folderTrail = []; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
+    onBreadcrumbActivated: index => {
+        if (index < 0 || index >= breadcrumbs.length - 1) return
+        const entry = breadcrumbs[index]
+        if (entry.kind === "category") categoryRequested(category)
+        else if (entry.kind === "folder") openFolder(entry.url)
+        else if (entry.kind === "music") {
+            remember(); selectedCollection = undefined; selectedName = ""; searchText = ""
+        }
+    }
+    onCategoryRequested: newCategory => { remember(); homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
     onBackRequested: { const stack = backStack.slice(); const state = stack.pop(); forwardStack = [...forwardStack, snapshot()]; backStack = stack; restore(state) }
     onForwardRequested: { const stack = forwardStack.slice(); const state = stack.pop(); backStack = [...backStack, snapshot()]; forwardStack = stack; restore(state) }
     onActivated: index => {
@@ -129,7 +149,7 @@ RedesignLibraryView {
         if (section === "folders") { openFolder(item.key); return }
         if (section === "playlists" || section === "artists") {
             remember()
-            homeSection = ""; currentFolder = ""; folderTrail = []; musicSection = ""; searchText = ""
+            homeSection = ""; currentFolder = ""; musicSection = ""; searchText = ""
             selectedPlaylist = undefined; selectedCollection = undefined
             if (section === "playlists") {
                 category = 4; selectedPlaylist = MediaLib.deserializeMlItemIdFromString(item.key); selectedName = item.name
@@ -166,12 +186,15 @@ RedesignLibraryView {
     function refreshFolders() {
         if (!libraryFolders || !folderEntries) return
         const rows = []
+        const roots = []
         for (let i = 0; i < libraryFolders.rowCount(); ++i) {
             const url = libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.MRL).toString()
+            roots.push(url)
             const name = nameFromUrl(url)
             if (name.toLocaleLowerCase().includes(searchText.toLocaleLowerCase())) rows.push({key: url, name: name})
         }
         rows.sort((a, b) => compareEntries(a, b))
+        registeredFolders = roots
         folderEntries.clear()
         for (const row of rows) folderEntries.append({fileUrl: row.key, fileName: row.name, fileIsDir: true})
     }

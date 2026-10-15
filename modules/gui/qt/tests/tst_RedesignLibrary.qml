@@ -43,6 +43,7 @@ TestCase {
     }
     Component { id: visitsComponent; RedesignLibraryVisits { ctx: settings } }
     Component { id: sortComponent; RedesignLibrarySort { ctx: settings } }
+    RedesignLibraryPath { id: folderPath }
     SignalSpy { id: homeSpy; target: library; signalName: "homeActivated" }
     SignalSpy { id: homeQueueSpy; target: library; signalName: "homeEnqueueRequested" }
     SignalSpy { id: sectionSpy; target: library; signalName: "homeSectionRequested" }
@@ -51,6 +52,7 @@ TestCase {
     SignalSpy { id: settingsSpy; target: library; signalName: "preferencesRequested" }
     SignalSpy { id: activateSpy; target: library; signalName: "activated" }
     SignalSpy { id: categorySpy; target: library; signalName: "categoryRequested" }
+    SignalSpy { id: breadcrumbSpy; target: library; signalName: "breadcrumbActivated" }
     function init() {
         testCase.width = 427
         testCase.Window.window.width = 427
@@ -63,8 +65,11 @@ TestCase {
         homeSpy.clear(); homeQueueSpy.clear(); sectionSpy.clear()
         library.category = 1
         library.grid = false
+        library.scaleFactor = 1
         library.expanded = false
         library.searchText = ""
+        library.breadcrumbs = []
+        breadcrumbSpy.clear()
         library.sortState.saved = ({})
         library.sortFields = ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
         library.canGoBack = false
@@ -73,7 +78,7 @@ TestCase {
         wait(20)
     }
     function cleanup() {
-        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu"]) {
+        for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu", "libraryAncestorMenu"]) {
             const menu = findChild(library, name)
             if (menu) { menu.close(); tryVerify(() => !menu || !menu.visible) }
         }
@@ -156,6 +161,76 @@ TestCase {
         compare(library.nameFromUrl("file:///media/20%25%20off/"), "20% off")
         compare(library.nameFromUrl("C:\\Media\\Shows\\"), "Shows")
         compare(library.nameFromUrl("file:///media/bad%escape/"), "bad%escape")
+        compare(library.nameFromUrl("file:///"), "/")
+    }
+    function test_folderPathAncestors_data() {
+        return [
+            {tag: "registered-root", url: "file:///media/Shows/The%20Wand/S01/", roots: ["file:///media/Shows/"], expected: ["file:///media/Shows", "file:///media/Shows/The%20Wand", "file:///media/Shows/The%20Wand/S01"]},
+            {tag: "longest-root", url: "file:///media/Shows/The%20Wand/S01", roots: ["file:///media/Shows", "file:///media/Shows/The Wand"], expected: ["file:///media/Shows/The%20Wand", "file:///media/Shows/The%20Wand/S01"]},
+            {tag: "segment-boundary", url: "file:///Shows2/S01", roots: ["file:///Shows"], expected: ["file:///", "file:///Shows2", "file:///Shows2/S01"]},
+            {tag: "raw-special-characters", url: "/media/20% off/Cat #1", roots: ["/media"], expected: ["file:///media", "file:///media/20%25%20off", "file:///media/20%25%20off/Cat%20%231"]},
+            {tag: "drive", url: "C:\\Movies\\Cat #1\\", roots: [], expected: ["file:///C:", "file:///C:/Movies", "file:///C:/Movies/Cat%20%231"]},
+            {tag: "drive-root-case", url: "file:///C:/Movies/Cat", roots: ["file:///c:/movies/"], expected: ["file:///C:/Movies", "file:///C:/Movies/Cat"]},
+            {tag: "unc-share", url: "\\\\OtherPC\\Movies\\Cat", roots: [], expected: ["file://otherpc/Movies", "file://otherpc/Movies/Cat"]},
+            {tag: "unc-root", url: "file://OtherPC/Movies/Cat", roots: ["\\\\OtherPC\\Movies"], expected: ["file://otherpc/Movies", "file://otherpc/Movies/Cat"]},
+            {tag: "unicode", url: "file:///media/%E7%8C%AB/%2520", roots: ["/media/猫"], expected: ["file:///media/%E7%8C%AB", "file:///media/%E7%8C%AB/%2520"]},
+            {tag: "filesystem-root", url: "file:///", roots: [], expected: ["file:///"]}
+        ]
+    }
+    function test_folderPathAncestors(data) {
+        compare(folderPath.trail(data.url, data.roots), data.expected)
+        compare(folderPath.location(data.url), data.expected[data.expected.length - 1])
+    }
+    function test_breadcrumbsKeepHiddenAncestorsAvailable() {
+        library.breadcrumbs = [{label: "Videos"}, {label: "Shows"}, {label: "The Wand"}, {label: "S01"}]
+        const location = findChild(library, "libraryLocation")
+        tryVerify(() => location.firstVisible > 0)
+        const current = findChild(location, "libraryPath3")
+        verify(current.visible)
+        verify(!current.enabled)
+        verify(current.width > 0)
+        verify(!current.contentItem.truncated)
+        const overflow = findChild(location, "libraryPathOverflow")
+        mouseClick(overflow)
+        const menu = findChild(location, "libraryAncestorMenu")
+        tryCompare(menu, "opened", true)
+        compare(menu.count, location.firstVisible)
+        const first = findChild(menu, "libraryAction_0")
+        tryVerify(() => first.visible)
+        verify(waitForRendering(first))
+        mouseClick(first)
+        tryCompare(breadcrumbSpy, "count", 1)
+        compare(breadcrumbSpy.signalArguments[0][0], 0)
+        expandLibrary()
+        const expanded = findChild(library, "libraryLocation")
+        compare(expanded.firstVisible, 0)
+        verify(!findChild(expanded, "libraryPathOverflow").visible)
+        mouseClick(findChild(expanded, "libraryPath1"))
+        compare(breadcrumbSpy.count, 2)
+        compare(breadcrumbSpy.signalArguments[1][0], 1)
+        const parent = findChild(expanded, "libraryPath2")
+        parent.forceActiveFocus()
+        keyClick(Qt.Key_Return)
+        compare(breadcrumbSpy.count, 3)
+        compare(breadcrumbSpy.signalArguments[2][0], 2)
+        compare(findChild(expanded, "libraryPath3").font.weight, Font.DemiBold)
+        for (let i = 0; i < 4; ++i) {
+            const button = findChild(expanded, "libraryPath" + i)
+            verify(!button.contentItem.truncated, button.text + ": " + button.width + "/" + button.contentItem.implicitWidth)
+        }
+        const oldWidth = expanded.widths[0]
+        library.scaleFactor = 1.25
+        tryVerify(() => expanded.widths[0] > oldWidth * 1.2)
+        for (let i = 0; i < 4; ++i) verify(!findChild(expanded, "libraryPath" + i).contentItem.truncated)
+    }
+    function test_breadcrumbsElideLongCurrentFolder() {
+        library.breadcrumbs = [{label: "Videos"}, {label: "A folder name that is much longer than the compact library toolbar"}]
+        const location = findChild(library, "libraryLocation")
+        compare(location.firstVisible, 1)
+        const current = findChild(location, "libraryPath1")
+        verify(current.width > 0)
+        verify(current.width < current.implicitWidth)
+        verify(current.mapToItem(location, current.width, 0).x <= location.width)
     }
     function test_addStaysAvailableAfterNavigation() {
         const add = findChild(library, "libraryAddRow")

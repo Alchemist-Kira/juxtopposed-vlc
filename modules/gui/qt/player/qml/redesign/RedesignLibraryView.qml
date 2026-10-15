@@ -15,6 +15,7 @@ Item {
     property var homeSections: []
     property int category: 1
     property string heading: qsTr("Videos")
+    property var breadcrumbs: []
     property string searchText: ""
     property bool grid: false
     property bool expanded: false
@@ -49,10 +50,12 @@ Item {
     signal forwardRequested()
     signal newPlaylistRequested()
     signal preferencesRequested()
+    signal breadcrumbActivated(int index)
 
     function nameFromUrl(url) {
         const value = url.toString()
         const name = value.replace(/\\/g, "/").replace(/\/+$/, "").split("/").pop()
+        if (!name || name === "file:") return "/"
         if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return name
         try { return decodeURIComponent(name) } catch (error) { return name }
     }
@@ -196,10 +199,12 @@ Item {
         text: qsTr("%n item", "%n items", root.itemCount)
         color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
     }
-    component Location: Text {
+    component Location: RedesignBreadcrumbs {
         objectName: "libraryLocation"
-        text: root.heading; elide: Text.ElideLeft
-        color: root.theme.foreground; font.pixelSize: root.theme.dp(16)
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        boldCurrent: root.expanded
+        entries: root.breadcrumbs.length ? root.breadcrumbs : [{label: root.heading}]
+        onActivated: index => root.breadcrumbActivated(index)
     }
     component SearchField: C.TextField {
         objectName: "librarySearchField"

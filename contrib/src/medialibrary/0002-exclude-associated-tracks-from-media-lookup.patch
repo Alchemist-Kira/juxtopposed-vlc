@@ -1,0 +1,44 @@
+Subject: [PATCH] files: exclude associated tracks from media lookup
+
+An external subtitle or soundtrack belongs to its source media. Looking up
+that track URI as a main media must not return the source, or playing a saved
+audio track can restore and update the wrong media's state. Skip track links
+when looking up external media; retain multi-part media lookup.
+
+Track links remain unique per source media, so the same track can be shared
+by several media and also have its own main-media record.
+
+---
+--- a/src/File.cpp
++++ b/src/File.cpp
+@@ -486,11 +486,14 @@
+                                                      int64_t fileSize, time_t insertionDate )
+ {
+     assert( mediaId > 0 );
+-    // Sqlite won't ensure uniqueness for (folder_id, mrl) when folder_id is null, so we have to ensure
+-    // of it ourselves
+-    static const std::string existingReq = "SELECT * FROM " + File::Table::Name +
+-            " WHERE folder_id IS NULL AND mrl = ?";
+-    auto existing = fetch( ml, existingReq, mrl );
++    // A track can be shared by several media and opened as main media itself.
++    // Keep associations unique per media, and main files unique by URI.
++    const bool associated = type == Type::Subtitles || type == Type::Soundtrack;
++    const std::string existingReq = "SELECT * FROM " + File::Table::Name +
++            " WHERE folder_id IS NULL AND mrl = ?" +
++            ( associated ? " AND media_id = ?" : " AND type != ? AND type != ?" );
++    auto existing = associated ? fetch( ml, existingReq, mrl, mediaId ) :
++        fetch( ml, existingReq, mrl, Type::Subtitles, Type::Soundtrack );
+     if ( existing != nullptr )
+         return nullptr;
+ 
+@@ -637,8 +640,8 @@
+         return nullptr;
+     }
+     static const std::string req = "SELECT * FROM " + File::Table::Name +
+-            " WHERE mrl = ? AND folder_id IS NULL";
+-    auto file = fetch( ml, req, mrl );
++            " WHERE mrl = ? AND folder_id IS NULL AND type != ? AND type != ?";
++    auto file = fetch( ml, req, mrl, IFile::Type::Subtitles, IFile::Type::Soundtrack );
+     if ( file == nullptr )
+         return nullptr;
+     assert( file->m_isExternal == true );

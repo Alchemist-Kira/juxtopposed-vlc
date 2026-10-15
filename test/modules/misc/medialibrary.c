@@ -41,6 +41,9 @@
 #include <vlc_filter.h>
 
 #include <vlc_media_library.h>
+#include <vlc_player.h>
+#include <vlc_url.h>
+#include <vlc_configuration.h>
 #include <ftw.h>
 
 #include "../lib/libvlc_internal.h"
@@ -48,6 +51,89 @@
 const char vlc_module_name[] = MODULE_STRING;
 
 static int exitcode = 0;
+
+static void TrackListChanged(vlc_player_t *player, enum vlc_player_list_action action,
+                              const struct vlc_player_track *track, void *data)
+{
+    (void)player; (void)action; (void)track;
+    vlc_cond_signal(data);
+}
+
+static void PlayerStateChanged(vlc_player_t *player, enum vlc_player_state state, void *data)
+{
+    (void)player; (void)state;
+    vlc_cond_signal(data);
+}
+
+static void TestAssociatedTracks(vlc_object_t *root, vlc_medialibrary_t *ml,
+                                 const vlc_ml_media_t *media, const char *mrl)
+{
+    char *directory = config_GetUserDir(VLC_USERDATA_DIR);
+    char *path;
+    assert(asprintf(&path, "%s/aux captions & accents.srt", directory) >= 0);
+    free(directory);
+    FILE *file = fopen(path, "wb");
+    assert(file);
+    fputs("1\n00:00:00,000 --> 00:01:00,000\nAssociated subtitle\n", file);
+    assert(fclose(file) == 0);
+    char *subtitle = vlc_path2uri(path, NULL);
+    free(path);
+    assert(subtitle);
+    const char *audio = "mock://audio_track_count=1;length=100000000";
+    assert(vlc_ml_media_add_external_mrl(ml, media->i_id, subtitle,
+                                        VLC_ML_FILE_TYPE_SUBTITLE) == VLC_SUCCESS);
+    assert(vlc_ml_media_add_external_mrl(ml, media->i_id, audio,
+                                        VLC_ML_FILE_TYPE_SOUNDTRACK) == VLC_SUCCESS);
+    /* A secondary file must not resolve to its parent when opened on its own. */
+    assert(vlc_ml_get_media_by_mrl(ml, subtitle) == NULL);
+    assert(vlc_ml_get_media_by_mrl(ml, audio) == NULL);
+    vlc_ml_media_t *standalone = vlc_ml_new_external_media(ml, audio);
+    assert(standalone);
+    vlc_ml_media_t *lookup = vlc_ml_get_media_by_mrl(ml, audio);
+    assert(lookup && lookup->i_id == standalone->i_id);
+    vlc_ml_media_release(lookup);
+    assert(vlc_ml_media_add_external_mrl(ml, standalone->i_id, subtitle,
+                                        VLC_ML_FILE_TYPE_SUBTITLE) == VLC_SUCCESS);
+    vlc_ml_media_release(standalone);
+    assert(vlc_ml_media_add_external_mrl(ml, media->i_id, "file:///part.mkv",
+                                        VLC_ML_FILE_TYPE_PART) == VLC_SUCCESS);
+    lookup = vlc_ml_get_media_by_mrl(ml, "file:///part.mkv");
+    assert(lookup && lookup->i_id == media->i_id);
+    vlc_ml_media_release(lookup);
+
+    vlc_player_t *player = vlc_player_New(root, VLC_PLAYER_LOCK_NORMAL);
+    assert(player);
+    vlc_cond_t changed;
+    vlc_cond_init(&changed);
+    const struct vlc_player_cbs callbacks = {
+        .on_track_list_changed = TrackListChanged,
+        .on_state_changed = PlayerStateChanged,
+    };
+    input_item_t *item = input_item_New(mrl, "Associated tracks");
+    assert(item);
+    vlc_player_Lock(player);
+    vlc_player_listener_id *listener = vlc_player_AddListener(player, &callbacks, &changed);
+    assert(listener);
+    for (unsigned attempt = 0; attempt < 2; ++attempt)
+    {
+        assert(vlc_player_SetCurrentMedia(player, item) == VLC_SUCCESS);
+        assert(vlc_player_Start(player) == VLC_SUCCESS);
+        while (vlc_player_GetState(player) != VLC_PLAYER_STATE_PLAYING ||
+               vlc_player_GetTrackCount(player, AUDIO_ES) < 1 ||
+               vlc_player_GetTrackCount(player, SPU_ES) < 1)
+            vlc_player_CondWait(player, &changed);
+        assert(vlc_player_GetTrackCount(player, AUDIO_ES) == 1);
+        assert(vlc_player_GetTrackCount(player, SPU_ES) == 1);
+        vlc_player_Stop(player);
+        while (vlc_player_GetState(player) != VLC_PLAYER_STATE_STOPPED)
+            vlc_player_CondWait(player, &changed);
+    }
+    vlc_player_RemoveListener(player, listener);
+    vlc_player_Unlock(player);
+    vlc_player_Delete(player);
+    input_item_Release(item);
+    free(subtitle);
+}
 
 static void ValidateThumbnail(void *data, const vlc_ml_event_t *event)
 {
@@ -82,6 +168,8 @@ static int OpenIntf(vlc_object_t *root)
 
     vlc_sem_wait(&sem);
     vlc_ml_event_unregister_callback(ml, listener);
+
+    TestAssociatedTracks(root, ml, media, MOCK_URL);
 
     vlc_ml_media_release(media);
 
@@ -122,7 +210,8 @@ int main(void)
 
     const char * const args[] = {
         "-vvv", "--vout=dummy", "--aout=dummy", "--text-renderer=dummy",
-        "--no-auto-preparse", "--media-library"
+        "--no-auto-preparse", "--media-library", "--ignore-config",
+        "--no-restore-playback-states", "--no-sub-autodetect-file"
     };
 
     libvlc_instance_t *vlc = libvlc_new(ARRAY_SIZE(args), args);

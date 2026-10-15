@@ -23,6 +23,7 @@
 #endif
 
 #include <vlc_common.h>
+#include <vlc_arrays.h>
 #include "player.h"
 #include "misc/variables.h"
 
@@ -47,6 +48,29 @@ vlc_player_input_RestoreMlStates(struct vlc_player_input* input, bool force_pos)
     vlc_ml_media_t* media = vlc_ml_get_media_by_mrl( ml, item->psz_uri);
     if (!media)
         return;
+    /* Associated tracks are independent of saved playback preferences. */
+    vlc_mutex_lock(&item->lock);
+    if (media->p_files)
+    {
+        for (size_t i = 0; i < media->p_files->i_nb_items; ++i)
+        {
+            const vlc_ml_file_t *file = &media->p_files->p_items[i];
+            if (!file->psz_mrl || !strcmp(file->psz_mrl, item->psz_uri) ||
+                (file->i_type != VLC_ML_FILE_TYPE_SUBTITLE &&
+                                  file->i_type != VLC_ML_FILE_TYPE_SOUNDTRACK))
+                continue;
+            bool exists = false;
+            for (int j = 0; j < item->i_slaves; ++j)
+                if (!strcmp(item->pp_slaves[j]->psz_uri, file->psz_mrl))
+                    exists = true;
+            if (exists) continue;
+            input_item_slave_t *slave = input_item_slave_New(file->psz_mrl,
+                file->i_type == VLC_ML_FILE_TYPE_SUBTITLE ? SLAVE_TYPE_SPU : SLAVE_TYPE_GENERIC,
+                SLAVE_PRIORITY_USER);
+            if (slave) TAB_APPEND(item->i_slaves, item->pp_slaves, slave);
+        }
+    }
+    vlc_mutex_unlock(&item->lock);
     if (media->i_type != VLC_ML_MEDIA_TYPE_VIDEO ||
         vlc_ml_media_get_all_playback_pref(ml, media->i_id,
                                            &input->ml.states) != VLC_SUCCESS)

@@ -57,6 +57,9 @@ public: // Interface
 
     Q_INVOKABLE void remove(const QModelIndexList & indexes);
 
+    Q_INVOKABLE void appendFiles(const QStringList& urls);
+    Q_INVOKABLE void editItem(int row, int destination, bool remove, const MLItemId& expected, const MLItemId& playlist);
+
     bool transactionPending() const { return m_transactionPending; };
 
 public: // QAbstractItemModel implementation
@@ -64,6 +67,7 @@ public: // QAbstractItemModel implementation
 
 signals:
     void transactionPendingChanged();
+    void itemsEdited(const MLItemId& playlist, bool success, const QString& error);
 
 protected: // MLBaseModel implementation
     QVariant itemRoleData(const MLItem *item, int role = Qt::DisplayRole) const override;

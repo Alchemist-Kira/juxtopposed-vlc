@@ -44,6 +44,75 @@
 // Interface
 //-------------------------------------------------------------------------------------------------
 
+void MLPlaylistModel::appendFiles(const QStringList& urls)
+{
+    const auto playlistId = parentId();
+    if (m_transactionPending || !playlistId.id || urls.isEmpty()) return;
+    setTransactionPending(true);
+    struct Result { bool success = false; QString error; };
+    m_mediaLib->runOnMLThread<Result>(this,
+        [playlistId, urls](vlc_medialibrary_t* ml, Result& result) {
+            ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_get_playlist(ml, playlistId.id));
+            if (!playlist) return;
+            if (playlist->b_is_read_only) { result.error = qtr("You cannot change this playlist."); return; }
+            std::vector<int64_t> ids;
+            for (const auto& text : urls) {
+                const QUrl url(text, QUrl::TolerantMode);
+                if (!url.isValid() || url.scheme().isEmpty()) return;
+                const auto uri = url.toEncoded();
+                ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
+                if (!media) media.reset(vlc_ml_new_external_media(ml, uri.constData()));
+                if (!media) return;
+                ids.push_back(media->i_id);
+            }
+            result.success = vlc_ml_playlist_append(ml, playlistId.id, ids.data(), ids.size()) == VLC_SUCCESS;
+        },
+        [this, playlistId](quint64, Result& result) {
+            endTransaction();
+            if (parentId() == playlistId) emit resetRequested();
+            if (!result.success && result.error.isEmpty()) result.error = qtr("VLC cannot add these files. Try again.");
+            emit itemsEdited(playlistId, result.success, result.error);
+        });
+}
+
+void MLPlaylistModel::editItem(int row, int destination, bool remove, const MLItemId& expected, const MLItemId& playlistId)
+{
+    if (m_transactionPending) return;
+    const auto reject = [this, playlistId] {
+        emit itemsEdited(playlistId, false, qtr("The playlist changed. Use playlist order and try again."));
+    };
+    if (!playlistId.id || playlistId != parentId() || !expected.id || row < 0
+            || row >= rowCount() || (!remove && (destination < 0 || destination >= rowCount()))
+            || (getSortCriteria() != QString {} && getSortCriteria() != QStringLiteral("id"))
+            || getMLSortingCriteria() != VLC_ML_SORTING_DEFAULT || getSortOrder() != Qt::AscendingOrder
+            || !searchPattern().isEmpty() || getOffset() != 0 || getFavoriteOnly()) { reject(); return; }
+    const auto entry = item(row);
+    if (!entry || entry->getId() != expected) { reject(); return; }
+    if (!remove && row == destination) return;
+    setTransactionPending(true);
+    struct Result { bool success = false; QString error; };
+    m_mediaLib->runOnMLThread<Result>(this,
+        [playlistId, expected, row, destination, remove](vlc_medialibrary_t* ml, Result& result) {
+            ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_get_playlist(ml, playlistId.id));
+            if (!playlist) return;
+            if (playlist->b_is_read_only) { result.error = qtr("You cannot change this playlist."); return; }
+            if (static_cast<unsigned>(row) >= playlist->i_nb_media
+                || (!remove && static_cast<unsigned>(destination) >= playlist->i_nb_media)) return;
+            auto query = vlc_ml_query_params_create();
+            query.i_offset = row; query.i_nbResults = 1;
+            ml_unique_ptr<vlc_ml_media_list_t> media(vlc_ml_list_playlist_media(ml, &query, playlistId.id));
+            if (!media || media->i_nb_items != 1 || media->p_items[0].i_id != expected.id) return;
+            result.success = (remove ? vlc_ml_playlist_remove(ml, playlistId.id, row, 1)
+                : vlc_ml_playlist_move(ml, playlistId.id, row, destination, 1)) == VLC_SUCCESS;
+        },
+        [this, playlistId](quint64, Result& result) {
+            endTransaction();
+            if (parentId() == playlistId) emit resetRequested();
+            if (!result.success && result.error.isEmpty()) result.error = qtr("VLC cannot change this playlist. Try again.");
+            emit itemsEdited(playlistId, result.success, result.error);
+        });
+}
+
 /* Q_INVOKABLE */ void MLPlaylistModel::insert(const QVariantList & items, int at)
 {
     assert(m_mediaLib);
@@ -374,7 +443,11 @@ vlc_ml_sorting_criteria_t MLPlaylistModel::nameToCriteria(QByteArray name) const
         {QByteArrayLiteral("title"),          VLC_ML_SORTING_ALPHA},
         {QByteArrayLiteral("duration"),       VLC_ML_SORTING_DURATION},
         {QByteArrayLiteral("playcount"),      VLC_ML_SORTING_PLAYCOUNT},
+        {QByteArrayLiteral("played"),         VLC_ML_SORTING_PLAYCOUNT},
         {QByteArrayLiteral("insertion"),      VLC_ML_SORTING_INSERTIONDATE},
+        {QByteArrayLiteral("main_artist"),    VLC_ML_SORTING_ARTIST},
+        {QByteArrayLiteral("album_title"),    VLC_ML_SORTING_ALBUM},
+        {QByteArrayLiteral("track_number"),   VLC_ML_SORTING_TRACKNUMBER},
     }.value(name, VLC_ML_SORTING_DEFAULT);
 }
 
@@ -495,8 +568,13 @@ size_t MLPlaylistModel::Loader::count(vlc_medialibrary_t* ml, const vlc_ml_query
 std::vector<std::unique_ptr<MLItem>>
 MLPlaylistModel::Loader::load(vlc_medialibrary_t* ml, const vlc_ml_query_params_t* queryParams) const /* override */
 {
+    const bool localSort = sortName() == QLatin1String("uri") || sortName() == QLatin1String("disc_number");
+    auto query = *queryParams;
+    // The media-library API has no full-URI or disc-number sort. Sort the full
+    // result before paging so every page belongs to the same requested order.
+    if (localSort) { query.i_offset = 0; query.i_nbResults = 0; }
     ml_unique_ptr<vlc_ml_media_list_t> list {
-        vlc_ml_list_playlist_media(ml, queryParams, m_parent.id)
+        vlc_ml_list_playlist_media(ml, &query, m_parent.id)
     };
 
     if (list == nullptr)
@@ -507,6 +585,25 @@ MLPlaylistModel::Loader::load(vlc_medialibrary_t* ml, const vlc_ml_query_params_
     for (const vlc_ml_media_t & media : ml_range_iterate<vlc_ml_media_t> (list))
     {
         result.emplace_back(std::make_unique<MLPlaylistMedia>(&media));
+    }
+
+    if (localSort) {
+        const bool byUri = sortName() == QLatin1String("uri");
+        std::stable_sort(result.begin(), result.end(), [byUri, descending = queryParams->b_desc](const auto& a, const auto& b) {
+            const auto left = static_cast<const MLPlaylistMedia*>(a.get());
+            const auto right = static_cast<const MLPlaylistMedia*>(b.get());
+            int comparison;
+            if (byUri) comparison = QString::compare(left->mrl(), right->mrl(), Qt::CaseInsensitive);
+            else if (left->discNumber() != right->discNumber()) comparison = left->discNumber() < right->discNumber() ? -1 : 1;
+            else comparison = left->trackNumber() == right->trackNumber() ? 0 : left->trackNumber() < right->trackNumber() ? -1 : 1;
+            return descending ? comparison > 0 : comparison < 0;
+        });
+        const auto first = std::min<size_t>(queryParams->i_offset, result.size());
+        const auto count = queryParams->i_nbResults ? std::min<size_t>(queryParams->i_nbResults, result.size() - first) : result.size() - first;
+        std::vector<std::unique_ptr<MLItem>> page;
+        page.reserve(count);
+        for (size_t i = first; i < first + count; ++i) page.push_back(std::move(result[i]));
+        return page;
     }
 
     return result;

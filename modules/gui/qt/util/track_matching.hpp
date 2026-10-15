@@ -36,15 +36,24 @@ inline Episode episode(const QString& name)
 inline int score(const QUrl& media, const QUrl& track)
 {
     const auto target = stem(media), source = stem(track);
+    const auto compact = [](QString value) { return value.remove(QLatin1Char(' ')); };
     if (target.isEmpty() || source.isEmpty()) return 0;
-    if (target == source) return 100;
+    if (compact(target) == compact(source)) return 100;
     const auto a = episode(target), b = episode(source);
     if (a.number >= 0 && b.number >= 0) {
         if (a.number != b.number || a.season != b.season) return 0;
-        if (a.show == b.show) return 90;
+        if (compact(a.show) == compact(b.show)) return 90;
         return a.show.isEmpty() || b.show.isEmpty() ? 50 : 0;
     }
-    if (!source.startsWith(target + QLatin1Char(' '))) return 0;
+    const auto words = source.split(QLatin1Char(' '));
+    QString prefix;
+    int titleWords = 0;
+    for (const auto& word : words) {
+        prefix += word; ++titleWords;
+        if (prefix == compact(target)) break;
+        if (prefix.size() >= compact(target).size()) return 0;
+    }
+    if (prefix != compact(target) || titleWords == words.size()) return 0;
     // Only treat known track labels as suffixes. A short film title must not
     // silently match a different film whose name starts with the same words.
     static const QSet<QString> labels = [] {
@@ -57,7 +66,7 @@ inline int score(const QUrl& media, const QUrl& track)
             "0 1 2 5 7 ac3 eac3 dts flac opus aac mp3 wav atmos truehd").split(QLatin1Char(' '));
         return QSet<QString>(words.cbegin(), words.cend());
     }();
-    const auto suffix = source.mid(target.size() + 1).split(QLatin1Char(' '));
+    const auto suffix = words.mid(titleWords);
     for (const auto& word : suffix) if (!labels.contains(word)) return 0;
     return 80;
 }

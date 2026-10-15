@@ -602,6 +602,16 @@ private slots:
         QVERIFY(m_medialib->matchTrackAssignments({url("file:///movie/Up.mkv")}, {url("file:///tracks/Up_in_the_Air.srt")}).isEmpty());
         QCOMPARE(m_medialib->matchTrackAssignments({url("file:///movie/Up.mkv")}, {url("file:///tracks/Up.English.srt")}).size(), 1);
         QCOMPARE(m_medialib->matchTrackAssignments({url("file:///movie/FRAN%C3%87AIS.mkv")}, {url("file:///tracks/fran%C3%A7ais.srt")}).size(), 1);
+        QCOMPARE(m_medialib->matchTrackAssignments({url("file:///show/The_Wand_S01E04.mp4")},
+            {url("file:///tracks/thewand_s01e04.srt")}).size(), 1);
+        QCOMPARE(m_medialib->matchTrackAssignments({url("file:///show/The_Wand_S01E04.mp4")},
+            {url("file:///tracks/thewand_s01e04_English.srt")}).size(), 1);
+        QCOMPARE(m_medialib->matchTrackAssignments({url("file:///movie/The_Wand.mkv")},
+            {url("file:///tracks/thewand.English.srt")}).size(), 1);
+        QVERIFY(m_medialib->matchTrackAssignments({url("file:///movie/The_Wand.mkv")},
+            {url("file:///tracks/thewand_returns.srt")}).isEmpty());
+        QVERIFY(m_medialib->matchTrackAssignments({url("file:///show/The_Wand_S01E04.mp4"),
+            url("file:///other/thewand_S01E04.mkv")}, {url("file:///tracks/thewand_s01e04_English.srt")}).isEmpty());
     }
 
     void testTrackAssignmentRead()

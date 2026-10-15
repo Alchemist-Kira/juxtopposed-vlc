@@ -55,6 +55,7 @@ MediaLib::MediaLib(qt_intf_t *_intf, vlc::playlist::PlaylistController* playlist
 
 MediaLib::~MediaLib()
 {
+    cancelTrackMatching();
     m_runner->destroy();
 }
 
@@ -462,6 +463,37 @@ QVariantMap MediaLib::matchTrackAssignments(const QList<QUrl>& media, const QLis
         result.insert(it.key().toString(QUrl::FullyEncoded), values);
     }
     return result;
+}
+
+void MediaLib::cancelTrackMatching()
+{
+    if (m_trackMatchCancelled) m_trackMatchCancelled->store(true, std::memory_order_relaxed);
+    if (m_trackMatchTask) cancelMLTask(this, m_trackMatchTask);
+    m_trackMatchTask = 0;
+    m_trackMatchCancelled.reset();
+}
+
+void MediaLib::requestTrackMatches(const QList<QUrl>& media, const QList<QUrl>& tracks, QJSValue callback)
+{
+    cancelTrackMatching();
+    if (!callback.isCallable()) return;
+    const auto cancelled = std::make_shared<std::atomic_bool>(false);
+    m_trackMatchCancelled = cancelled;
+    m_trackMatchTask = runOnMLThread<QVariantMap>(this,
+        [media, tracks, cancelled](vlc_medialibrary_t*, QVariantMap& result) {
+            const auto matches = TrackMatching::match(media, tracks, cancelled.get());
+            for (auto it = matches.cbegin(); it != matches.cend(); ++it) {
+                QStringList values;
+                for (const auto& track : it.value()) values.append(track.toString(QUrl::FullyEncoded));
+                result.insert(it.key().toString(QUrl::FullyEncoded), values);
+            }
+        },
+        [this, callback, cancelled](quint64, const QVariantMap& result) mutable {
+            if (cancelled->load(std::memory_order_relaxed)) return;
+            m_trackMatchTask = 0;
+            m_trackMatchCancelled.reset();
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-track-matching");
 }
 
 void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback)

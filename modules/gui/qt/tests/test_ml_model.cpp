@@ -614,6 +614,34 @@ private slots:
             url("file:///other/thewand_S01E04.mkv")}, {url("file:///tracks/thewand_s01e04_English.srt")}).isEmpty());
     }
 
+    void testTrackMatchingAsync()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+        engine.globalObject().setProperty("staleCalls", 0);
+        QList<QUrl> media, tracks;
+        for (int i = 0; i < 2000; ++i) {
+            media.append(QUrl(QString("file:///show/Show_S01E%1.mkv").arg(i)));
+            tracks.append(QUrl(QString("file:///tracks/Show_S01E%1.en.srt").arg(i)));
+        }
+        m_medialib->requestTrackMatches(media, tracks, engine.evaluate("(function(value) { ++staleCalls; })"));
+        QVERIFY(engine.globalObject().property("answer").isNull());
+        const QUrl file("file:///show/Show_S01E04.mkv"), track("file:///tracks/show_s01e04.en.srt");
+        m_medialib->requestTrackMatches({file}, {track}, engine.evaluate("(function(value) { answer = value; })"));
+        QVERIFY(engine.globalObject().property("answer").isNull());
+        QVERIFY(QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }));
+        const auto answer = engine.globalObject().property("answer").toVariant().toMap();
+        QCOMPARE(answer.value(file.toString()).toList(), QVariantList{track.toString()});
+        QCOMPARE(engine.globalObject().property("staleCalls").toInt(), 0);
+        m_medialib->requestTrackMatches(media, tracks, engine.evaluate("(function(value) { ++staleCalls; })"));
+        m_medialib->cancelTrackMatching();
+        QTest::qWait(50);
+        QCOMPARE(engine.globalObject().property("staleCalls").toInt(), 0);
+    }
+
     void testTrackAssignmentRead()
     {
         QQmlEngine engine;

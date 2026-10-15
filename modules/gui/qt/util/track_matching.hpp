@@ -6,6 +6,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QUrl>
+#include <atomic>
 
 namespace TrackMatching {
 inline QString stem(const QUrl& url)
@@ -33,27 +34,45 @@ inline Episode episode(const QString& name)
         match.captured(longForm ? 1 : 3).toInt(), match.captured(longForm ? 2 : 4).toInt()};
 }
 
-inline int score(const QUrl& media, const QUrl& track)
+struct Name {
+    QUrl url;
+    QString normalized;
+    QString compact;
+    Episode episode;
+    QStringList words;
+};
+
+inline Name parse(const QUrl& url)
 {
-    const auto target = stem(media), source = stem(track);
+    const auto name = stem(url);
+    auto compact = name;
+    compact.remove(QLatin1Char(' '));
+    return {url, name, compact, episode(name), name.split(QLatin1Char(' '))};
+}
+
+inline int score(const Name& media, const Name& track)
+{
+    const auto& target = media.normalized;
+    const auto& source = track.normalized;
     const auto compact = [](QString value) { return value.remove(QLatin1Char(' ')); };
     if (target.isEmpty() || source.isEmpty()) return 0;
-    if (compact(target) == compact(source)) return 100;
-    const auto a = episode(target), b = episode(source);
+    if (media.compact == track.compact) return 100;
+    const auto& a = media.episode;
+    const auto& b = track.episode;
     if (a.number >= 0 && b.number >= 0) {
         if (a.number != b.number || a.season != b.season) return 0;
         if (compact(a.show) == compact(b.show)) return 90;
         return a.show.isEmpty() || b.show.isEmpty() ? 50 : 0;
     }
-    const auto words = source.split(QLatin1Char(' '));
+    const auto& words = track.words;
     QString prefix;
     int titleWords = 0;
     for (const auto& word : words) {
         prefix += word; ++titleWords;
-        if (prefix == compact(target)) break;
-        if (prefix.size() >= compact(target).size()) return 0;
+        if (prefix == media.compact) break;
+        if (prefix.size() >= media.compact.size()) return 0;
     }
-    if (prefix != compact(target) || titleWords == words.size()) return 0;
+    if (prefix != media.compact || titleWords == words.size()) return 0;
     // Only treat known track labels as suffixes. A short film title must not
     // silently match a different film whose name starts with the same words.
     static const QSet<QString> labels = [] {
@@ -71,20 +90,30 @@ inline int score(const QUrl& media, const QUrl& track)
     return 80;
 }
 
-inline QMap<QUrl, QList<QUrl>> match(const QList<QUrl>& media, const QList<QUrl>& tracks)
+inline QMap<QUrl, QList<QUrl>> match(const QList<QUrl>& media, const QList<QUrl>& tracks,
+                                    const std::atomic_bool* cancelled = nullptr)
 {
     QMap<QUrl, QList<QUrl>> result;
+    QList<Name> names;
+    QSet<QUrl> mediaSeen;
+    for (const auto& file : media) {
+        if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};
+        if (!mediaSeen.contains(file)) { mediaSeen.insert(file); names.append(parse(file)); }
+    }
     QSet<QUrl> seen;
     for (const auto& track : tracks) {
+        if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};
         if (seen.contains(track)) continue;
         seen.insert(track);
+        const auto source = parse(track);
         int best = 0;
         QSet<QUrl> targets;
-        for (const auto& file : media) {
-            if (file == track) continue;
-            const int value = score(file, track);
+        for (const auto& file : names) {
+            if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};
+            if (file.url == track) continue;
+            const int value = score(file, source);
             if (value > best) { best = value; targets.clear(); }
-            if (value > 0 && value == best) targets.insert(file);
+            if (value > 0 && value == best) targets.insert(file.url);
         }
         // A duplicate playlist entry is one media. Distinct locations with
         // the same name are ambiguous and require a manual choice.

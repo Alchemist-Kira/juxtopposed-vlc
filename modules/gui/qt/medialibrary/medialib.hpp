@@ -19,6 +19,7 @@
 #include <QQuickItem>
 
 #include <memory>
+#include <atomic>
 
 #include "qt.hpp"
 #include "mlthreadpool.hpp"
@@ -69,7 +70,9 @@ public:
     Q_INVOKABLE void playlistTrackTargets(const MLItemId& id, QJSValue callback);
     Q_INVOKABLE void trackAssignmentRows(const QVariantMap& target, bool subtitles, QJSValue callback);
     Q_INVOKABLE void trackAssignmentSources(const QUrl& folder, bool subtitles, QJSValue callback);
-    Q_INVOKABLE QVariantMap matchTrackAssignments(const QList<QUrl>& media, const QList<QUrl>& tracks) const;
+    QVariantMap matchTrackAssignments(const QList<QUrl>& media, const QList<QUrl>& tracks) const;
+    Q_INVOKABLE void requestTrackMatches(const QList<QUrl>& media, const QList<QUrl>& tracks, QJSValue callback);
+    Q_INVOKABLE void cancelTrackMatching();
     Q_INVOKABLE void saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback);
     Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
     Q_INVOKABLE void savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback);
@@ -214,6 +217,8 @@ private:
     std::unique_ptr<vlc_ml_event_callback_t, std::function<void(vlc_ml_event_callback_t*)>> m_event_cb;
     ThreadRunner* m_runner = nullptr;
 
+    quint64 m_trackMatchTask = 0;
+    std::shared_ptr<std::atomic_bool> m_trackMatchCancelled;
     QMap<QVector<MLItemId>, QVector<QJSValue>> m_inputItemQuery;
 };
 

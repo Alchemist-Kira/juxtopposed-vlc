@@ -11,7 +11,13 @@ TestCase {
     readonly property string second: "file:///show/Show_S01E02.mkv"
     readonly property string english: "file:///show/Show_S01E01.en.srt"
     readonly property string spanish: "file:///show/Show_S01E02.es.srt"
-    RedesignTrackAssignmentDialog { id: dialog; parent: testCase }
+    property bool finishMatching: true
+    RedesignTrackAssignmentDialog {
+        id: dialog; parent: testCase
+        onMatchRequested: (media, tracks, includeSaved, request) => {
+            if (testCase.finishMatching) dialog.loadMatches(request, {}, includeSaved)
+        }
+    }
     SignalSpy { id: saveSpy; target: dialog; signalName: "saveRequested" }
     SignalSpy { id: rowSpy; target: dialog; signalName: "rowsRequested" }
     function rows() { return [{url:first,name:"Show_S01E01.mkv",baseline:[]},{url:second,name:"Show_S01E02.mkv",baseline:[]}] }
@@ -20,6 +26,7 @@ TestCase {
         dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"},{url:spanish,name:"Spanish.srt"}]})
     }
     function init() {
+        finishMatching=true
         width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
         dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
         saveSpy.clear(); rowSpy.clear()
@@ -99,6 +106,34 @@ TestCase {
         compare(dialog.tracks(first).length,0); compare(dialog.changedRows.length,0)
         dialog.applyMatches({[first]:[english]},true)
         compare(dialog.tracks(first)[0],english); compare(dialog.changedRows.length,1)
+    }
+    function test_delayedMatchesKeepManualChanges() {
+        finishMatching=false
+        dialog.selectScope(1); load(rows())
+        verify(dialog.matching)
+        const request=dialog.matchRequestId
+        dialog.setTracks(first,[english])
+        dialog.submit(); compare(saveSpy.count,0)
+        dialog.loadMatches(request,{[first]:[],[second]:[spanish]})
+        verify(!dialog.matching)
+        compare(dialog.tracks(first)[0],english)
+        compare(dialog.tracks(second)[0],spanish)
+        dialog.submit(); compare(saveSpy.count,1)
+    }
+    function test_staleMatchesFromAnotherScopeAreIgnored() {
+        finishMatching=false
+        dialog.selectScope(1); load(rows())
+        const request=dialog.matchRequestId
+        dialog.selectScope(0); load([rows()[0]])
+        dialog.loadMatches(request,{[first]:[english]})
+        compare(dialog.tracks(first).length,0)
+        verify(!dialog.matching)
+        dialog.selectScope(1); load(rows())
+        const closedRequest=dialog.matchRequestId
+        dialog.reject()
+        dialog.loadMatches(closedRequest,{[first]:[english]})
+        compare(Object.keys(dialog.drafts).length,0)
+        verify(!dialog.matching)
     }
     function test_scaledAndSmallWindow_data() {
         return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]

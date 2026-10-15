@@ -18,7 +18,8 @@ RedesignTrackAssignmentDialog {
     onOpened: restartNeeded = false
     onRowsRequested: (target, subtitles, request) => MediaLib.trackAssignmentRows(target, subtitles, result => root.loadRows(request, result))
     onSourcesRequested: (folder, subtitles, request) => MediaLib.trackAssignmentSources(folder, subtitles, result => root.loadSources(request, result))
-    onMatchRequested: (media, tracks, includeSaved) => root.applyMatches(MediaLib.matchTrackAssignments(media, tracks), includeSaved)
+    onMatchRequested: (media, tracks, includeSaved, request) => MediaLib.requestTrackMatches(media, tracks, matches => root.loadMatches(request, matches, includeSaved))
+    onMatchingCanceled: MediaLib.cancelTrackMatching()
     onFilesRequested: target => root.addFiles(DialogsProvider.selectTrackFiles(root.subtitles, root.sourceFolder), target)
     onFolderRequested: {
         const folder = DialogsProvider.selectTrackFolder(root.sourceFolder)

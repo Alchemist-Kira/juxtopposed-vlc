@@ -25,6 +25,8 @@ C.Dialog {
     property bool loading: false
     property bool loadingSources: false
     property bool matchSavedSources: false
+    property bool matching: false
+    property int matchRequestId: 0
     property bool saving: false
     property string errorMessage: ""
     readonly property bool fileMode: scopeIndex === 0
@@ -43,7 +45,8 @@ C.Dialog {
     }
     signal rowsRequested(var target, bool subtitles, int request)
     signal sourcesRequested(url folder, bool subtitles, int request)
-    signal matchRequested(var media, var tracks, bool includeSaved)
+    signal matchRequested(var media, var tracks, bool includeSaved, int request)
+    signal matchingCanceled()
     signal filesRequested(string target)
     signal folderRequested()
     signal saveRequested(var rows, bool subtitles, int request)
@@ -75,7 +78,9 @@ C.Dialog {
         open(); requestRows()
         return true
     }
+    function cancelMatching() { ++matchRequestId; matching = false; matchingCanceled() }
     function requestRows() {
+        cancelMatching()
         ++requestId; loading = true; errorMessage = ""; selectedRows = ({})
         const target = scopeIndex === 0 ? {scope: "file", url: anchorFile}
             : scopeIndex === 1 ? {scope: "folder", folder: targetFolder}
@@ -100,6 +105,7 @@ C.Dialog {
         else performMatching()
     }
     function requestSources(includeSaved = false) {
+        cancelMatching()
         matchSavedSources = includeSaved
         ++sourceRequestId; loadingSources = true
         sourcesRequested(sourceFolder, subtitles, sourceRequestId)
@@ -111,8 +117,16 @@ C.Dialog {
         sources = result.sources || []; performMatching(matchSavedSources)
     }
     function performMatching(includeSaved = false) {
-        if (!fileMode && !loading && !loadingSources)
-            matchRequested(rows.map(row => row.url), sources.map(source => source.url), includeSaved)
+        cancelMatching()
+        if (!fileMode && !loading && !loadingSources) {
+            matching = true
+            matchRequested(rows.map(row => row.url), sources.map(source => source.url), includeSaved, matchRequestId)
+        }
+    }
+    function loadMatches(request, matches, includeSaved = false) {
+        if (!visible || request !== matchRequestId) return
+        matching = false
+        applyMatches(matches, includeSaved)
     }
     function applyMatches(matches, includeSaved = false) {
         const next = Object.assign({}, drafts)
@@ -151,7 +165,7 @@ C.Dialog {
     }
     function chooseRow(url) { picker.targetUrl = url; picker.open() }
     function submit() {
-        if (saving || loading || loadingSources || !changedRows.length) return
+        if (saving || loading || loadingSources || matching || !changedRows.length) return
         saving = true; picker.close(); errorMessage = ""
         saveRequested(changedRows, subtitles, requestId)
     }
@@ -167,7 +181,7 @@ C.Dialog {
         else errorMessage = (result.error || qsTr("VLC cannot save these tracks. Try again."))
             + (completed.length ? "\n" + qsTr("VLC kept the changes that it saved. Try Save again for the other files.") : "")
     }
-    onClosed: { ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
+    onClosed: { cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
     Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: root.visible && !root.saving; onActivated: root.submit() }
 
     header: Item {
@@ -292,8 +306,8 @@ C.Dialog {
         }
         Text {
             anchors.centerIn: parent; width: parent.width - root.theme.dp(40); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
-            visible: root.loading || root.loadingSources || (!list.count && !root.errorMessage)
-            text: root.loading || root.loadingSources ? qsTr("Loading files…") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
+            visible: root.loading || root.loadingSources || root.matching || (!list.count && !root.errorMessage)
+            text: root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources ? qsTr("Loading files…") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
             color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
         }
     }
@@ -328,7 +342,7 @@ C.Dialog {
             implicitWidth: root.theme.dp(100); implicitHeight: root.theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.saving ? qsTr("Saving…") : qsTr("Save"); text: caption
-            enabled: !root.saving && !root.loading && !root.loadingSources && root.changedRows.length > 0
+            enabled: !root.saving && !root.loading && !root.loadingSources && !root.matching && root.changedRows.length > 0
             foreground: root.theme.accent
             background: Rectangle { radius: root.theme.dp(5); color: root.theme.progress; border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : 0.4 }
             onClicked: root.submit()

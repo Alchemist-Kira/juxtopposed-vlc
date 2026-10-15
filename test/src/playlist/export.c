@@ -1,5 +1,10 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
-#include "../../libvlc/test.h"
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+#undef NDEBUG
+#include <assert.h>
+#include <vlc/vlc.h>
 #include "../lib/libvlc_internal.h"
 #include <vlc_common.h>
 #include <vlc_fs.h>
@@ -19,7 +24,10 @@ static unsigned descriptors(void)
 
 int main(void)
 {
-    test_init();
+#ifndef _WIN32
+    setenv("VLC_PLUGIN_PATH", TOP_BUILDDIR "/modules", 1);
+    setenv("VLC_LIB_PATH", TOP_BUILDDIR "/modules", 1);
+#endif
     const char *options[] = { "--ignore-config", "--no-plugins-cache", "--no-media-library" };
     libvlc_instance_t *instance = libvlc_new(ARRAY_SIZE(options), options);
     assert(instance);

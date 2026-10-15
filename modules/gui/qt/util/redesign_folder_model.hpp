@@ -7,6 +7,8 @@
 #include <QFileSystemWatcher>
 #include <QUrl>
 #include <QVector>
+#include <QHash>
+#include <QSet>
 #include <memory>
 
 class RedesignFolderScanResult : public QObject
@@ -30,7 +32,7 @@ class RedesignFolderModel : public QAbstractListModel
     Q_PROPERTY(int directoryCount READ directoryCount NOTIFY countChanged FINAL)
     Q_PROPERTY(QString searchPattern READ searchPattern WRITE setSearchPattern NOTIFY searchPatternChanged FINAL)
 public:
-    enum Role { FileName = Qt::UserRole + 1, FileUrl, FileIsDir };
+    enum Role { FileName = Qt::UserRole + 1, FileUrl, FileIsDir, Thumbnail };
     explicit RedesignFolderModel(QObject* parent = nullptr);
     QUrl folder() const { return m_folder; }
     void setFolder(const QUrl& folder);
@@ -48,6 +50,7 @@ public:
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
     Q_INVOKABLE QVariant get(int row, const QString& role) const;
+    Q_INVOKABLE void setArtwork(const QUrl& url, const QString& artwork);
 signals:
     void folderChanged();
     void nameFiltersChanged();
@@ -55,6 +58,7 @@ signals:
     void sortCriteriaChanged();
     void countChanged();
     void searchPatternChanged();
+    void artworkRequested(const QUrl& url);
 private:
     void scheduleRefresh();
     void scan();
@@ -66,6 +70,10 @@ private:
     QString m_searchPattern;
     QString m_sortCriteria = QStringLiteral("title");
     QFileInfoList m_entries;
+    QHash<QUrl, int> m_rowsByUrl;
+    QHash<QUrl, QString> m_artwork;
+    mutable QSet<QUrl> m_artworkRequested;
+    quint64 m_folderSerial = 0;
     quint64 m_serial = 0;
     bool m_sortReversed = false;
     bool m_refreshPending = false;

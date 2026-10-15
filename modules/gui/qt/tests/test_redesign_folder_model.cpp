@@ -14,6 +14,66 @@ class TestRedesignFolderModel : public QObject
         QVERIFY(file.open(QIODevice::WriteOnly));
     }
 private slots:
+    void artworkIsLazyAndDirectoriesDoNotRequestIt() {
+        QTemporaryDir directory;
+        QDir dir(directory.path());
+        QVERIFY(dir.mkdir("folder"));
+        touch(dir.filePath("movie.mp4"));
+        RedesignFolderModel model;
+        QSignalSpy requested(&model, &RedesignFolderModel::artworkRequested);
+        QSignalSpy changed(&model, &RedesignFolderModel::dataChanged);
+        model.setFolder(QUrl::fromLocalFile(directory.path()));
+        QTRY_COMPARE(model.count(), 2);
+        QCOMPARE(requested.count(), 0);
+        QVERIFY(model.get(0, "thumbnail").toString().isEmpty());
+        QVERIFY(model.get(1, "thumbnail").toString().isEmpty());
+        QVERIFY(model.get(1, "thumbnail").toString().isEmpty());
+        QTRY_COMPARE(requested.count(), 1);
+        const auto url = model.get(1, "fileUrl").toUrl();
+        QCOMPARE(requested[0][0].toUrl(), url);
+        model.setArtwork(url, QStringLiteral("file:///cached/movie.jpg"));
+        QCOMPARE(model.get(1, "thumbnail").toString(), QStringLiteral("file:///cached/movie.jpg"));
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(changed[0][2].value<QList<int>>(), QList<int>{RedesignFolderModel::Thumbnail});
+    }
+    void artworkFollowsFilesAcrossSortAndSearch() {
+        QTemporaryDir directory;
+        QDir dir(directory.path());
+        touch(dir.filePath("a.mp4")); touch(dir.filePath("b.mp4"));
+        RedesignFolderModel model;
+        model.setFolder(QUrl::fromLocalFile(directory.path()));
+        QTRY_COMPARE(model.count(), 2);
+        const auto a = model.get(0, "fileUrl").toUrl();
+        const auto b = model.get(1, "fileUrl").toUrl();
+        model.get(0, "thumbnail"); model.get(1, "thumbnail");
+        model.setSearchPattern("b");
+        QTRY_COMPARE(model.count(), 1);
+        model.setArtwork(a, QStringLiteral("a.jpg"));
+        model.setArtwork(b, QStringLiteral("b.jpg"));
+        QCOMPARE(model.get(0, "thumbnail").toString(), QStringLiteral("b.jpg"));
+        model.setSearchPattern(""); model.setSortReversed(true);
+        QTRY_COMPARE(model.count(), 2);
+        QCOMPARE(model.get(0, "fileName").toString(), QStringLiteral("b.mp4"));
+        QCOMPARE(model.get(0, "thumbnail").toString(), QStringLiteral("b.jpg"));
+        QCOMPARE(model.get(1, "thumbnail").toString(), QStringLiteral("a.jpg"));
+    }
+    void oldFolderArtworkCannotReplaceCurrentFiles() {
+        QTemporaryDir first, second;
+        touch(QDir(first.path()).filePath("movie.mp4"));
+        touch(QDir(second.path()).filePath("movie.mp4"));
+        RedesignFolderModel model;
+        model.setFolder(QUrl::fromLocalFile(first.path()));
+        QTRY_COMPARE(model.count(), 1);
+        const auto old = model.get(0, "fileUrl").toUrl();
+        model.get(0, "thumbnail");
+        model.setFolder(QUrl::fromLocalFile(second.path()));
+        QTRY_COMPARE(model.count(), 1);
+        model.get(0, "thumbnail");
+        model.setArtwork(old, QStringLiteral("old.jpg"));
+        QVERIFY(model.get(0, "thumbnail").toString().isEmpty());
+        model.setArtwork(model.get(0, "fileUrl").toUrl(), QStringLiteral("current.jpg"));
+        QCOMPARE(model.get(0, "thumbnail").toString(), QStringLiteral("current.jpg"));
+    }
     void sortDatesAndEncodedUrisKeepDirectoriesFirst() {
         QTemporaryDir directory;
         QDir dir(directory.path());

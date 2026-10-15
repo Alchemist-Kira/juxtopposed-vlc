@@ -41,6 +41,9 @@ void RedesignFolderModel::setFolder(const QUrl& folder)
     if (m_folder == normalized)
         return;
     m_folder = normalized;
+    ++m_folderSerial;
+    m_artwork.clear();
+    m_artworkRequested.clear();
     const auto watched = m_watcher.directories();
     if (!watched.isEmpty())
         m_watcher.removePaths(watched);
@@ -101,7 +104,7 @@ int RedesignFolderModel::rowCount(const QModelIndex& parent) const
 
 QHash<int, QByteArray> RedesignFolderModel::roleNames() const
 {
-    return {{FileName, "fileName"}, {FileUrl, "fileUrl"}, {FileIsDir, "fileIsDir"}};
+    return {{FileName, "fileName"}, {FileUrl, "fileUrl"}, {FileIsDir, "fileIsDir"}, {Thumbnail, "thumbnail"}};
 }
 
 QVariant RedesignFolderModel::data(const QModelIndex& index, int role) const
@@ -114,8 +117,32 @@ QVariant RedesignFolderModel::data(const QModelIndex& index, int role) const
     case FileName: return file.fileName();
     case FileUrl: return QUrl::fromLocalFile(file.absoluteFilePath());
     case FileIsDir: return file.isDir();
+    case Thumbnail: {
+        if (file.isDir()) return QString {};
+        const auto url = QUrl::fromLocalFile(file.absoluteFilePath());
+        if (!m_artworkRequested.contains(url)) {
+            m_artworkRequested.insert(url);
+            auto self = const_cast<RedesignFolderModel*>(this);
+            QTimer::singleShot(0, self, [self, url, serial = m_folderSerial] {
+                if (serial == self->m_folderSerial)
+                    emit self->artworkRequested(url);
+            });
+        }
+        return m_artwork.value(url);
+    }
     default: return {};
     }
+}
+
+void RedesignFolderModel::setArtwork(const QUrl& url, const QString& artwork)
+{
+    // Results are tied to the requested file, never to a row that may have moved.
+    if (!m_artworkRequested.contains(url) || m_artwork.value(url) == artwork)
+        return;
+    m_artwork.insert(url, artwork);
+    const auto row = m_rowsByUrl.value(url, -1);
+    if (row >= 0)
+        emit dataChanged(index(row), index(row), {Thumbnail});
 }
 
 QVariant RedesignFolderModel::get(int row, const QString& role) const
@@ -184,6 +211,10 @@ void RedesignFolderModel::replaceEntries(const QFileInfoList& entries)
     const int oldDirectoryCount = directoryCount();
     beginResetModel();
     m_entries = entries;
+    m_rowsByUrl.clear();
+    for (int row = 0; row < m_entries.size(); ++row)
+        if (!m_entries[row].isDir())
+            m_rowsByUrl.insert(QUrl::fromLocalFile(m_entries[row].absoluteFilePath()), row);
     endResetModel();
     if (oldCount != count() || oldDirectoryCount != directoryCount())
         emit countChanged();

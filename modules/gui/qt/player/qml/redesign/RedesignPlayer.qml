@@ -213,10 +213,16 @@ FocusScope {
         queueContent: Component {
             RedesignQueuePanel {
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
+                onCloseRequested: view.queueOpen = false
                 queueContent: Component { RedesignQueue {
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 queueModel: PlaylistListModel { id: queueModel; playlist: MainPlaylistController.playlist }
-                itemCount: MainPlaylistController.count
+                itemCount: queueModel.count
+                currentIndex: queueModel.currentIndex
+                totalDurationText: summaryDuration(queueModel.duration)
+                sortChoices: MainPlaylistController.sortKeyTitleList
+                sortKey: MainPlaylistController.sortKey
+                sortDescending: MainPlaylistController.sortOrder === PlaylistController.SORT_ORDER_DESC
                 random: MainPlaylistController.random
                 repeating: MainPlaylistController.repeatMode !== PlaylistController.PLAYBACK_REPEAT_NONE
                 onCloseRequested: view.queueOpen = false
@@ -225,6 +231,7 @@ FocusScope {
                 onClearRequested: MainPlaylistController.clear()
                 onShuffleRequested: MainPlaylistController.toggleRandom()
                 onRepeatRequested: MainPlaylistController.toggleRepeatMode()
+                onSortRequested: (key, descending) => MainPlaylistController.sort(key, descending ? PlaylistController.SORT_ORDER_DESC : PlaylistController.SORT_ORDER_ASC)
                 onPlayRequested: index => MainPlaylistController.goTo(index, true)
                 onRemoveRequested: index => queueModel.removeItems([index])
                 onMoveRequested: (from, to) => queueModel.moveItemsPre([from], to)

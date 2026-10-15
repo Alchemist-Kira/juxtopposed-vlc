@@ -1018,6 +1018,7 @@ qml_modules += {
 qml_tests = {
     'tst_FSM': files('tests/tst_FSM.qml'),
     'tst_Redesign': files('tests/tst_Redesign.qml'),
+    'tst_RedesignQueue': files('tests/tst_RedesignQueue.qml'),
     'tst_RedesignPreferences': files('tests/tst_RedesignPreferences.qml'),
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
     'tst_RedesignSubtitleTimeline': files('tests/tst_RedesignSubtitleTimeline.qml'),

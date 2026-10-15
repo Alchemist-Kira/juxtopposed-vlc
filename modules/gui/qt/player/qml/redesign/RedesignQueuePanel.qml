@@ -15,12 +15,13 @@ Item {
     property int tab: 0
     property bool floating: false
     property Component queueContent
+    signal closeRequested()
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
         Rectangle {
-            Layout.fillWidth: true; height: theme.dp(root.floating ? 60 : 50); color: theme.field
+            Layout.fillWidth: true; height: theme.dp(root.floating ? 60 : 50); color: root.floating ? theme.panel : theme.field
             radius: root.floating ? theme.dp(14) : 0
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(14); color: parent.color }
             Text {
@@ -30,10 +31,10 @@ Item {
             }
             RedesignButton {
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                visible: root.floating
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "more"; text: qsTr("Queue views")
-                onClicked: viewsMenu.popup()
+                enabled: root.floating || root.tab === 0
+                onClicked: if (root.floating) viewsMenu.popup(); else if (queueBody.item) queueBody.item.openActions()
                 RedesignActionMenu {
                     id: viewsMenu
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -41,14 +42,21 @@ Item {
                     onAboutToShow: entries = [
                         { action: "0", label: qsTr("Queue"), icon: "queue" },
                         { action: "1", label: qsTr("Bookmarks"), icon: "bookmark", enabled: MainCtx.mediaLibraryAvailable },
-                        { action: "2", label: qsTr("Chapters"), icon: "chapters" }
+                        { action: "2", label: qsTr("Chapters"), icon: "chapters" },
+                        { action: "save", label: qsTr("Save queue to file"), enabled: !!queueBody.item && queueBody.item.itemCount > 0 },
+                        { action: "clear", label: qsTr("Clear queue"), enabled: !!queueBody.item && queueBody.item.itemCount > 0 },
+                        { action: "close", label: qsTr("Close queue") }
                     ]
-                    onActionRequested: action => root.tab = Number(action)
+                    onActionRequested: action => {
+                        if (action === "0" || action === "1" || action === "2") root.tab = Number(action)
+                        else if (action === "close") root.closeRequested()
+                        else if (queueBody.item) queueBody.item.runAction(action)
+                    }
                 }
             }
             RowLayout {
                 visible: !root.floating
-                anchors.fill: parent; anchors.leftMargin: theme.dp(12); anchors.rightMargin: theme.dp(12)
+                anchors.fill: parent; anchors.leftMargin: theme.dp(12); anchors.rightMargin: theme.dp(36)
                 Repeater {
                     model: [qsTr("Queue"), qsTr("Bookmarks"), qsTr("Chapters")]
                     RedesignButton {
@@ -57,6 +65,10 @@ Item {
                         Layout.fillWidth: true
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         caption: modelData; text: modelData; selected: root.tab === index
+                        iconName: ["queue", "bookmark", "chapters"][index]
+                        iconSize: theme.dp(20)
+                        captionFontSize: 12
+                        background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; radius: theme.dp(6) }
                         enabled: index !== 1 || MainCtx.mediaLibraryAvailable
                         onClicked: root.tab = index
                         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(2); color: theme.accent; visible: root.tab === index }
@@ -64,7 +76,7 @@ Item {
                 }
             }
         }
-        Loader { Layout.fillWidth: true; Layout.fillHeight: true; visible: root.tab === 0; active: visible; sourceComponent: root.queueContent }
+        Loader { id: queueBody; Layout.fillWidth: true; Layout.fillHeight: true; visible: root.tab === 0; active: visible; sourceComponent: root.queueContent }
         Loader {
             Layout.fillWidth: true; Layout.fillHeight: true
             visible: root.tab === 1; active: visible && MainCtx.mediaLibraryAvailable

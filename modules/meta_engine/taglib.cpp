@@ -1413,7 +1413,21 @@ static int WriteMeta( vlc_object_t *p_this )
     }
 
     // Save the meta data
-    f.save();
-
+    // Some TagLib versions return success after a failed stream write.
+    // Preserve fatal filesystem errors as well as the save result.
+    errno = 0;
+    const bool saved = f.save();
+    const int error = errno;
+    if( !saved || error == EIO || error == ENOSPC || error == EFBIG ||
+        error == EROFS || error == EACCES || error == EPERM
+#ifdef EDQUOT
+        || error == EDQUOT
+#endif
+      )
+    {
+        msg_Err( p_this, "cannot write metadata: %s",
+                 vlc_strerror( error ? error : EIO ) );
+        return VLC_EGENERIC;
+    }
     return VLC_SUCCESS;
 }

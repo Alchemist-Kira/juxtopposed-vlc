@@ -654,6 +654,37 @@ TestCase {
         verify(mini.x + mini.width <= player.width - 6)
         verify(mini.y + mini.height <= player.height - 6)
     }
+    function test_miniQueueFollowsCardAndKeepsVideoBounds() {
+        testCase.width = 1920; testCase.height = 1080
+        const mini = openMiniPlayer()
+        mini.userMoved = false
+        const viewport = findChild(player, "redesignViewport")
+        const before = viewport.mapToItem(player, 0, 0)
+        mouseClick(findChild(mini, "miniPlayerQueueButton"))
+        const queue = findChild(player, "redesignFloatingQueue")
+        verify(queue.visible)
+        compare(queue.width, 391)
+        compare(queue.height, 356)
+        compare(queue.x, mini.x)
+        compare(queue.y + queue.height, mini.y)
+        compare(viewport.mapToItem(player, 0, 0), before)
+        verify(!findChild(player, "redesignRightPanel").visible)
+        const title = findChild(mini, "miniPlayerTitle")
+        mouseDrag(title, 80, title.height / 2, -700, -200)
+        compare(queue.x, mini.x)
+        compare(queue.y + queue.height, mini.y)
+        verify(queue.y >= 46)
+        compare(viewport.mapToItem(player, 0, 0).x, mini.x + 10)
+        compare(viewport.mapToItem(player, 0, 0).y, mini.y + 10)
+        player.libraryExpanded = false
+        verify(!queue.visible)
+        verify(findChild(player, "redesignRightPanel").visible)
+        player.libraryExpanded = true
+        mouseMove(mini, 160, 80)
+        mouseClick(findChild(mini, "miniPlayerCloseButton"))
+        verify(!player.queueOpen)
+        verify(!queue.visible)
+    }
     function test_miniSeekHoldsUntilReleaseAndCancelsWhenClosed() {
         const mini = openMiniPlayer()
         mini.draggedX = 100; mini.draggedY = 100; mini.userMoved = true

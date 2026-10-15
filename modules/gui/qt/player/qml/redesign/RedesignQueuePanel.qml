@@ -13,14 +13,41 @@ Item {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property int tab: 0
+    property bool floating: false
     property Component queueContent
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
         Rectangle {
-            Layout.fillWidth: true; height: theme.dp(50); color: theme.field
+            Layout.fillWidth: true; height: theme.dp(root.floating ? 60 : 50); color: theme.field
+            radius: root.floating ? theme.dp(14) : 0
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(14); color: parent.color }
+            Text {
+                anchors.centerIn: parent; visible: root.floating
+                text: [qsTr("Queue"), qsTr("Bookmarks"), qsTr("Chapters")][root.tab]
+                color: theme.foreground; font.pixelSize: theme.dp(16)
+            }
+            RedesignButton {
+                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                visible: root.floating
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "more"; text: qsTr("Queue views")
+                onClicked: viewsMenu.popup()
+                RedesignActionMenu {
+                    id: viewsMenu
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    checkedAction: String(root.tab)
+                    onAboutToShow: entries = [
+                        { action: "0", label: qsTr("Queue"), icon: "queue" },
+                        { action: "1", label: qsTr("Bookmarks"), icon: "bookmark", enabled: MainCtx.mediaLibraryAvailable },
+                        { action: "2", label: qsTr("Chapters"), icon: "chapters" }
+                    ]
+                    onActionRequested: action => root.tab = Number(action)
+                }
+            }
             RowLayout {
+                visible: !root.floating
                 anchors.fill: parent; anchors.leftMargin: theme.dp(12); anchors.rightMargin: theme.dp(12)
                 Repeater {
                     model: [qsTr("Queue"), qsTr("Bookmarks"), qsTr("Chapters")]

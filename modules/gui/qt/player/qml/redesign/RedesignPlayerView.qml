@@ -51,6 +51,7 @@ FocusScope {
     property bool libraryInitialized: false
     onLibraryOpenChanged: if (!libraryOpen) libraryExpanded = false
     property bool queueOpen: false
+    readonly property bool floatingQueue: queueOpen && miniPlayer.visible
     property string settingsPage: ""
     property real position: 0
     property real volume: 1
@@ -324,6 +325,7 @@ FocusScope {
         hasPrevious: root.hasPrevious; hasNext: root.hasNext; hasVideo: root.hasVideo
         position: root.position; mediaTitle: root.mediaTitle; folderTitle: root.mediaFolderTitle; artist: root.artist
         canBrowseMedia: root.canBrowseMedia
+        minimumY: Math.min(root.height - height - theme.dp(6), theme.dp(46) + (root.floatingQueue ? theme.dp(356) : 0))
         previewEnabled: root.showSeekPreview && !root.presentationOnly
         previewImage: root.seekPreviewImage; previewImagePosition: root.seekPreviewImagePosition
         timeForPosition: root.timeForPosition
@@ -336,16 +338,31 @@ FocusScope {
         onPreviewRequested: position => root.seekPreviewRequested(position)
         onPreviewEnded: root.seekPreviewEnded()
         onOpenPlayerRequested: { root.libraryExpanded = false; root.libraryOpen = false }
-        onCloseRequested: root.miniPlayerVisible = false
+        onCloseRequested: { root.queueOpen = false; root.miniPlayerVisible = false }
         onQueueRequested: { root.settingsPage = ""; root.queueOpen = !root.queueOpen }
         onFolderRequested: root.mediaFolderRequested()
         onArtistRequested: root.artistRequested()
     }
     Rectangle {
+        id: floatingQueuePanel
+        objectName: "redesignFloatingQueue"
+        z: 1.5
+        visible: root.floatingQueue
+        x: miniPlayer.x
+        y: Math.max(theme.dp(46), miniPlayer.y - height)
+        width: miniPlayer.width
+        height: Math.min(theme.dp(356), Math.max(0, miniPlayer.y - theme.dp(46)))
+        radius: theme.dp(14)
+        color: theme.background
+        // Continue the card behind the mini player without moving its video.
+        Rectangle { y: parent.height - theme.dp(14); width: parent.width; height: theme.dp(28); color: parent.color }
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+    }
+    Rectangle {
         id: rightPanel
         objectName: "redesignRightPanel"
         z: 3
-        visible: root.queueOpen || root.settingsPage.length > 0
+        visible: (root.queueOpen && !root.floatingQueue) || root.settingsPage.length > 0
         width: Math.min(theme.dp(400), root.width * 0.48)
         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.right: parent.right
         anchors.topMargin: header.height; anchors.bottomMargin: toolbar.height
@@ -353,10 +370,13 @@ FocusScope {
         border.color: theme.border
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
         Loader {
+            id: queueLoader
+            parent: root.floatingQueue ? floatingQueuePanel : rightPanel
             anchors.fill: parent
             sourceComponent: root.queueContent
             active: root.queueOpen
             visible: active
+            onLoaded: if (item && item.floating !== undefined) item.floating = Qt.binding(() => root.floatingQueue)
         }
         Loader {
             id: settingsLoader

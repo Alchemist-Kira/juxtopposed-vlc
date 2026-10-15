@@ -38,7 +38,10 @@
 //=================================================================================================
 
 /* explicit */ MLPlaylistModel::MLPlaylistModel(QObject * parent)
-    : MLBaseModel(parent) {}
+    : MLBaseModel(parent)
+{
+    connect(this, &MLBaseModel::parentIdChanged, this, [this] { m_requestedThumbnails.clear(); });
+}
 
 //-------------------------------------------------------------------------------------------------
 // Interface
@@ -547,10 +550,16 @@ std::vector<std::pair<int, int>> MLPlaylistModel::getSortedRowsRanges(const QMod
 
 void MLPlaylistModel::generateThumbnail(const MLItemId& itemid) const
 {
+    // A failed request also emits dataChanged. Retry only on the next visit,
+    // rather than starting another request every time a delegate reads its cover.
+    if (m_requestedThumbnails.contains(itemid.id)) return;
+    m_requestedThumbnails.insert(itemid.id);
     m_mediaLib->runOnMLThread(this,
     //ML thread
     [id = itemid.id](vlc_medialibrary_t* ml)
     {
+        ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media(ml, id));
+        if (!media || media->i_type != VLC_ML_MEDIA_TYPE_VIDEO) return;
         vlc_ml_media_generate_thumbnail(ml, id, VLC_ML_THUMBNAIL_SMALL,
                                         512, 320, 0.15);
     });

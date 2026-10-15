@@ -21,6 +21,7 @@
 
 // MediaLibrary includes
 #include "mlbasemodel.hpp"
+#include <QSet>
 
 class MLPlaylistModel : public MLBaseModel
 {
@@ -108,6 +109,7 @@ private: // Functions
 
     bool m_transactionPending = false;
     bool m_resetAfterTransaction = false;
+    mutable QSet<int64_t> m_requestedThumbnails;
 
 private:
     struct Loader : public MLListCacheLoader::MLOp

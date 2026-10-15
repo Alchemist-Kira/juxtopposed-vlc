@@ -39,6 +39,7 @@ public: // Interface
     QString artwork() const { return m_artwork; }
     uint32_t creationDate() const { return m_creationDate; }
     bool readOnly() const { return m_readOnly; }
+    bool favorite() const { return m_favorite; }
 
     VLCDuration getDuration() const;
 
@@ -52,6 +53,7 @@ private:
     QString m_artwork;
     uint32_t m_creationDate;
     bool m_readOnly;
+    bool m_favorite;
 
     int64_t m_duration;
 

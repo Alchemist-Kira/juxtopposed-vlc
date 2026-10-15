@@ -269,6 +269,7 @@ public slots:
     void loadAudioFile();
     void loadVideoFile();
     void addMediaTracksDialog(const QUrl& media, bool subtitles);
+    void exportLibraryPlaylistDialog(const MLItemId& playlist, const QString& name);
 
     void quit();
 

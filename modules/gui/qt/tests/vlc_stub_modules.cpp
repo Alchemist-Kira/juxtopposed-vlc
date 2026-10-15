@@ -119,10 +119,10 @@ static void* MLGet( vlc_medialibrary_module_t*, int query, va_list args )
     return testenv->mediaGet ? testenv->mediaGet(query, args) : nullptr;
 }
 
-static int MLList( vlc_medialibrary_module_t*, int,
-                const vlc_ml_query_params_t*, va_list )
+static int MLList( vlc_medialibrary_module_t*, int query,
+                const vlc_ml_query_params_t* params, va_list args )
 {
-    return VLC_EGENERIC;
+    return testenv->mediaList ? testenv->mediaList(query, params, args) : VLC_EGENERIC;
 }
 
 static int MLControl( vlc_medialibrary_module_t*, int query, va_list args )

@@ -64,6 +64,11 @@ public:
     Q_INVOKABLE void mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback);
     Q_INVOKABLE void mediaState(const QUrl& url, bool create, QJSValue callback);
     Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
+    Q_INVOKABLE void playlistState(const MLItemId& id, QJSValue callback);
+    Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
+    Q_INVOKABLE void shuffleAndPlay(const MLItemId& id);
+    void exportPlaylist(const MLItemId& id, const QUrl& file, const QByteArray& format,
+                        QObject* receiver, std::function<void(const QString&)> callback);
     struct TrackAddition {
         QList<QUrl> added;
         QString error;
@@ -184,6 +189,7 @@ signals:
 private:
     enum class MediaStateAction { Read, Ensure, Played, Favorite };
     void requestMediaState(const QUrl& url, MediaStateAction action, bool value, QJSValue callback);
+    void requestPlaylistState(const MLItemId& id, bool update, bool favorite, QJSValue callback);
     static void onMediaLibraryEvent( void* data, const vlc_ml_event_t* event );
 
 private:

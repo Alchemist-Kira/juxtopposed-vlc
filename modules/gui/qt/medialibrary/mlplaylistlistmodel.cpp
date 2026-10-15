@@ -450,7 +450,8 @@ QHash<int, QByteArray> MLPlaylistListModel::roleNames() const /* override */
         { PLAYLIST_NB_AUDIO,  QByteArrayLiteral("nb_audio")   },
         { PLAYLIST_NB_VIDEO,  QByteArrayLiteral("nb_video")   },
         { PLAYLIST_NB_UNKNOWN,QByteArrayLiteral("nb_unknown") },
-        { PLAYLIST_READ_ONLY, QByteArrayLiteral("readOnly")   }
+        { PLAYLIST_READ_ONLY, QByteArrayLiteral("readOnly")   },
+        { PLAYLIST_FAVORITE,  QByteArrayLiteral("favorite")   }
     };
 }
 
@@ -472,6 +473,8 @@ QVariant MLPlaylistListModel::itemRoleData(const MLItem *item, int role) const /
             return playlist->getName();
         case PLAYLIST_READ_ONLY:
             return playlist->readOnly();
+        case PLAYLIST_FAVORITE:
+            return playlist->favorite();
         case PLAYLIST_THUMBNAIL:
             return getCover(playlist);
         case PLAYLIST_DURATION:
@@ -576,6 +579,10 @@ void MLPlaylistListModel::onVlcMlEvent(const MLEvent & event) /* override */
 
     switch (event.i_type)
     {
+    case VLC_ML_EVENT_FAVORITES_CHANGED:
+        if (event.favorites_changed.i_entity_type == VLC_ML_PARENT_PLAYLIST)
+            updateItemInCache(MLItemId(event.favorites_changed.i_entity_id, VLC_ML_PARENT_PLAYLIST));
+        break;
     case VLC_ML_EVENT_PLAYLIST_DELETED:
     {
         MLItemId itemId(event.deletion.i_entity_id, VLC_ML_PARENT_PLAYLIST);

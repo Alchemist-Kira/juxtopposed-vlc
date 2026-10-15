@@ -76,6 +76,7 @@
 #include <QListView>
 #include <QScreen>
 #include <QScopeGuard>
+#include <QRegularExpression>
 #include <algorithm>
 
 #define I_OP_DIR_WINTITLE I_DIR_OR_FOLDER( N_("Open Directory"), \
@@ -899,6 +900,61 @@ void DialogsProvider::PLAppendDir()
 /****************
  * Playlist     *
  ****************/
+void DialogsProvider::exportLibraryPlaylistDialog(const MLItemId& playlist, const QString& name)
+{
+    const QPointer<MainCtx> context = p_intf->p_mi;
+    if (!context || !context->hasMediaLibrary()) return;
+    const bool shortcuts = context->getUseGlobalShortcuts();
+    context->setUseGlobalShortcuts(false);
+    const auto restoreShortcuts = qScopeGuard([context, shortcuts] {
+        if (context) context->setUseGlobalShortcuts(shortcuts);
+    });
+    const QStringList extensions {"xspf", "m3u", "m3u8", "html"};
+    const QStringList filters {qtr("XSPF playlist (*.xspf)"), qtr("M3U playlist (*.m3u)"),
+                               qtr("M3U8 playlist (*.m3u8)"), qtr("HTML playlist (*.html)")};
+    QFileDialog dialog(nullptr, qtr("Export Playlist"));
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    dialog.selectNameFilter(filters[2]);
+    dialog.setDefaultSuffix("m3u8");
+    connect(&dialog, &QFileDialog::filterSelected, &dialog, [&dialog, filters, extensions](const QString& filter) {
+        const int index = filters.indexOf(filter);
+        if (index >= 0) dialog.setDefaultSuffix(extensions[index]);
+    });
+    auto directory = context->getDialogFilePath();
+    if (directory.isLocalFile() && QFileInfo(directory.toLocalFile()).isFile())
+        directory = directory.adjusted(QUrl::RemoveFilename);
+    dialog.setDirectoryUrl(directory);
+    QString filename = name.trimmed();
+    filename.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|\\r\\n]")), QStringLiteral("-"));
+    dialog.selectFile(filename.isEmpty() ? qtr("Playlist") : filename);
+    if (auto *buttons = dialog.findChild<QDialogButtonBox*>())
+        if (auto *save = buttons->button(QDialogButtonBox::Save)) save->setProperty("redesignPrimary", true);
+    applyRedesignWidgetTheme(&dialog, context);
+    for (auto *combo : dialog.findChildren<QComboBox*>()) {
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        combo->setMinimumContentsLength(16);
+    }
+    QVLCDialog::setWindowTransientParent(&dialog, nullptr, p_intf);
+    const auto available = dialog.screen()->availableGeometry().size();
+    dialog.resize(std::min(qRound(800 * context->getIntfScaleFactor()), available.width() - 40),
+                  std::min(qRound(560 * context->getIntfScaleFactor()), available.height() - 40));
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedUrls().isEmpty()) return;
+    QUrl file = dialog.selectedUrls().first();
+    if (!file.isLocalFile()) return;
+    int index = extensions.indexOf(QFileInfo(file.toLocalFile()).suffix().toLower());
+    if (index < 0) {
+        index = filters.indexOf(dialog.selectedNameFilter());
+        if (index < 0) return;
+    }
+    context->setDialogFilePath(file);
+    context->getMediaLibrary()->exportPlaylist(playlist, file,
+        QByteArray("export-") + extensions[index].toLatin1(), this, [this](const QString& error) {
+            if (!error.isEmpty()) messageDialog(error, qtr("Export Playlist"));
+        });
+}
+
 void DialogsProvider::savePlayingToPlaylist()
 {
     static const struct

@@ -52,6 +52,12 @@ struct MLEvent
         } background_idle_changed;
         struct
         {
+            int64_t i_entity_id;
+            int i_entity_type;
+            bool b_favorite;
+        } favorites_changed;
+        struct
+        {
             int64_t i_media_id;
             vlc_ml_thumbnail_size_t i_size;
             bool b_success;
@@ -65,6 +71,11 @@ struct MLEvent
         i_type = event->i_type;
         switch (event->i_type)
         {
+            case VLC_ML_EVENT_FAVORITES_CHANGED:
+                favorites_changed.i_entity_id = event->favorites_changed.i_entity_id;
+                favorites_changed.i_entity_type = event->favorites_changed.i_entity_type;
+                favorites_changed.b_favorite = event->favorites_changed.b_favorite;
+                break;
             case VLC_ML_EVENT_MEDIA_ADDED:
                 creation.i_entity_id = event->creation.p_media->i_id;
                 creation.media.i_type = event->creation.p_media->i_type;

@@ -51,6 +51,12 @@ RedesignLibraryView {
         const target = targetForItem(index, section || homeSection)
         if (!target) return null
         if (selectedPlaylist && !section) { target.playlistRow = index; target.playlistKey = playlistKey }
+        if (target.kind === "playlist") {
+            return new Promise(resolve => MediaLib.playlistState(MediaLib.deserializeMlItemIdFromString(target.key), state => {
+                target.favorite = state.favorite; target.count = state.count
+                resolve(state.success ? {target: target, entries: playlistMenuEntries(target)} : null)
+            }))
+        }
         if (["file", "media"].includes(target.kind)) {
             return new Promise(resolve => MediaLib.mediaState(Qt.resolvedUrl(target.url || target.key), false, state => {
                 target.played = state.played; target.favorite = state.favorite
@@ -70,7 +76,15 @@ RedesignLibraryView {
             ] : [])}
     }
     onItemActionRequested: (target, action) => {
-        if (action === "watched" || action === "favorite") {
+        if (action === "favorite" && target.kind === "playlist") {
+            MediaLib.setPlaylistFavorite(MediaLib.deserializeMlItemIdFromString(target.key), !target.favorite, result => {
+                if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
+            })
+        } else if (action === "shuffle" && target.kind === "playlist") {
+            MediaLib.shuffleAndPlay(MediaLib.deserializeMlItemIdFromString(target.key))
+        } else if (action === "export" && target.kind === "playlist") {
+            DialogsProvider.exportLibraryPlaylistDialog(MediaLib.deserializeMlItemIdFromString(target.key), target.name)
+        } else if (action === "watched" || action === "favorite") {
             MediaLib.setMediaState(Qt.resolvedUrl(target.url || target.key), action === "watched" ? "played" : "favorite",
                 action === "watched" ? !target.played : !target.favorite, result => {
                     if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
@@ -159,6 +173,17 @@ RedesignLibraryView {
     emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
     RedesignLibraryPath { id: folderPath }
+    function playlistMenuEntries(target) {
+        return [
+            {action: "play", label: qsTr("Play"), icon: "play", accent: true, enabled: target.count > 0},
+            {action: "favorite", label: target.favorite ? qsTr("Remove from Favorites") : qsTr("Favorite"), icon: target.favorite ? "favorite-active" : "favorite", accent: true},
+            {action: "shuffle", label: qsTr("Shuffle"), icon: "shuffle", accent: true, enabled: target.count > 0},
+            {action: "export", label: qsTr("Export Playlist"), icon: "save", accent: true},
+            {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true, enabled: target.count > 0},
+            {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
+            {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"}
+        ]
+    }
     function mediaMenuEntries(target) {
         return [
             {action: "play", label: qsTr("Play"), icon: "play", accent: true},

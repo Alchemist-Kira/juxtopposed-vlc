@@ -27,6 +27,12 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSet>
+#include <QRandomGenerator>
+#include <QTemporaryFile>
+#include <QSaveFile>
+#include <QDir>
+#include <vlc_playlist.h>
+#include <algorithm>
 
 MediaLib::MediaLib(qt_intf_t *_intf, vlc::playlist::PlaylistController* playlistController, QObject *_parent)
     : QObject( _parent )
@@ -253,6 +259,105 @@ void MediaLib::reload()
 void MediaLib::mediaState(const QUrl& url, bool create, QJSValue callback)
 {
     requestMediaState(url, create ? MediaStateAction::Ensure : MediaStateAction::Read, false, callback);
+}
+
+void MediaLib::playlistState(const MLItemId& id, QJSValue callback)
+{
+    requestPlaylistState(id, false, false, callback);
+}
+
+void MediaLib::setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback)
+{
+    requestPlaylistState(id, true, favorite, callback);
+}
+
+void MediaLib::requestPlaylistState(const MLItemId& id, bool update, bool favorite, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [id, update, favorite](vlc_medialibrary_t* ml, QVariantMap& state) {
+            state = {{"success", false}, {"error", qtr("VLC cannot read this playlist. Select it again.")}};
+            if (id.type != VLC_ML_PARENT_PLAYLIST || id.id <= 0) return;
+            ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_get_playlist(ml, id.id));
+            if (!playlist) return;
+            if (update && vlc_ml_playlist_set_favorite(ml, id.id, favorite) != VLC_SUCCESS) {
+                state["error"] = qtr("VLC cannot save this change. Try again.");
+                return;
+            }
+            state = {{"success", true}, {"error", QString()}, {"id", id.toString()},
+                {"name", qfu(playlist->psz_name)}, {"favorite", update ? favorite : playlist->b_is_favorite},
+                {"count", playlist->i_nb_media}, {"duration", QVariant::fromValue(playlist->i_duration)},
+                {"readOnly", playlist->b_is_read_only}};
+        },
+        [this, callback](quint64, const QVariantMap& state) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(state)});
+        }, "redesign-playlist-state");
+}
+
+void MediaLib::shuffleAndPlay(const MLItemId& id)
+{
+    if (id.type != VLC_ML_PARENT_PLAYLIST || id.id <= 0) return;
+    struct Result { QVector<vlc::playlist::Media> media; };
+    runOnMLThread<Result>(this,
+        [id](vlc_medialibrary_t* ml, Result& result) {
+            convertMLItemToPlaylistMedias(ml, id, {}, result.media);
+            std::shuffle(result.media.begin(), result.media.end(), *QRandomGenerator::global());
+        },
+        [this](quint64, const Result& result) {
+            if (!result.media.isEmpty()) m_playlistController->append(result.media, true);
+        });
+}
+
+void MediaLib::exportPlaylist(const MLItemId& id, const QUrl& file, const QByteArray& format,
+                             QObject* receiver, std::function<void(const QString&)> callback)
+{
+    runOnMLThread<QString>(receiver,
+        [id, file, format, intf = m_intf](vlc_medialibrary_t* ml, QString& error) {
+            error = qtr("VLC cannot export this playlist. Select it again.");
+            if (id.type != VLC_ML_PARENT_PLAYLIST || id.id <= 0 || !file.isLocalFile()) return;
+            if (format != "export-xspf" && format != "export-m3u" && format != "export-m3u8" && format != "export-html") return;
+            ml_unique_ptr<vlc_ml_playlist_t> source(vlc_ml_get_playlist(ml, id.id));
+            if (!source) return;
+            auto query = vlc_ml_query_params_create();
+            ml_unique_ptr<vlc_ml_media_list_t> media(vlc_ml_list_playlist_media(ml, &query, id.id));
+            if (!media) return;
+            std::vector<SharedInputItem> items;
+            std::vector<input_item_t*> pointers;
+            for (const auto& entry : ml_range_iterate<vlc_ml_media_t>(media)) {
+                SharedInputItem item(vlc_ml_get_input_item(ml, entry.i_id), false);
+                if (!item) return;
+                pointers.push_back(item.get());
+                items.push_back(std::move(item));
+            }
+            /* An independent, non-playing queue keeps export separate from the
+             * user's playback queue, selected item and shuffle setting. */
+            auto queue = vlc::wrap_cptr(vlc_playlist_New(VLC_OBJECT(intf),
+                VLC_PLAYLIST_PREPARSING_DISABLED, 1, 0), vlc_playlist_Delete);
+            if (!queue) return;
+            error = qtr("VLC cannot save this file. Select another location.");
+            const QFileInfo destination(file.toLocalFile());
+            QTemporaryFile temporary(destination.dir().filePath(QStringLiteral(".vlc-export-XXXXXX")));
+            if (!temporary.open()) return;
+            temporary.close();
+            vlc_playlist_Lock(queue.get());
+            int status = pointers.empty() ? VLC_SUCCESS :
+                vlc_playlist_Insert(queue.get(), 0, pointers.data(), pointers.size());
+            if (status == VLC_SUCCESS)
+                status = vlc_playlist_Export(queue.get(), qtu(temporary.fileName()), format.constData());
+            vlc_playlist_Unlock(queue.get());
+            if (status != VLC_SUCCESS) return;
+            QFile input(temporary.fileName());
+            QSaveFile output(destination.filePath());
+            if (!input.open(QIODevice::ReadOnly) || !output.open(QIODevice::WriteOnly)) return;
+            while (!input.atEnd()) {
+                const auto bytes = input.read(65536);
+                if (bytes.isEmpty() || output.write(bytes) != bytes.size()) return;
+            }
+            if (input.error() != QFile::NoError || !output.commit()) return;
+            error.clear();
+        },
+        [callback = std::move(callback)](quint64, const QString& error) { callback(error); },
+        "redesign-playlist-export");
 }
 
 void MediaLib::addMediaTracks(const QUrl& url, const QList<QUrl>& tracks, bool subtitles,

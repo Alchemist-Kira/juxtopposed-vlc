@@ -1470,6 +1470,7 @@ if qt6_dep.found()
 
         vlc_tests += {
             'name': 'test_qt_ml_model',
+            'module_depends': ['export'],
             'sources': files(
                 'tests/test_ml_model.cpp',
                 'tests/vlc_stub_modules.cpp',

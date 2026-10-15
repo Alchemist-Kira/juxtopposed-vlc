@@ -31,6 +31,8 @@
 #include <QTest>
 #include <QTemporaryDir>
 #include <QFile>
+#include <QQmlEngine>
+#include <QQmlContext>
 
 struct vlc_medialibrary_t;
 
@@ -164,6 +166,123 @@ private slots:
         m_medialib.reset();
         m_env->mediaGet = {};
         m_env->mediaControl = {};
+        m_env->mediaList = {};
+    }
+
+    void testPlaylistFavoriteAndState()
+    {
+        vlc_ml_event_t event{};
+        event.i_type = VLC_ML_EVENT_FAVORITES_CHANGED;
+        event.favorites_changed = {42, VLC_ML_PARENT_PLAYLIST, true};
+        const MLEvent copied(&event);
+        QCOMPARE(copied.favorites_changed.i_entity_id, 42);
+        QCOMPARE(copied.favorites_changed.i_entity_type, VLC_ML_PARENT_PLAYLIST);
+        QVERIFY(copied.favorites_changed.b_favorite);
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        QVERIFY(qjsEngine(m_medialib.get()) == &engine);
+        bool favorite = false, reject = false;
+        int writes = 0;
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            if (query != VLC_ML_GET_PLAYLIST || va_arg(args, int64_t) != 42) return nullptr;
+            auto* playlist = static_cast<vlc_ml_playlist_t*>(calloc(1, sizeof(vlc_ml_playlist_t)));
+            playlist->i_id = 42;
+            playlist->psz_name = strdup("Saved playlist");
+            playlist->b_is_favorite = favorite;
+            playlist->i_nb_media = 3;
+            return playlist;
+        };
+        m_env->mediaControl = [&](int query, va_list args) {
+            if (query != VLC_ML_PLAYLIST_SET_FAVORITE || va_arg(args, int64_t) != 42) return VLC_EGENERIC;
+            const bool requested = va_arg(args, int);
+            ++writes;
+            if (reject) return VLC_EGENERIC;
+            favorite = requested;
+            return VLC_SUCCESS;
+        };
+        auto request = [&](const MLItemId& id, bool update, bool value) {
+            engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+            auto callback = engine.evaluate("(function(value) { answer = value; })");
+            if (update) m_medialib->setPlaylistFavorite(id, value, callback);
+            else m_medialib->playlistState(id, callback);
+            if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
+                qFatal("Playlist state callback did not finish");
+            return engine.globalObject().property("answer");
+        };
+        const MLItemId id(42, VLC_ML_PARENT_PLAYLIST);
+        auto result = request(id, false, false);
+        QVERIFY(result.property("success").toBool());
+        QCOMPARE(result.property("count").toInt(), 3);
+        QVERIFY(!result.property("favorite").toBool());
+        result = request(id, true, true);
+        QVERIFY(result.property("success").toBool() && result.property("favorite").toBool());
+        QVERIFY(favorite);
+        QVERIFY(request(id, false, false).property("favorite").toBool());
+        reject = true;
+        result = request(id, true, false);
+        QVERIFY(!result.property("success").toBool());
+        QVERIFY(!result.property("error").toString().isEmpty());
+        QVERIFY(favorite);
+        QCOMPARE(writes, 2);
+        QVERIFY(!request(MLItemId(42, VLC_ML_PARENT_UNKNOWN), false, false).property("success").toBool());
+        QVERIFY(!request(MLItemId(99, VLC_ML_PARENT_PLAYLIST), false, false).property("success").toBool());
+    }
+
+    void testSavedPlaylistExport()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            const auto id = va_arg(args, int64_t);
+            if (query == VLC_ML_GET_PLAYLIST && id == 42) {
+                auto* playlist = static_cast<vlc_ml_playlist_t*>(calloc(1, sizeof(vlc_ml_playlist_t)));
+                playlist->i_id = 42;
+                return playlist;
+            }
+            if (query == VLC_ML_GET_INPUT_ITEM && (id == 11 || id == 12))
+                return input_item_New(id == 11 ? "file:///media/first%20%26%20last.mkv" : "https://example.test/video.mp4", "Video");
+            return nullptr;
+        };
+        bool empty = false, reject = false;
+        m_env->mediaList = [&](int query, const vlc_ml_query_params_t*, va_list args) {
+            if (query != VLC_ML_LIST_PLAYLIST_MEDIA || va_arg(args, int64_t) != 42 || reject) return VLC_EGENERIC;
+            auto** output = va_arg(args, vlc_ml_media_list_t**);
+            auto* list = static_cast<vlc_ml_media_list_t*>(calloc(1, sizeof(vlc_ml_media_list_t) + 3 * sizeof(vlc_ml_media_t)));
+            list->i_nb_items = empty ? 0 : 3;
+            list->p_items[0].i_id = list->p_items[2].i_id = 11;
+            list->p_items[1].i_id = 12;
+            *output = list;
+            return VLC_SUCCESS;
+        };
+        auto exportFile = [&](const MLItemId& id, const QString& path, const QByteArray& format) {
+            bool done = false;
+            QString error;
+            m_medialib->exportPlaylist(id, QUrl::fromLocalFile(path), format, this,
+                [&](const QString& result) { error = result; done = true; });
+            if (!QTest::qWaitFor([&] { return done; })) qFatal("Playlist export did not finish");
+            return error;
+        };
+        const MLItemId id(42, VLC_ML_PARENT_PLAYLIST);
+        const QString file = directory.filePath(QStringLiteral("saved & français.m3u8"));
+        QVERIFY(exportFile(id, file, "export-m3u8").isEmpty());
+        QFile output(file); QVERIFY(output.open(QIODevice::ReadOnly));
+        const auto content = output.readAll(); output.close();
+        QVERIFY(content.startsWith("#EXTM3U"));
+        QCOMPARE(content.count("first%20%26%20last.mkv"), 2);
+        QVERIFY(content.indexOf("first%20%26%20last.mkv") < content.indexOf("https://example.test/video.mp4"));
+        QVERIFY(content.lastIndexOf("first%20%26%20last.mkv") > content.indexOf("https://example.test/video.mp4"));
+        reject = true;
+        QVERIFY(!exportFile(id, file, "export-m3u8").isEmpty());
+        QVERIFY(output.open(QIODevice::ReadOnly)); QCOMPARE(output.readAll(), content); output.close();
+        reject = false;
+        QVERIFY(!exportFile(MLItemId(99, VLC_ML_PARENT_PLAYLIST), file, "export-m3u8").isEmpty());
+        QVERIFY(!exportFile(id, file, "unsupported").isEmpty());
+        QVERIFY(!exportFile(id, directory.path(), "export-m3u8").isEmpty());
+        empty = true;
+        QVERIFY(exportFile(id, file, "export-m3u8").isEmpty());
+        QVERIFY(output.open(QIODevice::ReadOnly)); QCOMPARE(output.readAll().trimmed(), QByteArray("#EXTM3U"));
     }
 
     void testAssociatedTracks()

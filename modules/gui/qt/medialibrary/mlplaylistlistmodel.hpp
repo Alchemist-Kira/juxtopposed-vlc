@@ -41,7 +41,8 @@ public:
         PLAYLIST_NB_AUDIO,
         PLAYLIST_NB_VIDEO,
         PLAYLIST_NB_UNKNOWN,
-        PLAYLIST_READ_ONLY
+        PLAYLIST_READ_ONLY,
+        PLAYLIST_FAVORITE
     };
     Q_ENUM(Roles)
 

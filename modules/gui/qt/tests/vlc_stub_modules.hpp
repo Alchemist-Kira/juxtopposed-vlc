@@ -28,6 +28,7 @@
 #include <vlc_common.h>
 #include <vlc_plugin.h>
 #include <vlc_player.h>
+#include <vlc_media_library.h>
 #include <vlc_playlist.h>
 #include <vlc_services_discovery.h>
 #include <vlc_renderer_discovery.h>
@@ -73,6 +74,7 @@ struct VLCTestingEnv
     bool renderDiscoveryProbeEnabled = true;
     std::function<void*(int, va_list)> mediaGet;
     std::function<int(int, va_list)> mediaControl;
+    std::function<int(int, const vlc_ml_query_params_t*, va_list)> mediaList;
 };
 
 #endif /* QT_VLC_STUB_MODULES */

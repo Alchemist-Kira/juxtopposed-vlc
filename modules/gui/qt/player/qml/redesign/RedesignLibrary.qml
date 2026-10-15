@@ -65,7 +65,7 @@ RedesignLibraryView {
         }
         const navigate = ["folder", "section", "home"].includes(target.kind)
         return {target: target, entries: [
-            {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play"},
+            {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play-outline"},
             {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
         ].concat(["section", "home"].includes(target.kind) ? [] : [{action: "queue", label: qsTr("Add to queue"), icon: "queue"}])
             .concat(["file", "media", "collection", "playlist"].includes(target.kind) ? [{action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist"}] : [])
@@ -182,19 +182,19 @@ RedesignLibraryView {
     RedesignLibraryPath { id: folderPath }
     function playlistMenuEntries(target) {
         return [
-            {action: "play", label: qsTr("Play"), icon: "play", accent: true, enabled: target.count > 0},
+            {action: "play", label: qsTr("Play"), icon: "play-outline", accent: true, enabled: target.count > 0},
             {action: "favorite", label: target.favorite ? qsTr("Remove from Favorites") : qsTr("Favorite"), icon: target.favorite ? "favorite-active" : "favorite", accent: true},
             {action: "shuffle", label: qsTr("Shuffle"), icon: "shuffle", accent: true, enabled: target.count > 0},
             {action: "export", label: qsTr("Export Playlist"), icon: "save", accent: true},
             {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true, enabled: target.count > 0},
-            {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles", accent: true, enabled: target.count > 0},
-            {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio", accent: true, enabled: target.count > 0},
-            {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"}
+            {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles-two-tone", accent: true, enabled: target.count > 0},
+            {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio-two-tone", accent: true, enabled: target.count > 0},
+            {action: "properties", label: qsTr("Properties & Metadata"), icon: "info-two-tone", accent: true}
         ]
     }
     function mediaMenuEntries(target) {
         return [
-            {action: "play", label: qsTr("Play"), icon: "play", accent: true},
+            {action: "play", label: qsTr("Play"), icon: "play-outline", accent: true},
             {action: "watched", label: target.played ? qsTr("Mark as Unwatched") : qsTr("Mark as Watched"), icon: "watched", accent: true},
             {action: "favorite", label: target.favorite ? qsTr("Remove from Favorites") : qsTr("Favorite"), icon: target.favorite ? "favorite-active" : "favorite", accent: true},
             {action: "stream", label: qsTr("Stream"), icon: "stream", accent: true},
@@ -203,9 +203,9 @@ RedesignLibraryView {
             {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true}
         ].concat(target.kind === "file" ? [{action: "explorer", label: qsTr("Show in File Explorer"), icon: "folder", accent: true}] : [])
             .concat([{action: "source", label: qsTr("Go to Source"), icon: "source", accent: true},
-                {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles", accent: true},
-                {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio", accent: true},
-                {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"},
+                {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles-two-tone", accent: true},
+                {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio-two-tone", accent: true},
+                {action: "properties", label: qsTr("Properties & Metadata"), icon: "info-two-tone", accent: true},
                 {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"}])
             .concat(playlistEditing && target.playlistKey === playlistKey ? [
                 {action: "earlier", label: qsTr("Move earlier"), icon: "sort", enabled: target.playlistRow > 0 && !playlistBusy},

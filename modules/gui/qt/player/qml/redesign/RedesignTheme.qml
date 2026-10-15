@@ -15,6 +15,7 @@ QtObject {
     readonly property color hover: lightTheme ? "#d5d5d5" : "#292929"
     readonly property color selected: lightTheme ? "#b8b8b8" : "#333333"
     readonly property color accent: accentColor
+    readonly property color menuAccent: accentColor.toString() === "#d37918" ? "#ab6314" : Qt.darker(accentColor, 1.23)
     readonly property color progress: lightTheme ? "#d8ba9a" : "#371f06"
     readonly property color danger: "#d33718"
     readonly property color dangerBackground: lightTheme ? "#f8e2d9" : "#1a1111"

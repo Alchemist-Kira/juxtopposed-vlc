@@ -147,7 +147,7 @@ Item {
         ].concat(root.playlistOpen ? [{action: "edit-playlist", label: root.playlistEditing ? qsTr("Done") : qsTr("Edit playlist"), icon: root.playlistEditing ? "check" : "drag", enabled: !root.playlistBusy}] : [])
             .concat(root.playlistOpen && root.locationPinTarget ? [
                 {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
-                {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"}] : [])
+                {action: "properties", label: qsTr("Properties & Metadata"), icon: "info-two-tone", accent: true}] : [])
             .concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
             .concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
         onActionRequested: action => {

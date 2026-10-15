@@ -20,6 +20,7 @@ T.Button {
     property var iconDetailColor
     property real captionFontSize: 14
     property real captionSpacing: 6
+    property real captionMaximumWidth: Infinity
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     implicitWidth: caption.length > 0 ? Math.max(theme.dp(36), contentItem.implicitWidth + theme.dp(16)) : theme.dp(36)
@@ -61,6 +62,8 @@ T.Button {
         }
         Text {
             visible: root.caption.length > 0
+            width: Math.min(implicitWidth, root.captionMaximumWidth)
+            elide: Text.ElideRight
             anchors.verticalCenter: parent.verticalCenter
             text: root.caption
             color: root.iconName === "cone" ? theme.accent : root.accent ? "#161616" : root.selected ? root.selectedForeground : root.foreground

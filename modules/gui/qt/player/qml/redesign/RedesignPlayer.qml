@@ -105,7 +105,7 @@ FocusScope {
         buffering: Player.buffering
         statistics: Player.playbackStatistics
         mediaTitle: Player.title || Player.name || qsTr("VLC Media Player")
-        locationTitle: view.libraryItem ? view.libraryItem.heading : qsTr("Videos")
+        locationTitle: view.libraryItem ? view.libraryItem.locationTitle : qsTr("Videos")
         timeText: started ? rootPlayer.clockText(Player.time) : "00:00:00"
         lengthText: started ? rootPlayer.clockText(Player.length) : "00:00:00"
         artist: Player.artist
@@ -134,8 +134,11 @@ FocusScope {
         onPreferencesRequested: DialogsProvider.prefsDialog()
         onFullLibraryRequested: { libraryOpen = true; libraryExpanded = !libraryExpanded }
         onMediaFolderRequested: {
-            const library = view.libraryItem ? view.libraryItem.item : null
-            if (library && rootPlayer.mediaFolderUrl) library.openFolder(rootPlayer.mediaFolderUrl, view.hasVideo ? 1 : 2)
+            libraryOpen = true
+            Qt.callLater(() => {
+                const library = view.libraryItem ? view.libraryItem.item : null
+                if (library && rootPlayer.mediaFolderUrl) library.openFolder(rootPlayer.mediaFolderUrl, Player.videoTracks.count > 0 ? 1 : 2)
+            })
         }
         onArtistRequested: {
             const library = view.libraryItem ? view.libraryItem.item : null
@@ -199,6 +202,7 @@ FocusScope {
                     onCategoryRequested: category => category === 3 ? DialogsProvider.openNetDialog() : DialogsProvider.simpleOpenDialog()
                 }
                 property string heading: item ? item.heading : qsTr("Videos")
+                property string locationTitle: item && item.breadcrumbs.length ? item.breadcrumbs[item.breadcrumbs.length - 1].label : qsTr("Videos")
             }
         }
         queueContent: Component {

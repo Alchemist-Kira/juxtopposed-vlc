@@ -132,6 +132,7 @@ TestCase {
         player.libraryExpanded = false
         player.miniPlayerVisible = true
         player.mediaFolderTitle = "Shows"
+        player.canBrowseMedia = true
         player.artist = ""
         findChild(player, "redesignMiniPlayer").userMoved = false
         folderSpy.clear(); artistSpy.clear()
@@ -410,6 +411,24 @@ TestCase {
         tryCompare(trackPicker, "visible", false)
         verify(!subtitles.selected)
         verify(!settings.selected)
+    }
+    function test_headerFolderOpensCurrentMediaFolderWithoutMovingVideo() {
+        const button = findChild(player, "mediaFolderButton")
+        const bounds = videoBounds()
+        compare(button.caption, "Shows")
+        mouseClick(button)
+        verify(player.libraryOpen)
+        compare(folderSpy.count, 1)
+        compare(videoBounds(), bounds)
+        mouseClick(findChild(player, "libraryToggleButton"))
+        verify(!player.libraryOpen)
+        player.mediaFolderTitle = "A folder with a name that is too long to fit in the header of the player"
+        verify(button.width < 300)
+        player.mediaFolderTitle = ""
+        compare(button.caption, player.locationTitle)
+        mouseClick(button)
+        verify(player.libraryOpen)
+        compare(folderSpy.count, 1)
     }
     function test_subtitleButtonClosesOpenPopupAndExpandedSubtitlePanel() {
         const button = findChild(player, "subtitleButton")

@@ -457,10 +457,20 @@ FocusScope {
             }
             Rectangle { visible: !root.presentationOnly && !root.libraryExpanded; Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
             ChromeButton {
+                objectName: "mediaFolderButton"
+                property bool hasMediaFolder: root.started && root.canBrowseMedia && root.mediaFolderTitle.length > 0
                 visible: !root.presentationOnly && !root.libraryExpanded && root.width > theme.dp(700)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "folder"; caption: root.locationTitle; text: qsTr("Browse library")
-                onClicked: root.libraryOpen = !root.libraryOpen
+                iconName: "folder"
+                caption: hasMediaFolder ? root.mediaFolderTitle : root.locationTitle
+                captionMaximumWidth: theme.dp(220)
+                text: hasMediaFolder ? qsTr("Open media folder") : qsTr("Browse library")
+                onClicked: {
+                    if (hasMediaFolder) {
+                        root.libraryOpen = true
+                        root.mediaFolderRequested()
+                    } else root.libraryOpen = !root.libraryOpen
+                }
             }
         }
         Text {

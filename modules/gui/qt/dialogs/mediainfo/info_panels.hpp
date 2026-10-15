@@ -54,6 +54,7 @@ public:
 
     bool isInEditMode();
     void setEditMode( bool );
+    void discardEdits();
 
 private:
     SharedInputItem p_input;

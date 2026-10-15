@@ -207,6 +207,14 @@ MediaInfoDialog::~MediaInfoDialog()
 
 void MediaInfoDialog::showTab( panel i_tab = META_PANEL )
 {
+    if( isMainInputInfo )
+    {
+        const SharedInputItem input { THEMIM->getInput() };
+        if( input )
+            updateAllTabs( input );
+        else
+            clearAllTabs();
+    }
     infoTabW->setCurrentIndex( i_tab );
     show();
 }
@@ -247,16 +255,15 @@ void MediaInfoDialog::clearAllTabs()
 void MediaInfoDialog::close()
 {
     hide();
-
-    /* if dialog is closed, revert editing if not saved */
-    if( MP->isInEditMode() )
-    {
-        MP->setEditMode( false );
-        updateButtons( 0 );
-    }
-
     if( !isMainInputInfo )
         deleteLater();
+}
+
+void MediaInfoDialog::hideEvent( QHideEvent *event )
+{
+    MP->discardEdits();
+    updateButtons( infoTabW->currentIndex() );
+    QVLCFrame::hideEvent( event );
 }
 
 void MediaInfoDialog::updateButtons( int i_tab )

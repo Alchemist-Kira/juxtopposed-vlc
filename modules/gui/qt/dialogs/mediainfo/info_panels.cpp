@@ -247,6 +247,8 @@ void MetaPanel::update( const SharedInputItem& p_item )
     psz_meta = input_item_GetNowPlayingFb( inputItem );
     if( !EMPTY_STR( psz_meta ) )
         nowplaying_text->setText( qfu( psz_meta ) );
+    else
+        nowplaying_text->clear();
     free( psz_meta );
 
 #undef UPDATE_META_INT
@@ -270,30 +272,37 @@ bool MetaPanel::saveMeta()
         return false;
     }
 
-    /* now we read the modified meta data */
-    input_item_SetTitle(  input, qtu( title_text->text() ) );
-    input_item_SetArtist( input, qtu( artist_text->text() ) );
-    input_item_SetAlbum(  input, qtu( collection_text->text() ) );
-    input_item_SetGenre(  input, qtu( genre_text->text() ) );
-    input_item_SetTrackNum(  input, qtu( seqnum_text->text() ) );
-    input_item_SetTrackTotal(  input, qtu( seqtot_text->text() ) );
-    input_item_SetDate(  input, qtu( date_text->text() ) );
-    input_item_SetLanguage(  input, qtu( language_text->text() ) );
-
-    input_item_SetCopyright( input, qtu( copyright_text->text() ) );
-    input_item_SetPublisher( input, qtu( publisher_text->text() ) );
-    input_item_SetDescription( input, qtu( description_text->toPlainText() ) );
-    if( !currentURL.isEmpty() )
-        input_item_SetArtURL( input, qtu( currentURL ) );
-
-    /* Reset the status of the mode. No need to emit any signal because parent
-       is the only caller */
-    b_inEditMode = false;
-    int vlcret = input_item_WriteMeta( VLC_OBJECT(p_intf), input );
+    // Keep the live item unchanged until the file write succeeds.
+    const SharedInputItem edited { input_item_Copy( input ), false };
+    if( !edited )
+    {
+        QMessageBox::warning( this, qtr("Metadata"), qtr("Failed to save metadata") );
+        return false;
+    }
+    const auto applyEdits = [this]( input_item_t *item ) {
+        input_item_SetTitle( item, qtu( title_text->text() ) );
+        input_item_SetArtist( item, qtu( artist_text->text() ) );
+        input_item_SetAlbum( item, qtu( collection_text->text() ) );
+        input_item_SetGenre( item, qtu( genre_text->text() ) );
+        input_item_SetTrackNum( item, qtu( seqnum_text->text() ) );
+        input_item_SetTrackTotal( item, qtu( seqtot_text->text() ) );
+        input_item_SetDate( item, qtu( date_text->text() ) );
+        input_item_SetLanguage( item, qtu( language_text->text() ) );
+        input_item_SetCopyright( item, qtu( copyright_text->text() ) );
+        input_item_SetPublisher( item, qtu( publisher_text->text() ) );
+        input_item_SetDescription( item, qtu( description_text->toPlainText() ) );
+        input_item_SetEncodedBy( item, qtu( encodedby_text->text() ) );
+        if( !currentURL.isEmpty() )
+            input_item_SetArtURL( item, qtu( currentURL ) );
+    };
+    applyEdits( edited.get() );
+    int vlcret = input_item_WriteMeta( VLC_OBJECT(p_intf), edited.get() );
     if (vlcret != VLC_SUCCESS) {
         QMessageBox::warning( this, qtr("Metadata"), qtr("Failed to save metadata") );
         return false;
     }
+    applyEdits( input );
+    b_inEditMode = false;
     art_cover->setItem( p_input );
     /* Refresh the player controller caches for the currently playing item so
      * the Qt UI sees the new artwork and metadata without reopening. */
@@ -312,6 +321,14 @@ void MetaPanel::enterEditMode()
     setEditMode( true );
 }
 
+void MetaPanel::discardEdits()
+{
+    if( !b_inEditMode )
+        return;
+    b_inEditMode = false;
+    update( p_input );
+}
+
 void MetaPanel::setEditMode( bool b_editing )
 {
     b_inEditMode = b_editing;
@@ -323,6 +340,7 @@ void MetaPanel::setEditMode( bool b_editing )
  */
 void MetaPanel::clear()
 {
+    p_input.reset();
     title_text->clear();
     artist_text->clear();
     genre_text->clear();

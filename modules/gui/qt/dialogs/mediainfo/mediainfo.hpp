@@ -52,7 +52,11 @@ public:
     void setInput( input_item_t * );
 #endif
 
+protected:
+    void hideEvent( QHideEvent * ) override;
+
 private:
+    void cancel() override { close(); }
     bool isMainInputInfo;
 
     QTabWidget *infoTabW;

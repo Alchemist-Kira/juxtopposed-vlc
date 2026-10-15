@@ -179,9 +179,9 @@ RedesignLibraryView {
     RedesignLibraryVisits { id: visits; ctx: MainCtx; onEntriesChanged: root.refreshVisits() }
     ListModel { id: frequentFolders }
     ListModel { id: frequentPlaylists }
-    MLRecentVideoModel { id: recentVideo; ml: MediaLib; sortCriteria: root.homeSection === "watching" ? root.mediaSortField : ""; sortOrder: root.homeSection === "watching" ? root.mediaSortOrder : Qt.DescendingOrder; limit: root.homeSectionsVisible ? 3 : 0; searchPattern: root.searchText }
-    MLRecentAudioModel { id: recentAudio; ml: MediaLib; sortCriteria: root.homeSection === "listening" ? root.mediaSortField : ""; sortOrder: root.homeSection === "listening" ? root.mediaSortOrder : Qt.DescendingOrder; limit: root.homeSectionsVisible ? 3 : 0; searchPattern: root.searchText }
-    MLPlayedArtistModel { id: playedArtists; ml: MediaLib; sortCriteria: root.homeSection === "artists" ? root.mediaSortField : ""; sortOrder: root.mediaSortOrder; limit: root.homeSectionsVisible ? 3 : 0; searchPattern: root.searchText }
+    MLRecentVideoModel { id: recentVideo; ml: MediaLib; sortCriteria: root.homeSection === "watching" ? root.mediaSortField : ""; sortOrder: root.homeSection === "watching" ? root.mediaSortOrder : Qt.DescendingOrder; limit: root.homeSectionsVisible ? (root.expanded ? 6 : 3) : 0; searchPattern: root.searchText }
+    MLRecentAudioModel { id: recentAudio; ml: MediaLib; sortCriteria: root.homeSection === "listening" ? root.mediaSortField : ""; sortOrder: root.homeSection === "listening" ? root.mediaSortOrder : Qt.DescendingOrder; limit: root.homeSectionsVisible ? (root.expanded ? 6 : 3) : 0; searchPattern: root.searchText }
+    MLPlayedArtistModel { id: playedArtists; ml: MediaLib; sortCriteria: root.homeSection === "artists" ? root.mediaSortField : ""; sortOrder: root.mediaSortOrder; limit: root.homeSectionsVisible ? (root.expanded ? 6 : 3) : 0; searchPattern: root.searchText }
 
     Loader {
         id: folderLoader

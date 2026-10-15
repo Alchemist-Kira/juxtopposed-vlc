@@ -19,6 +19,7 @@ T.Button {
     property real iconReveal: 0
     property var iconDetailColor
     property real captionFontSize: 14
+    property real captionSpacing: 6
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     implicitWidth: caption.length > 0 ? Math.max(theme.dp(36), contentItem.implicitWidth + theme.dp(16)) : theme.dp(36)
@@ -43,7 +44,7 @@ T.Button {
         implicitHeight: contentRow.implicitHeight
         Row {
         id: contentRow
-        spacing: theme.dp(6)
+        spacing: theme.dp(root.captionSpacing)
         anchors.verticalCenter: parent.verticalCenter
         anchors.horizontalCenter: root.leftAligned ? undefined : parent.horizontalCenter
         anchors.left: root.leftAligned ? parent.left : undefined

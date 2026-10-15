@@ -177,11 +177,13 @@ FocusScope {
                     item.scaleFactor = Qt.binding(() => view.scaleFactor)
                     item.lightTheme = Qt.binding(() => view.lightTheme)
                     item.accentColor = Qt.binding(() => view.accentColor)
+                    item.expanded = Qt.binding(() => view.libraryExpanded)
                     item.fullLibraryRequested.connect(() => { view.libraryExpanded = !view.libraryExpanded })
                 }
                 RedesignLibraryView {
                     anchors.fill: parent
                     visible: !MainCtx.mediaLibraryAvailable
+                    expanded: view.libraryExpanded
                     scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                     emptyText: qsTr("This VLC build has no media library. Open files or a folder to add them to the queue.")
                     onAddRequested: DialogsProvider.simpleOpenDialog()

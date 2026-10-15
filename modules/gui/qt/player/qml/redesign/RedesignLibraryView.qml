@@ -17,6 +17,9 @@ Item {
     property string heading: qsTr("Videos")
     property string searchText: ""
     property bool grid: false
+    property bool expanded: false
+    readonly property bool wideToolbar: expanded && width >= theme.dp(1000)
+    readonly property bool squareCards: category === 2 || showingFolders
     property var settingsContext
     property string sortScope: "media"
     property var sortFields: ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
@@ -96,27 +99,39 @@ Item {
         entries: [
             { action: "add", label: root.addLabel, icon: "add" },
             { action: "settings", label: qsTr("Library settings"), icon: "settings" }
-        ]
-        onActionRequested: action => action === "add" ? root.addMedia() : root.preferencesRequested()
+        ].concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
+        onActionRequested: action => {
+            if (action === "add") root.addMedia()
+            else if (action === "compact") root.fullLibraryRequested()
+            else root.preferencesRequested()
+        }
     }
     RedesignActionMenu {
         id: viewMenu
         objectName: "libraryViewMenu"
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        checkedAction: root.grid ? "grid" : "list"
         entries: [
-            { action: "grid", label: qsTr("Grid View"), icon: "grid", checked: root.grid },
-            { action: "list", label: qsTr("List View"), icon: "list-view", checked: !root.grid }
+            { action: "grid", label: qsTr("Grid View"), icon: "grid" },
+            { action: "list", label: qsTr("List View"), icon: "list-view" }
         ]
         onActionRequested: action => root.grid = action === "grid"
     }
 
     Rectangle {
         id: rail
-        anchors.top: parent.top; anchors.bottom: parent.bottom; width: theme.dp(50)
-        color: theme.background
+        objectName: "libraryNavigation"
+        x: root.expanded ? theme.dp(8) : 0
+        anchors.top: parent.top; anchors.bottom: parent.bottom
+        anchors.topMargin: root.expanded ? theme.dp(8) : 0
+        anchors.bottomMargin: root.expanded ? theme.dp(8) : 0
+        width: root.expanded ? theme.dp(201) : theme.dp(50)
+        radius: root.expanded ? theme.dp(6) : 0
+        color: root.expanded && !root.lightTheme ? "#191919" : theme.background
         Column {
-            anchors.top: parent.top; anchors.topMargin: theme.dp(6)
+            anchors.top: parent.top; anchors.topMargin: theme.dp(root.expanded ? 10 : 6)
             anchors.horizontalCenter: parent.horizontalCenter
+            width: root.expanded ? parent.width - theme.dp(16) : theme.dp(36)
             spacing: theme.dp(10)
             Repeater {
                 model: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files"), qsTr("Add media")]
@@ -127,6 +142,11 @@ Item {
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     iconName: [root.category === 0 ? "home-active" : "home", "videos", "music", "network", "playlist", "history", "add"][index]
                     text: modelData; selected: root.category === index
+                    width: parent.width
+                    caption: root.expanded ? [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network"), qsTr("Playlists"), qsTr("Recent"), qsTr("Add item")][index] : ""
+                    leftAligned: root.expanded
+                    captionSpacing: 10
+                    selectedForeground: root.theme.bright
                     onClicked: index === 6 ? root.addRequested() : root.categoryRequested(index)
                     background: Rectangle {
                         radius: root.theme.dp(6)
@@ -138,88 +158,122 @@ Item {
             }
         }
     }
+    property bool searchOpen: false
+    component LibraryButton: RedesignButton {
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+    }
+    component BackButton: LibraryButton {
+        objectName: "libraryBackButton"
+        iconName: "back"; text: qsTr("Back"); enabled: root.canGoBack
+        onClicked: root.backRequested()
+    }
+    component ForwardButton: LibraryButton {
+        iconName: "forward"; text: qsTr("Forward"); enabled: root.canGoForward
+        onClicked: root.forwardRequested()
+    }
+    component MoreButton: LibraryButton {
+        id: button
+        objectName: "libraryMoreButton"
+        iconName: "more"; text: qsTr("More library actions")
+        onClicked: moreMenu.popup(button, 0, height)
+    }
+    component SortButton: LibraryButton {
+        id: button
+        objectName: "librarySortButton"
+        enabled: sorting.options.length > 0
+        iconName: enabled && (root.sortPopup || sorting.selection.id !== root.defaultSortChoice) ? "sort-active" : "sort"
+        iconDetailColor: root.theme.accent
+        text: qsTr("Sort options")
+        onClicked: root.openSortMenu(button)
+    }
+    component ViewButton: LibraryButton {
+        id: button
+        objectName: "libraryViewButton"
+        iconName: root.grid ? "grid" : "list-view"; text: qsTr("View options")
+        onClicked: viewMenu.popup(button, 0, height)
+    }
+    component ItemCount: Text {
+        text: qsTr("%n item", "%n items", root.itemCount)
+        color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
+    }
+    component Location: Text {
+        objectName: "libraryLocation"
+        text: root.heading; elide: Text.ElideLeft
+        color: root.theme.foreground; font.pixelSize: root.theme.dp(16)
+    }
+    component SearchField: C.TextField {
+        objectName: "librarySearchField"
+        placeholderText: qsTr("Search")
+        text: root.searchText
+        onTextEdited: root.searchText = text
+        color: root.theme.bright
+        font.pixelSize: root.theme.dp(14)
+        implicitHeight: root.theme.dp(34)
+        leftPadding: root.expanded ? root.theme.dp(42) : root.theme.dp(10)
+        background: Rectangle { color: root.theme.field; radius: root.theme.dp(6); border.width: parent.activeFocus ? 1 : 0; border.color: root.theme.accent }
+        RedesignIcon { visible: root.expanded; x: root.theme.dp(12); anchors.verticalCenter: parent.verticalCenter; width: root.theme.dp(24); height: width; name: "search"; color: root.theme.foreground }
+    }
+    Component {
+        id: compactToolbar
+        ColumnLayout {
+            spacing: root.theme.dp(10)
+            RowLayout {
+                Layout.fillWidth: true; Layout.rightMargin: -root.theme.dp(6)
+                spacing: 0
+                BackButton {}
+                ForwardButton {}
+                Location { Layout.fillWidth: true }
+                MoreButton {}
+                LibraryButton {
+                    objectName: "expandLibraryButton"
+                    iconName: "expand"; text: qsTr("Open full library")
+                    onClicked: root.fullLibraryRequested()
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                ItemCount { Layout.fillWidth: true }
+                SortButton {}
+                ViewButton {}
+                LibraryButton {
+                    iconName: "search"; text: qsTr("Search library"); selected: root.searchOpen
+                    onClicked: {
+                        root.searchOpen = !root.searchOpen
+                        if (root.searchOpen) compactSearch.forceActiveFocus()
+                        else root.searchText = ""
+                    }
+                }
+            }
+            SearchField { id: compactSearch; visible: root.searchOpen || root.searchText.length > 0; Layout.fillWidth: true }
+        }
+    }
+    Component {
+        id: expandedToolbar
+        RowLayout {
+            spacing: root.theme.dp(4)
+            BackButton {}
+            ForwardButton {}
+            Location { Layout.fillWidth: true }
+            ItemCount { Layout.rightMargin: root.theme.dp(12) }
+            SortButton {}
+            ViewButton {}
+            SearchField { Layout.preferredWidth: Math.min(root.theme.dp(325), root.width * 0.24); Layout.leftMargin: root.theme.dp(12); Layout.rightMargin: root.theme.dp(12) }
+            LibraryButton { visible: root.showAddRow; iconName: "add"; text: root.addLabel; onClicked: root.addMedia() }
+            MoreButton {}
+        }
+    }
     ColumnLayout {
-        anchors { top: parent.top; bottom: parent.bottom; left: rail.right; right: parent.right; margins: theme.dp(20); topMargin: theme.dp(12) }
-        spacing: theme.dp(10)
-        RowLayout {
+        anchors { top: parent.top; bottom: parent.bottom; left: rail.right; right: parent.right; margins: theme.dp(20); leftMargin: theme.dp(root.expanded ? 28 : 20); topMargin: theme.dp(root.wideToolbar ? 20 : 12) }
+        spacing: theme.dp(root.wideToolbar ? 16 : 10)
+        Loader {
             Layout.fillWidth: true
-            Layout.rightMargin: -theme.dp(6)
-            spacing: 0
-            RedesignButton {
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "back"; text: qsTr("Back"); enabled: root.canGoBack
-                onClicked: root.backRequested()
-            }
-            RedesignButton {
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "forward"; text: qsTr("Forward"); enabled: root.canGoForward
-                onClicked: root.forwardRequested()
-            }
-            Text {
-                Layout.fillWidth: true
-                text: root.heading; elide: Text.ElideLeft
-                color: theme.foreground; font.pixelSize: theme.dp(16)
-            }
-            RedesignButton {
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                id: moreButton
-                objectName: "libraryMoreButton"
-                iconName: "more"; text: qsTr("More library actions")
-                onClicked: moreMenu.popup(moreButton, 0, height)
-            }
-            RedesignButton {
-                objectName: "expandLibraryButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "expand"; text: qsTr("Open full library")
-                onClicked: root.fullLibraryRequested()
-            }
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Text {
-                Layout.fillWidth: true
-                text: qsTr("%n item", "%n items", root.itemCount)
-                color: theme.foreground; font.pixelSize: theme.dp(14)
-            }
-            RedesignButton {
-                id: sortButton
-                objectName: "librarySortButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                visible: !root.homeSectionsVisible && sorting.options.length > 0
-                iconName: root.sortPopup || sorting.selection.id !== root.defaultSortChoice ? "sort-active" : "sort"
-                iconDetailColor: root.theme.accent
-                text: qsTr("Sort options")
-                onClicked: root.openSortMenu(sortButton)
-            }
-            RedesignButton {
-                id: viewButton
-                objectName: "libraryViewButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: root.grid ? "grid" : "list-view"; text: qsTr("View options")
-                onClicked: viewMenu.popup(viewButton, 0, height)
-            }
-            RedesignButton {
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "search"; text: qsTr("Search library"); selected: searchField.visible
-                onClicked: { searchField.visible = !searchField.visible; if (searchField.visible) searchField.forceActiveFocus(); else root.searchText = "" }
-            }
-        }
-        C.TextField {
-            id: searchField
-            objectName: "librarySearchField"
-            Layout.fillWidth: true
-            visible: false
-            placeholderText: qsTr("Search library")
-            text: root.searchText
-            onTextEdited: root.searchText = text
-            color: theme.bright
-            font.pixelSize: theme.dp(14)
-            background: Rectangle { color: theme.field; radius: theme.dp(4); border.color: searchField.activeFocus ? theme.accent : theme.border }
+            Layout.preferredHeight: root.wideToolbar ? theme.dp(34) : implicitHeight
+            sourceComponent: root.wideToolbar ? expandedToolbar : compactToolbar
         }
         Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
         RedesignButton {
             objectName: "libraryAddRow"
-            visible: root.showAddRow
+            visible: root.showAddRow && !root.expanded
             Layout.topMargin: theme.dp(5)
             Layout.fillWidth: true
             implicitHeight: theme.dp(42)
@@ -238,9 +292,11 @@ Item {
         RedesignHomeView {
             objectName: "libraryHomeView"
             visible: root.homeSectionsVisible
-            Layout.topMargin: theme.dp(9)
+            Layout.topMargin: theme.dp(root.expanded ? 25 : 9)
             Layout.fillWidth: true; Layout.fillHeight: true
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            expanded: root.expanded
+            searchText: root.searchText
             sections: root.homeSectionsVisible ? root.homeSections : []
             onActivated: (section, index) => root.homeActivated(section, index)
             onEnqueueRequested: (section, index) => root.homeEnqueueRequested(section, index)
@@ -249,13 +305,14 @@ Item {
         GridView {
             id: mediaView
             objectName: "libraryMediaView"
-            Layout.topMargin: root.showAddRow ? -theme.dp(10) : theme.dp(5)
+            Layout.topMargin: root.expanded ? theme.dp(4) : root.showAddRow ? -theme.dp(10) : theme.dp(5)
+            Layout.rightMargin: root.expanded ? -theme.dp(20) : 0
             Layout.fillWidth: true; Layout.fillHeight: true
             clip: true
             model: root.mediaModel
             visible: !root.homeSectionsVisible && root.itemCount > 0
-            cellWidth: root.grid ? width / Math.max(1, Math.floor(width / theme.dp(130))) : width
-            cellHeight: root.grid ? theme.dp(142) : theme.dp(42)
+            cellWidth: root.expanded ? Math.min(width, theme.dp(root.grid ? root.squareCards ? 220 : 336 : 416)) : root.grid ? width / Math.max(1, Math.floor(width / theme.dp(130))) : width
+            cellHeight: root.grid ? root.expanded ? (cellWidth - theme.dp(20)) * (root.squareCards ? 1 : 9 / 16) + theme.dp(root.category === 2 ? 88 : 78) : theme.dp(142) : theme.dp(42)
             keyNavigationEnabled: true
             currentIndex: -1
             C.ScrollBar.vertical: C.ScrollBar { policy: C.ScrollBar.AsNeeded }
@@ -263,9 +320,11 @@ Item {
                 id: delegate
                 required property int index
                 required property var model
-                width: mediaView.cellWidth
+                width: mediaView.cellWidth - (root.expanded ? theme.dp(20) : 0)
                 height: mediaView.cellHeight
                 readonly property string itemTitle: model.title || model.name || model.fileName || (model.url ? root.nameFromUrl(model.url) : "")
+                readonly property string itemArtist: model.main_artist || ""
+                readonly property string displayTitle: itemTitle + ((!root.expanded || !root.grid) && itemArtist ? " - " + itemArtist : "")
                 readonly property string itemArtwork: model.thumbnail || model.small_cover || model.cover || ""
                 RedesignButton {
                     id: mediaButton
@@ -273,27 +332,38 @@ Item {
                     anchors.fill: parent
                     anchors.margins: 0
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    text: delegate.itemTitle
+                    text: delegate.displayTitle
                     selected: mediaView.currentIndex === delegate.index
                     onClicked: { mediaView.currentIndex = delegate.index; root.activated(delegate.index) }
                     contentItem: Item {
-                        Rectangle {
+                        RedesignLibraryArtwork {
                             id: thumbnail
-                            x: root.grid ? theme.dp(4) : 0
-                            y: root.grid ? theme.dp(4) : (parent.height - height) / 2
-                            width: root.grid ? parent.width - theme.dp(8) : theme.dp(32)
-                            height: root.grid ? theme.dp(90) : theme.dp(32)
-                            radius: theme.dp(2); color: model.fileIsDir || root.showingFolders || model.iconName ? "transparent" : theme.field
-                            RedesignIcon { anchors.centerIn: parent; width: theme.dp(24); height: width; name: model.fileIsDir || root.showingFolders ? "folder" : model.iconName || root.defaultItemIcon; color: theme.foreground }
-                            Image { anchors.fill: parent; source: delegate.itemArtwork; fillMode: Image.PreserveAspectCrop; visible: status === Image.Ready }
+                            objectName: "libraryArtwork" + delegate.index
+                            x: root.grid && !root.expanded ? theme.dp(4) : 0
+                            y: root.grid ? 0 : (parent.height - height) / 2
+                            width: root.grid ? parent.width - (root.expanded ? 0 : theme.dp(8)) : theme.dp(32)
+                            height: root.grid ? root.expanded ? width * (root.squareCards ? 1 : 9 / 16) : theme.dp(90) : theme.dp(32)
+                            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                            cornerRadius: root.grid && root.expanded ? 12 : 2
+                            iconName: model.fileIsDir || root.showingFolders ? "folder" : model.iconName || root.defaultItemIcon
+                            iconSize: root.grid && root.expanded ? 48 : 24
+                            source: delegate.itemArtwork
+                            progress: root.grid ? Number(model.progress || 0) : 0
+                            surroundColor: mediaButton.down || mediaButton.selected ? theme.selected : mediaButton.hovered ? theme.hover : theme.panel
                         }
                         Text {
-                            x: root.grid ? theme.dp(4) : thumbnail.width + theme.dp(10)
-                            y: root.grid ? thumbnail.y + thumbnail.height + theme.dp(6) : (parent.height - height) / 2
-                            width: root.grid ? parent.width - theme.dp(8) : Math.max(0, parent.width - x - theme.dp(26))
-                            text: delegate.itemTitle; elide: Text.ElideRight
+                            x: root.grid ? root.expanded ? 0 : theme.dp(4) : thumbnail.width + theme.dp(10)
+                            y: root.grid ? thumbnail.y + thumbnail.height + theme.dp(root.expanded ? 20 : 6) : (parent.height - height) / 2
+                            width: root.grid ? parent.width - (root.expanded ? 0 : theme.dp(8)) : Math.max(0, parent.width - x - theme.dp(26))
+                            text: delegate.displayTitle; elide: Text.ElideRight
                             color: mediaButton.hovered || mediaButton.visualFocus ? theme.bright : theme.foreground
-                            font.pixelSize: theme.dp(14)
+                            font.pixelSize: theme.dp(root.expanded && root.grid ? 16 : 14)
+                        }
+                        Text {
+                            visible: root.expanded && root.grid && delegate.itemArtist.length > 0
+                            x: 0; y: thumbnail.height + theme.dp(50); width: parent.width
+                            text: delegate.itemArtist; elide: Text.ElideRight
+                            color: theme.foreground; font.pixelSize: theme.dp(16)
                         }
                     }
                     DragHandler {

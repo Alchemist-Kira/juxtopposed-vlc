@@ -25,6 +25,7 @@ TestCase {
         ListElement { title: "Third" }
         ListElement { title: "Fourth" }
     }
+    ListModel { id: emptyHomeItems }
     QtObject {
         id: settings
         property string saved: "[]"
@@ -48,7 +49,11 @@ TestCase {
     SignalSpy { id: addSpy; target: library; signalName: "addRequested" }
     SignalSpy { id: playlistSpy; target: library; signalName: "newPlaylistRequested" }
     SignalSpy { id: settingsSpy; target: library; signalName: "preferencesRequested" }
+    SignalSpy { id: activateSpy; target: library; signalName: "activated" }
+    SignalSpy { id: categorySpy; target: library; signalName: "categoryRequested" }
     function init() {
+        testCase.width = 427
+        testCase.Window.window.width = 427
         testCase.height = 986
         testCase.Window.window.height = 986
         wait(20)
@@ -58,10 +63,14 @@ TestCase {
         homeSpy.clear(); homeQueueSpy.clear(); sectionSpy.clear()
         library.category = 1
         library.grid = false
+        library.expanded = false
+        library.searchText = ""
         library.sortState.saved = ({})
         library.sortFields = ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
         library.canGoBack = false
         addSpy.clear(); playlistSpy.clear(); settingsSpy.clear()
+        activateSpy.clear(); categorySpy.clear()
+        wait(20)
     }
     function cleanup() {
         for (const name of ["libraryMoreMenu", "libraryViewMenu", "librarySortMenu"]) {
@@ -221,6 +230,101 @@ TestCase {
         compare(section.mapToItem(home, 0, 0).y - firstHeader.mapToItem(home, 0, 0).y, 192)
         home.contentY = 500
         verify(home.contentHeight > home.height)
+    }
+    function expandLibrary() {
+        testCase.width = 1920; testCase.height = 1040
+        testCase.Window.window.width = 1920; testCase.Window.window.height = 1040
+        library.expanded = true
+        wait(20)
+    }
+    function test_expandedNavigationAndToolbarKeepSearchOnCollapse() {
+        expandLibrary()
+        const navigation = findChild(library, "libraryNavigation")
+        compare(navigation.width, 201)
+        compare(navigation.x, 8)
+        compare(findChild(library, "libraryCategory2").caption, "Music")
+        mouseClick(findChild(library, "libraryCategory2"))
+        compare(categorySpy.signalArguments[0][0], 2)
+        const search = findChild(library, "librarySearchField")
+        verify(search.visible)
+        mouseClick(search)
+        keyClick(Qt.Key_S)
+        compare(library.searchText, "s")
+        library.expanded = false
+        tryCompare(navigation, "width", 50)
+        const compactSearch = findChild(library, "librarySearchField")
+        tryVerify(() => compactSearch.visible)
+        compare(compactSearch.text, "s")
+        compare(findChild(library, "libraryCategory2").caption, "")
+    }
+    function test_expandedGridAndListMatchReferenceAndActivateSameItem() {
+        expandLibrary()
+        library.grid = true
+        wait(20)
+        const artwork = findChild(library, "libraryArtwork0")
+        tryCompare(artwork, "width", 316)
+        compare(artwork.height, 177.75)
+        compare(artwork.mapToItem(library, 0, 0).x, 237)
+        compare(artwork.mapToItem(library, 0, 0).y, 91)
+        verify(!findChild(library, "libraryAddRow").visible)
+        const second = findChild(library, "libraryMediaItem1")
+        compare(second.mapToItem(library, 0, 0).x, 573)
+        mouseClick(second)
+        compare(activateSpy.signalArguments[0][0], 1)
+        library.grid = false
+        wait(20)
+        tryCompare(second, "height", 42)
+        compare(second.mapToItem(library, 0, 0).x, 653)
+        mouseClick(second)
+        compare(activateSpy.count, 2)
+        compare(activateSpy.signalArguments[1][0], 1)
+        library.expanded = false
+        tryCompare(second, "width", findChild(library, "libraryMediaView").width)
+    }
+    function test_expandedLibraryKeepsControlsInsideNarrowWindow() {
+        testCase.width = 640
+        testCase.Window.window.width = 640
+        library.expanded = true
+        library.grid = true
+        wait(20)
+        const button = findChild(library, "libraryViewButton")
+        const position = button.mapToItem(library, button.width, 0)
+        verify(position.x <= library.width)
+        mouseClick(button)
+        tryCompare(findChild(library, "libraryViewMenu"), "opened", true)
+        mouseClick(findChild(library, "libraryAction_list"))
+        compare(library.grid, false)
+    }
+    function test_expandedHomeUsesMediaCardsAndKeepsMoreThanThreeItems() {
+        expandLibrary()
+        library.category = 0
+        library.homeSections = [
+            {key: "watching", title: "Continue Watching", model: homeItems, icon: "video", emptyText: "None"},
+            {key: "listening", title: "Listen Again", model: homeItems, icon: "music", emptyText: "None"},
+            {key: "folders", title: "Frequently Visited Folders", model: emptyHomeItems, icon: "folder", emptyText: "No folders"}
+        ]
+        const home = findChild(library, "libraryHomeView")
+        wait(20)
+        const video = findChild(home, "homeArtwork_watching_0")
+        const music = findChild(home, "homeArtwork_listening_0")
+        tryCompare(video, "width", 316)
+        compare(video.height, 177.75)
+        compare(music.width, 200)
+        compare(music.height, 200)
+        const first = findChild(home, "homeSection_watching")
+        const next = findChild(home, "homeSection_listening")
+        compare(first.mapToItem(library, 0, 0).y, 112)
+        compare(next.mapToItem(home, 0, 0).y - first.mapToItem(home, 0, 0).y, 337.75)
+        const fourth = findChild(home, "homeItem_watching_3")
+        verify(fourth.visible)
+        mouseClick(fourth)
+        compare(homeSpy.signalArguments[0][1], 3)
+        fourth.libraryView.enqueueRequested(fourth.mediaIndex)
+        compare(homeQueueSpy.signalArguments[0][1], 3)
+        compare(findChild(home, "homeItem_listening_0").text, "First")
+        library.expanded = false
+        tryCompare(fourth, "visible", false)
+        compare(findChild(home, "homeItem_listening_0").text, "First - Artist")
     }
     function test_homeDragFollowsPointerToQueue() {
         library.category = 0

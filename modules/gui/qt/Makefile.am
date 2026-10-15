@@ -1233,6 +1233,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignIcon.qml \
 	player/qml/redesign/RedesignSvg.qml \
 	player/qml/redesign/RedesignActionMenu.qml \
+	player/qml/redesign/RedesignLibraryArtwork.qml \
 	player/qml/redesign/RedesignLibraryView.qml \
 	player/qml/redesign/RedesignHomeView.qml \
 	player/qml/redesign/RedesignLibraryDrag.qml \

@@ -44,7 +44,7 @@ MLMediaStore::MLMediaStore(MediaLib *ml, QObject *parent)
     );
 }
 
-void MLMediaStore::insert(const QString &mrl)
+void MLMediaStore::insert(const QString &mrl, bool createMissing)
 {
     struct Ctx
     {
@@ -52,21 +52,27 @@ void MLMediaStore::insert(const QString &mrl)
     };
 
     m_files.insert(mrl);
+    const auto revision = ++m_revisions[mrl];
 
     m_ml->runOnMLThread<Ctx>(this,
     //ML thread
-    [mrl](vlc_medialibrary_t *ml, Ctx &ctx)
+    [mrl, createMissing](vlc_medialibrary_t *ml, Ctx &ctx)
     {
         ml_unique_ptr<vlc_ml_media_t> media {vlc_ml_get_media_by_mrl(ml, qtu(mrl))};
+        if (!media && createMissing)
+            media.reset(vlc_ml_new_external_media(ml, qtu(mrl)));
         if (media)
             ctx.media = MLMedia(media.get());
     },
     //UI thread
-    [this, mrl](quint64, Ctx &ctx)
+    [this, mrl, revision, generation = m_generation](quint64, Ctx &ctx)
     {
-        if (!ctx.media.valid())
-            return; // failed to get media, TODO: notify??
-
+        if (generation != m_generation || m_revisions.value(mrl) != revision)
+            return;
+        if (!ctx.media.valid()) {
+            emit updated(mrl, ctx.media);
+            return;
+        }
         setMedia(mrl, std::move(ctx.media));
     });
 }
@@ -80,11 +86,15 @@ void MLMediaStore::remove(const MLItemId &id)
 
     m_mrls.remove(id);
     m_files.remove(mrl);
+    m_revisions.remove(mrl);
 }
 
 void MLMediaStore::clear()
 {
+    ++m_generation;
+    m_files.clear();
     m_mrls.clear();
+    m_revisions.clear();
 }
 
 void MLMediaStore::onVlcMlEvent(void *data, const vlc_ml_event_t *event)
@@ -93,8 +103,13 @@ void MLMediaStore::onVlcMlEvent(void *data, const vlc_ml_event_t *event)
     switch (event->i_type)
     {
     case VLC_ML_EVENT_MEDIA_ADDED:
+    case VLC_ML_EVENT_MEDIA_THUMBNAIL_GENERATED:
     {
-        const vlc_ml_media_t *media = event->creation.p_media;
+        if (event->i_type == VLC_ML_EVENT_MEDIA_THUMBNAIL_GENERATED
+                && event->media_thumbnail_generated.i_size != VLC_ML_THUMBNAIL_SMALL)
+            break;
+        const vlc_ml_media_t *media = event->i_type == VLC_ML_EVENT_MEDIA_ADDED
+                ? event->creation.p_media : event->media_thumbnail_generated.p_media;
         QString mrl;
         for (const vlc_ml_file_t &file : ml_range_iterate<vlc_ml_file_t>(media->p_files))
         {
@@ -154,6 +169,9 @@ void MLMediaStore::update(const MLItemId &id)
         MLMedia media;
     };
 
+    const auto mrl = m_mrls[id];
+    const auto revision = ++m_revisions[mrl];
+
     m_ml->runOnMLThread<Ctx>(this,
     //ML thread
     [id](vlc_medialibrary_t *ml, Ctx &ctx)
@@ -162,12 +180,11 @@ void MLMediaStore::update(const MLItemId &id)
         ctx.media = media ? MLMedia(media.get()) : MLMedia {};
     },
     //UI thread
-    [this, id](quint64, Ctx &ctx)
+    [this, id, mrl, revision, generation = m_generation](quint64, Ctx &ctx)
     {
-        if (!m_mrls.contains(id))
+        if (generation != m_generation || m_revisions.value(mrl) != revision || !m_mrls.contains(id))
             return; // item was removed?
 
-        const QString mrl = m_mrls[id];
         emit updated(mrl, ctx.media);
     }, UPDATE_QUEUE); // update in a single queue in case there
                       // is a overlap of same media update
@@ -178,6 +195,8 @@ void MLMediaStore::setMedia(const QString &mrl, MLMedia media)
     if (!m_files.contains(mrl))
         return;
 
+    // A newer event must win over a lookup started before that event.
+    ++m_revisions[mrl];
     m_mrls[media.getId()] = mrl;
     emit updated(mrl, media);
 }

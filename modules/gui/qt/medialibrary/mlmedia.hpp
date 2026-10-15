@@ -109,7 +109,7 @@ protected:
     struct MLThumbnail
     {
         QString mrl;
-        vlc_ml_thumbnail_status_t status;
+        vlc_ml_thumbnail_status_t status = VLC_ML_THUMBNAIL_STATUS_MISSING;
     };
 
     QString m_title;
@@ -117,12 +117,12 @@ protected:
     MLThumbnail m_smallThumbnail;
     MLThumbnail m_bannerThumbnail;
     VLCDuration m_duration;
-    qreal m_progress;
-    int m_playCount;
+    qreal m_progress = 0;
+    int m_playCount = 0;
     unsigned m_trackNumber = 0;
     unsigned m_discNumber = 0;
     QUrl m_mrl;
-    vlc_ml_media_type_t m_type;
-    bool m_isFavorite;
+    vlc_ml_media_type_t m_type = VLC_ML_MEDIA_TYPE_UNKNOWN;
+    bool m_isFavorite = false;
     QDateTime m_lastPlayedDate;
 };

@@ -195,6 +195,7 @@ libqt_plugin_la_SOURCES = \
 	medialibrary/medialib.hpp \
 	medialibrary/mlmediastore.cpp \
 	medialibrary/mlmediastore.hpp \
+	medialibrary/mlfileartwork.cpp medialibrary/mlfileartwork.hpp \
 	medialibrary/mlalbum.cpp \
 	medialibrary/mlalbum.hpp \
 	medialibrary/mlalbummodel.cpp \
@@ -467,6 +468,7 @@ nodist_libqt_plugin_la_SOURCES = \
 	maininterface/video_window_handler.moc.cpp \
 	medialibrary/medialib.moc.cpp \
 	medialibrary/mlmediastore.moc.cpp \
+	medialibrary/mlfileartwork.moc.cpp \
 	medialibrary/mlalbummodel.moc.cpp \
 	medialibrary/mlaudiomodel.moc.cpp \
 	medialibrary/mlartistmodel.moc.cpp \

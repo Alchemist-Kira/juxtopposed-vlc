@@ -13,6 +13,7 @@ RedesignLibraryView {
     property var selectedCollection
     property string homeSection: ""
     property string currentFolder: ""
+    onCurrentFolderChanged: folderArtwork.clear()
     property var registeredFolders: []
     readonly property var folderTrail: folderPath.trail(currentFolder, registeredFolders)
     property string musicSection: ""
@@ -133,7 +134,7 @@ RedesignLibraryView {
             const url = folder.get(index, "fileUrl")
             if (!url) return null
             const isDirectory = folder.get(index, "fileIsDir")
-            return pinTarget(isDirectory ? "folder" : "file", folderPath.location(url), folder.get(index, "fileName"), category, isDirectory ? "folder" : category === 2 ? "music" : "video", "", "")
+            return pinTarget(isDirectory ? "folder" : "file", folderPath.location(url), folder.get(index, "fileName"), category, isDirectory ? "folder" : category === 2 ? "music" : "video", isDirectory ? "" : folder.get(index, "thumbnail"), "")
         }
         if (category === 1) {
             const item = folderEntries.get(index)
@@ -313,6 +314,17 @@ RedesignLibraryView {
     MLRecentAudioModel { id: recentAudio; ml: MediaLib; sortCriteria: root.homeSection === "listening" ? root.mediaSortField : ""; sortOrder: root.homeSection === "listening" ? root.mediaSortOrder : Qt.DescendingOrder; limit: root.homeSectionsVisible ? (root.expanded ? 6 : 3) : 0; searchPattern: root.searchText }
     MLPlayedArtistModel { id: playedArtists; ml: MediaLib; sortCriteria: root.homeSection === "artists" ? root.mediaSortField : ""; sortOrder: root.mediaSortOrder; limit: root.homeSectionsVisible ? (root.expanded ? 6 : 3) : 0; searchPattern: root.searchText }
 
+    MLFileArtwork {
+        id: folderArtwork
+        ctx: MainCtx
+        onArtworkChanged: (url, artwork) => {
+            if (folderLoader.item) folderLoader.item.setArtwork(url, artwork)
+            if (!artwork) return
+            const key = folderPath.location(url)
+            const pin = pinStore.entries.find(entry => entry.kind === "file" && entry.key === key)
+            if (pin && pin.artwork !== artwork) pinStore.add(Object.assign({}, pin, {artwork: artwork}))
+        }
+    }
     Loader {
         id: folderLoader
         active: root.currentFolder.length > 0
@@ -322,6 +334,7 @@ RedesignLibraryView {
             sortReversed: root.descending
             sortCriteria: root.sortField
             searchPattern: root.searchText
+            onArtworkRequested: url => folderArtwork.request(url, root.category !== 2)
         }
     }
     ListModel {

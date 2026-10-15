@@ -42,7 +42,7 @@ public:
     MLMediaStore(MediaLib *ml, QObject *parent = nullptr);
     ~MLMediaStore();
 
-    void insert(const QString &mrl);
+    void insert(const QString &mrl, bool createMissing = false);
     void remove(const MLItemId &id);
     void clear();
 
@@ -71,4 +71,6 @@ private:
     // MLEvent doesn't provide media mrl
     // maintain a map for faster handling of ml events
     QHash<MLItemId, QString> m_mrls;
+    QHash<QString, quint64> m_revisions;
+    quint64 m_generation = 0;
 };

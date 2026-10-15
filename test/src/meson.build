@@ -1,3 +1,12 @@
+if host_system == 'windows'
+    vlc_tests += {
+        'name' : 'test_src_misc_win32_pipe',
+        'sources' : files('misc/win32_pipe.c'),
+        'suite' : ['src', 'test_src'],
+        'link_with' : [libvlccore],
+    }
+endif
+
 vlc_tests += {
     'name' : 'test_src_config_chain',
     'sources' : files('config/chain.c'),

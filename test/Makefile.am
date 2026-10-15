@@ -176,6 +176,12 @@ AM_LDFLAGS = -no-install $(LDFLAGS_vlc)
 LIBVLCCORE = -L../src/ -lvlccore
 LIBVLC = -L../lib -lvlc
 
+if HAVE_WIN32
+check_PROGRAMS += test_src_misc_win32_pipe
+test_src_misc_win32_pipe_SOURCES = src/misc/win32_pipe.c
+test_src_misc_win32_pipe_LDADD = $(LIBVLCCORE)
+endif
+
 test_libvlc_core_SOURCES = libvlc/core.c
 test_libvlc_core_LDADD = $(LIBVLC)
 test_libvlc_downloader_SOURCES = libvlc/downloader.c

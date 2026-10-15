@@ -123,6 +123,8 @@ protected:
             key.track = id % 3 == 1 ? 10 : id % 3 == 2 ? 2 : 1;
             key.disc = id <= 6 ? 2 : 1;
             key.played = id % 2;
+            key.artist = id % 2 ? "Z artist" : "A artist";
+            key.album = id <= 6 ? "Z album" : "A album";
             return key;
         }
 
@@ -173,6 +175,10 @@ private slots:
         QTest::newRow("uri-descending") << QString("uri") << Qt::DescendingOrder << QList<int>{1,2,3,4,5,6,7,8,9,10,11,12};
         QTest::newRow("unwatched-first") << QString("played") << Qt::AscendingOrder << QList<int>{2,4,6,8,10,12,1,3,5,7,9,11};
         QTest::newRow("watched-first") << QString("played") << Qt::DescendingOrder << QList<int>{1,3,5,7,9,11,2,4,6,8,10,12};
+        QTest::newRow("artist-ascending") << QString("main_artist") << Qt::AscendingOrder << QList<int>{2,4,6,8,10,12,1,3,5,7,9,11};
+        QTest::newRow("artist-descending") << QString("main_artist") << Qt::DescendingOrder << QList<int>{1,3,5,7,9,11,2,4,6,8,10,12};
+        QTest::newRow("album-ascending") << QString("album_title") << Qt::AscendingOrder << QList<int>{7,8,9,10,11,12,1,2,3,4,5,6};
+        QTest::newRow("album-descending") << QString("album_title") << Qt::DescendingOrder << QList<int>{1,2,3,4,5,6,7,8,9,10,11,12};
     }
 
     void testSortKeysUseLoadedMediaMetadata_data()

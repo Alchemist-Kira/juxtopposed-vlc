@@ -27,6 +27,7 @@
 #include "mlbasemodel.hpp"
 #include "mlhelper.hpp"
 #include "mlmedia.hpp"
+#include "mlaudio.hpp"
 
 #include "util/base_model_p.hpp"
 #include "util/asynctask.hpp"
@@ -612,6 +613,7 @@ void MLBaseModel::deleteRangeInCache(int first, int last)
 namespace {
 // The database API has no URI/disc sort, and its TrackNumber criterion counts
 // tracks in a collection rather than sorting songs by their track number.
+// Artist/album joins in older dependencies can also return extra media columns.
 // Build the order on the ML worker, then keep only IDs for the normal lazy cache.
 class CustomSortOp final : public MLListCacheLoader::MLOp
 {
@@ -661,6 +663,8 @@ private:
         std::stable_sort(entries.begin(), entries.end(), [this](const Entry& a, const Entry& b) {
             int primary = 0;
             if (m_sortName == "uri") primary = QString::compare(a.key.uri, b.key.uri);
+            else if (m_sortName == "main_artist") primary = QString::compare(a.key.artist, b.key.artist, Qt::CaseInsensitive);
+            else if (m_sortName == "album_title") primary = QString::compare(a.key.album, b.key.album, Qt::CaseInsensitive);
             else {
                 const auto av = m_sortName == "played" ? unsigned(a.key.played)
                     : m_sortName == "track_number" ? a.key.track : a.key.disc;
@@ -850,19 +854,47 @@ MLListCacheLoader::MLOp::MLOp(MLItemId parentId, QString searchPattern, vlc_ml_s
 
 bool MLListCacheLoader::MLOp::isCustomSort(const QString& name)
 {
-    return name == "uri" || name == "track_number" || name == "disc_number" || name == "played";
+    return name == "uri" || name == "track_number" || name == "disc_number" || name == "played"
+        || name == "main_artist" || name == "album_title";
 }
 
 MLListCacheLoader::MLOp::SortKey MLListCacheLoader::MLOp::sortKey(
     vlc_medialibrary_t* ml, const MLItem& item) const
 {
     SortKey result;
+    const auto albumNames = [ml, &result](int64_t artistId, int64_t albumId) {
+        if (artistId > 0) {
+            ml_unique_ptr<vlc_ml_artist_t> artist{vlc_ml_get_artist(ml, artistId)};
+            if (artist) result.artist = qfu(artist->psz_name);
+        }
+        if (albumId > 0) {
+            ml_unique_ptr<vlc_ml_album_t> album{vlc_ml_get_album(ml, albumId)};
+            if (album) result.album = qfu(album->psz_title);
+        }
+    };
+    if (item.getId().type == VLC_ML_PARENT_ALBUM) {
+        ml_unique_ptr<vlc_ml_album_t> album{vlc_ml_get_album(ml, item.getId().id)};
+        if (album) {
+            result.title = qfu(album->psz_title);
+            result.artist = qfu(album->psz_artist);
+        }
+        return result;
+    }
     if (const auto media = dynamic_cast<const MLMedia*>(&item)) {
         result.title = media->title();
         result.uri = media->mrl();
         result.played = media->playCount() > 0;
         result.track = media->trackNumber();
         result.disc = media->discNumber();
+        if (const auto audio = dynamic_cast<const MLAudio*>(media)) {
+            result.artist = audio->getArtist();
+            result.album = audio->getAlbumTitle();
+        } else if (media->type() == VLC_ML_MEDIA_TYPE_AUDIO
+            && (m_sortName == "main_artist" || m_sortName == "album_title")) {
+            ml_unique_ptr<vlc_ml_media_t> data{vlc_ml_get_media(ml, item.getId().id)};
+            if (data && data->i_subtype == VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK)
+                albumNames(data->album_track.i_artist_id, data->album_track.i_album_id);
+        }
         return result;
     }
     if (item.getId().type != VLC_ML_PARENT_UNKNOWN) return result;
@@ -875,6 +907,8 @@ MLListCacheLoader::MLOp::SortKey MLListCacheLoader::MLOp::sortKey(
     if (media->i_subtype == VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK) {
         result.track = std::max(0, media->album_track.i_track_nb);
         result.disc = std::max(0, media->album_track.i_disc_nb);
+        if (m_sortName == "main_artist" || m_sortName == "album_title")
+            albumNames(media->album_track.i_artist_id, media->album_track.i_album_id);
     }
     return result;
 }

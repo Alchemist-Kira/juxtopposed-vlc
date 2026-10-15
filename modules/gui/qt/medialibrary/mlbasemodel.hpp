@@ -192,6 +192,8 @@ public:
         struct SortKey {
             QString title;
             QString uri;
+            QString artist;
+            QString album;
             unsigned track = 0;
             unsigned disc = 0;
             bool played = false;

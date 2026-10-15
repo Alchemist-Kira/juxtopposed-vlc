@@ -49,16 +49,6 @@ MLItemId MLAudio::getAlbumId() const {
 }
 
 
-QString MLAudio::getAlbumTitle() const
-{
-    return m_albumTitle;
-}
-
-QString MLAudio::getArtist() const
-{
-    return m_artist;
-}
-
 unsigned int MLAudio::getTrackNumber() const
 {
     return m_trackNumber;

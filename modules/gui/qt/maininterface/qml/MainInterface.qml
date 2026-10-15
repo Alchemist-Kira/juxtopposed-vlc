@@ -59,12 +59,19 @@ Item {
         target: DialogsProvider
         function onShowRedesignNetworkStreams() { if (networkStreams.item) networkStreams.item.begin() }
         function onShowRedesignAddToPlaylist(media, type) { if (addToPlaylist.item) addToPlaylist.item.beginSelection(media, type) }
+        function onShowRedesignTrackAssignments(target, subtitles) { if (trackAssignments.item) trackAssignments.item.begin(target, subtitles) }
     }
     Loader {
         id: addToPlaylist
         anchors.fill: parent
         active: MainCtx.mediaLibraryAvailable
         source: active ? "qrc:///qt/qml/VLC/Player/RedesignAddToPlaylist.qml" : ""
+    }
+    Loader {
+        id: trackAssignments
+        anchors.fill: parent
+        active: MainCtx.mediaLibraryAvailable
+        source: active ? "qrc:///qt/qml/VLC/Player/RedesignTrackAssignments.qml" : ""
     }
 
     property bool _extendedFrameVisible: MainCtx.windowSuportExtendedFrame

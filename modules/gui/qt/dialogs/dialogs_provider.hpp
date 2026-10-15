@@ -269,6 +269,10 @@ public slots:
     void loadAudioFile();
     void loadVideoFile();
     void addMediaTracksDialog(const QUrl& media, bool subtitles);
+    void showTrackAssignments(const QVariantMap& target, bool subtitles);
+    QStringList selectTrackFiles(bool subtitles, const QUrl& folder);
+    QUrl selectTrackFolder(const QUrl& folder);
+    bool applySavedTrackAssignments(const QVariantList& saved, bool subtitles);
     void exportLibraryPlaylistDialog(const MLItemId& playlist, const QString& name);
 
     void quit();
@@ -317,6 +321,7 @@ signals:
     void showRedesignPreferencesPage(const QString& page);
     void showRedesignNetworkStreams();
     void showRedesignAddToPlaylist(const QVariantList& media, int type);
+    void showRedesignTrackAssignments(const QVariantMap& target, bool subtitles);
 #ifdef UPDATE_CHECK
     void updateDialogVisibleChanged();
 #endif

@@ -67,6 +67,8 @@ RedesignLibraryView {
             {action: "open", label: qsTr("Open"), icon: "folder", accent: true},
             {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true},
             {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"},
+            {action: "subtitle-tracks", label: qsTr("Edit Subtitle Tracks"), icon: "subtitles", accent: true},
+            {action: "audio-tracks", label: qsTr("Edit Audio Tracks"), icon: "audio", accent: true},
             {action: "resync", label: qsTr("Resync"), icon: "refresh-two-tone", accent: true},
             {action: "folder-info", label: qsTr("Info"), icon: "info-two-tone", accent: true}
         ]}
@@ -109,9 +111,11 @@ RedesignLibraryView {
         } else if (action === "stream" || action === "convert") DialogsProvider.streamingDialog([Qt.resolvedUrl(target.url || target.key)], action === "convert")
         else if (action === "subtitle-tracks" || action === "audio-tracks") {
             if (target.kind === "playlist") {
-                const request = playlistTracks.begin(target.key, action === "subtitle-tracks")
-                if (request >= 0) MediaLib.playlistTrackTargets(MediaLib.deserializeMlItemIdFromString(target.key), result => playlistTracks.load(request, result))
-            } else DialogsProvider.addMediaTracksDialog(Qt.resolvedUrl(target.url || target.key), action === "subtitle-tracks")
+                DialogsProvider.showTrackAssignments({scope: "playlist", key: target.key}, action === "subtitle-tracks")
+            } else if (target.kind === "folder") {
+                DialogsProvider.showTrackAssignments({scope: "folder", folder: target.key}, action === "subtitle-tracks")
+            } else DialogsProvider.showTrackAssignments({scope: "file", url: target.url || target.key,
+                key: target.playlistKey || ""}, action === "subtitle-tracks")
         }
         else if (action === "explorer") Qt.openUrlExternally(folderPath.parentFolder(target.url || target.key))
         else if (action === "source") {
@@ -487,15 +491,6 @@ RedesignLibraryView {
         onSaveRequested: (key, name, cover, request) => MediaLib.savePlaylistDetails(
             MediaLib.deserializeMlItemIdFromString(key), name, cover, result => playlistProperties.finish(request, result))
     }
-    RedesignPlaylistTrackTarget {
-        id: playlistTracks
-        parent: C.Overlay.overlay
-        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-        onTracksRequested: (media, subtitles) => {
-            DialogsProvider.addMediaTracksDialog(media, subtitles)
-            playlistTracks.finish()
-        }
-    }
     RedesignFolderModel {
         id: folderTools
         onInfoReady: (serial, info) => folderInfo.load(serial, info)
@@ -507,7 +502,7 @@ RedesignLibraryView {
     }
     Binding {
         target: MainCtx; property: "useGlobalShortcuts"; value: false
-        when: playlistProperties.visible || playlistTracks.visible || folderInfo.visible; restoreMode: Binding.RestoreBindingOrValue
+        when: playlistProperties.visible || folderInfo.visible; restoreMode: Binding.RestoreBindingOrValue
     }
     Connections {
         target: MediaLib

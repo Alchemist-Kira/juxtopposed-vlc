@@ -60,6 +60,7 @@
 #include "util/redesign_widget_theme.hpp"
 
 #include <vlc_url.h>
+#include <vlc_playlist.h>
 
 #include <QEvent>
 #include <QApplication>
@@ -1174,11 +1175,19 @@ void  DialogsProvider::loadMediaFile( const es_format_category_e category, const
 
 void DialogsProvider::loadSubtitlesFile()
 {
+    if (p_intf->p_mi && p_intf->p_mi->hasMediaLibrary()) {
+        showTrackAssignments({{"scope", "file"}}, true);
+        return;
+    }
     loadMediaFile( SPU_ES, EXT_FILTER_SUBTITLE, qtr( "Open subtitles..." ) );
 }
 
 void DialogsProvider::loadAudioFile()
 {
+    if (p_intf->p_mi && p_intf->p_mi->hasMediaLibrary()) {
+        showTrackAssignments({{"scope", "file"}}, false);
+        return;
+    }
     loadMediaFile( AUDIO_ES, EXT_FILTER_AUDIO, qtr( "Open audio..." ) );
 }
 
@@ -1189,32 +1198,93 @@ void DialogsProvider::loadVideoFile()
 
 void DialogsProvider::addMediaTracksDialog(const QUrl& media, bool subtitles)
 {
+    showTrackAssignments({{"scope", "file"}, {"url", media}}, subtitles);
+}
+
+void DialogsProvider::showTrackAssignments(const QVariantMap& target, bool subtitles)
+{
     if (!p_intf->p_mi || !p_intf->p_mi->hasMediaLibrary()) return;
-    const auto files = showSimpleOpen(subtitles ? qtr("Add Subtitle Tracks") : qtr("Add Audio Tracks"),
-                                     subtitles ? EXT_FILTER_SUBTITLE : EXT_FILTER_AUDIO,
-                                     media.isLocalFile() ? media.adjusted(QUrl::RemoveFilename) : QUrl());
-    QList<QUrl> tracks;
-    for (const auto& file : files) tracks.push_back(QUrl(file));
-    if (tracks.isEmpty()) return;
-    p_intf->p_mi->getMediaLibrary()->addMediaTracks(media, tracks, subtitles, this,
-        [this, media, subtitles](const MediaLib::TrackAddition& result) {
-            const SharedInputItem current { THEMIM->getInput() };
-            if (current) {
-                char *uri = input_item_GetURI(current.get());
-                const bool same = uri && QUrl(qfu(uri)) == media;
-                free(uri);
-                if (same) {
-                    for (const auto& track : result.added)
-                        THEMIM->AddAssociatedMedia(subtitles ? SPU_ES : AUDIO_ES,
-                            track.toString(QUrl::FullyEncoded), false, false, false);
-                }
-            }
-            if (!result.error.isEmpty()) {
-                const auto message = result.error + (result.added.isEmpty() ? QString() :
-                    QStringLiteral("\n\n") + qtr("VLC kept the tracks that it saved. Select the other files again."));
-                messageDialog(message, qtr("VLC Media Player"));
-            }
-        });
+    QVariantMap context = target;
+    if (context.value("url").toUrl().isEmpty()) {
+        const SharedInputItem current { THEMIM->getInput() };
+        if (current) {
+            char *uri = input_item_GetURI(current.get());
+            context.insert("url", QUrl(qfu(uri))); free(uri);
+        }
+    }
+    QVariantList queue;
+    vlc_playlist_Lock(p_intf->p_playlist);
+    for (size_t i = 0; i < vlc_playlist_Count(p_intf->p_playlist); ++i) {
+        auto* item = vlc_playlist_item_GetMedia(vlc_playlist_Get(p_intf->p_playlist, i));
+        char *uri = input_item_GetURI(item);
+        if (uri) queue.append(QUrl(qfu(uri)));
+        free(uri);
+    }
+    vlc_playlist_Unlock(p_intf->p_playlist);
+    context.insert("urls", queue);
+    emit showRedesignTrackAssignments(context, subtitles);
+}
+
+QStringList DialogsProvider::selectTrackFiles(bool subtitles, const QUrl& folder)
+{
+    return showSimpleOpen(subtitles ? qtr("Select subtitle files") : qtr("Select audio files"),
+        subtitles ? EXT_FILTER_SUBTITLE : EXT_FILTER_AUDIO, folder);
+}
+
+QUrl DialogsProvider::selectTrackFolder(const QUrl& folder)
+{
+    return QFileDialog::getExistingDirectoryUrl(nullptr, qtr("Select track folder"),
+        folder, QFileDialog::ShowDirsOnly, {QStringLiteral("file")});
+}
+
+bool DialogsProvider::applySavedTrackAssignments(const QVariantList& saved, bool subtitles)
+{
+    struct Change { QSet<QUrl> removed; QList<QUrl> added; };
+    QHash<QUrl, Change> changes;
+    for (const auto& value : saved) {
+        const auto row = value.toMap();
+        QSet<QUrl> before, after;
+        for (const auto& track : row.value("baseline").toList()) before.insert(track.toUrl());
+        for (const auto& track : row.value("tracks").toList()) after.insert(track.toUrl());
+        Change change {before - after, {}};
+        for (const auto& value : row.value("tracks").toList()) {
+            const auto track = value.toUrl();
+            if (!before.contains(track) && !change.added.contains(track)) change.added.append(track);
+        }
+        changes.insert(row.value("url").toUrl(), change);
+    }
+    auto removeSavedSlaves = [&](input_item_t* item) {
+        char *uri = input_item_GetURI(item);
+        const auto change = changes.constFind(QUrl(qfu(uri))); free(uri);
+        if (change == changes.cend() || change->removed.isEmpty()) return;
+        vlc_mutex_lock(&item->lock);
+        int count = 0;
+        for (int i = 0; i < item->i_slaves; ++i) {
+            auto* slave = item->pp_slaves[i];
+            if (change->removed.contains(QUrl(qfu(slave->psz_uri))))
+                input_item_slave_Delete(slave);
+            else item->pp_slaves[count++] = slave;
+        }
+        item->i_slaves = count;
+        vlc_mutex_unlock(&item->lock);
+    };
+    // Remove only explicitly unassigned tracks from queued item caches. This
+    // preserves unrelated additions and applies the edit on their next play.
+    vlc_playlist_Lock(p_intf->p_playlist);
+    for (size_t i = 0; i < vlc_playlist_Count(p_intf->p_playlist); ++i)
+        removeSavedSlaves(vlc_playlist_item_GetMedia(vlc_playlist_Get(p_intf->p_playlist, i)));
+    vlc_playlist_Unlock(p_intf->p_playlist);
+    const SharedInputItem current { THEMIM->getInput() };
+    if (!current) return false;
+    char *uri = input_item_GetURI(current.get());
+    const auto change = changes.constFind(QUrl(qfu(uri))); free(uri);
+    if (change == changes.cend()) return false;
+    removeSavedSlaves(current.get());
+    for (const auto& track : change->added)
+        THEMIM->AddAssociatedMedia(subtitles ? SPU_ES : AUDIO_ES,
+            track.toString(QUrl::FullyEncoded), false, false, false);
+    // The running demuxer has no remove-associated-media operation.
+    return !change->removed.isEmpty();
 }
 
 

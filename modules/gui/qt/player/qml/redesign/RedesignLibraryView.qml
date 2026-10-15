@@ -149,6 +149,8 @@ Item {
                 {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
                 {action: "properties", label: qsTr("Properties & Metadata"), icon: "info-two-tone", accent: true}] : [])
             .concat(root.locationPinTarget && root.locationPinTarget.kind === "folder" ? [
+                {action: "subtitle-tracks", label: qsTr("Edit Subtitle Tracks"), icon: "subtitles", accent: true},
+                {action: "audio-tracks", label: qsTr("Edit Audio Tracks"), icon: "audio", accent: true},
                 {action: "resync", label: qsTr("Resync"), icon: "refresh-two-tone", accent: true},
                 {action: "folder-info", label: qsTr("Info"), icon: "info-two-tone", accent: true}] : [])
             .concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
@@ -158,7 +160,7 @@ Item {
             if (action === "add") root.addMedia()
             else if (action === "edit-playlist") root.playlistEditRequested()
             else if (action === "pin") root.pinLocationRequested()
-            else if (["add-playlist", "properties", "resync", "folder-info"].includes(action)) root.itemActionRequested(root.locationPinTarget, action)
+            else if (["add-playlist", "properties", "resync", "folder-info", "subtitle-tracks", "audio-tracks"].includes(action)) root.itemActionRequested(root.locationPinTarget, action)
             else if (action === "compact") root.fullLibraryRequested()
             else root.preferencesRequested()
         }

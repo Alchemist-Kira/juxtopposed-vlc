@@ -1,0 +1,117 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+import QtQuick
+import QtTest
+import "../player/qml/redesign"
+
+TestCase {
+    id: testCase
+    name: "JuxtopposedTrackAssignments"
+    width: 1280; height: 900; visible: true; when: windowShown
+    readonly property string first: "file:///show/Show_S01E01.mkv"
+    readonly property string second: "file:///show/Show_S01E02.mkv"
+    readonly property string english: "file:///show/Show_S01E01.en.srt"
+    readonly property string spanish: "file:///show/Show_S01E02.es.srt"
+    RedesignTrackAssignmentDialog { id: dialog; parent: testCase }
+    SignalSpy { id: saveSpy; target: dialog; signalName: "saveRequested" }
+    SignalSpy { id: rowSpy; target: dialog; signalName: "rowsRequested" }
+    function rows() { return [{url:first,name:"Show_S01E01.mkv",baseline:[]},{url:second,name:"Show_S01E02.mkv",baseline:[]}] }
+    function load(items) {
+        dialog.loadRows(dialog.requestId,{success:true,rows:items})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"},{url:spanish,name:"Spanish.srt"}]})
+    }
+    function init() {
+        width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
+        dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
+        saveSpy.clear(); rowSpy.clear()
+        verify(dialog.begin({scope:"file",url:first,urls:[first,second]},true))
+        tryCompare(dialog,"opened",true); load([rows()[0]])
+    }
+    function cleanup() { dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false) }
+    function test_selectAndCancelDoesNotSave() {
+        compare(dialog.changedRows.length,0)
+        const list=findChild(dialog,"trackAssignmentList")
+        tryVerify(() => !!list.itemAtIndex(0))
+        mouseClick(list.itemAtIndex(0))
+        compare(dialog.tracks(first)[0],english)
+        compare(dialog.changedRows.length,1)
+        mouseClick(findChild(dialog,"trackAssignmentCancel")); tryCompare(dialog,"visible",false)
+        compare(saveSpy.count,0); compare(Object.keys(dialog.drafts).length,0)
+    }
+    function test_scopeSwitchPreservesAllDrafts() {
+        dialog.toggle(first,english)
+        dialog.selectScope(1); load(rows()); dialog.applyMatches({[second]:[spanish]})
+        compare(dialog.tracks(first)[0],english); compare(dialog.tracks(second)[0],spanish)
+        dialog.selectScope(0); load([rows()[0]])
+        compare(dialog.changedRows.length,2)
+        dialog.submit(); compare(saveSpy.count,1)
+        compare(saveSpy.signalArguments[0][0].length,2)
+        dialog.submit(); compare(saveSpy.count,1)
+        keyClick(Qt.Key_Escape); verify(dialog.visible)
+        dialog.finish(dialog.requestId,{success:true,saved:saveSpy.signalArguments[0][0]})
+        tryCompare(dialog,"visible",false)
+    }
+    function test_partialSaveUpdatesBaselineAndRetryKeepsDraft() {
+        dialog.selectScope(1); load(rows())
+        dialog.applyMatches({[first]:[english],[second]:[spanish]})
+        dialog.submit(); compare(saveSpy.count,1)
+        dialog.finish(dialog.requestId,{success:false,error:"Second file failed",saved:[{url:first,tracks:[english]}]})
+        verify(dialog.visible); compare(dialog.changedRows.length,1)
+        compare(dialog.changedRows[0].url,second)
+        verify(dialog.errorMessage.includes("Second file failed"))
+        dialog.submit(); compare(saveSpy.count,2)
+        compare(saveSpy.signalArguments[1][0].length,1)
+        compare(saveSpy.signalArguments[1][0][0].url,second)
+    }
+    function test_initialFolderKeepsScopeLabel() {
+        dialog.reject(); tryCompare(dialog,"visible",false)
+        verify(dialog.begin({scope:"folder",folder:"file:///show/",urls:[]},true))
+        tryCompare(dialog,"opened",true); load(rows())
+        compare(dialog.scopeIndex,1)
+        tryCompare(findChild(dialog,"trackAssignmentScope"),"currentIndex",1)
+        dialog.selectScope(0); load([rows()[0]])
+        tryCompare(findChild(dialog,"trackAssignmentScope"),"currentIndex",0)
+    }
+    function test_removalAndManualChoiceSurviveMatching() {
+        dialog.selectScope(1)
+        dialog.loadRows(dialog.requestId,{success:true,rows:[{url:first,name:"Episode.mkv",baseline:[english]}]})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"}]})
+        dialog.setTracks(first,[])
+        dialog.applyMatches({[first]:[english]})
+        compare(dialog.tracks(first).length,0); compare(dialog.changedRows.length,1)
+        dialog.submit(); compare(saveSpy.signalArguments[0][0][0].tracks.length,0)
+    }
+    function test_staleAndClosedResultsAreIgnored() {
+        const old=dialog.requestId, oldSources=dialog.sourceRequestId
+        dialog.selectScope(1)
+        dialog.loadRows(old,{success:true,rows:[rows()[1]]})
+        verify(dialog.loading)
+        dialog.reject()
+        dialog.loadRows(dialog.requestId,{success:true,rows:rows()})
+        dialog.loadSources(oldSources,{success:true,sources:[{url:english,name:"English"}]})
+        compare(dialog.rows.length,0); compare(dialog.sources.length,0)
+        compare(saveSpy.count,0)
+    }
+    function test_savedEmptySelectionIsNotUndoneByMatching() {
+        dialog.selectScope(1)
+        dialog.loadRows(dialog.requestId,{success:true,rows:[{url:first,name:"Episode.mkv",baseline:[],explicitSelection:true}]})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"}]})
+        dialog.applyMatches({[first]:[english]})
+        compare(dialog.tracks(first).length,0); compare(dialog.changedRows.length,0)
+        dialog.applyMatches({[first]:[english]},true)
+        compare(dialog.tracks(first)[0],english); compare(dialog.changedRows.length,1)
+    }
+    function test_scaledAndSmallWindow_data() {
+        return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]
+    }
+    function test_scaledAndSmallWindow(data) {
+        width=data.w; height=data.h; dialog.scaleFactor=data.scale; dialog.lightTheme=!!data.light
+        wait(50)
+        verify(dialog.x>=0 && dialog.y>=0)
+        verify(dialog.x+dialog.width<=width && dialog.y+dialog.height<=height)
+        for (const name of ["trackAssignmentClose","trackAssignmentScope","trackAssignmentFiles","trackAssignmentFolder","trackAssignmentCancel","trackAssignmentSave"]) {
+            const button=findChild(dialog,name), point=button.mapToItem(testCase,0,0)
+            verify(point.x>=0 && point.y>=0,name)
+            verify(point.x+button.width<=width && point.y+button.height<=height,name)
+        }
+    }
+}

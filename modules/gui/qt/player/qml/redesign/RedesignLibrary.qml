@@ -78,6 +78,11 @@ RedesignLibraryView {
         visits.record("folders", currentFolder, selectedName)
         searchText = ""
     }
+    function openArtistByName(name) {
+        remember()
+        category = 2; homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined
+        currentFolder = ""; folderTrail = []; musicSection = "Artists"; selectedName = ""; searchText = name
+    }
     onCategoryRequested: newCategory => { remember(); homeSection = ""; selectedPlaylist = undefined; selectedCollection = undefined; currentFolder = ""; folderTrail = []; musicSection = ""; selectedName = ""; searchText = ""; category = newCategory }
     onBackRequested: { const stack = backStack.slice(); const state = stack.pop(); forwardStack = [...forwardStack, snapshot()]; backStack = stack; restore(state) }
     onForwardRequested: { const stack = forwardStack.slice(); const state = stack.pop(); backStack = [...backStack, snapshot()]; forwardStack = stack; restore(state) }

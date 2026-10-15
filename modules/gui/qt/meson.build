@@ -793,6 +793,8 @@ qml_modules += {
        'player/qml/redesign/RedesignPlayerView.qml',
        'player/qml/redesign/RedesignQueue.qml',
        'player/qml/redesign/RedesignSeekBar.qml',
+       'player/qml/redesign/RedesignPlayerSeekBar.qml',
+       'player/qml/redesign/RedesignMiniPlayer.qml',
        'player/qml/redesign/RedesignTheme.qml',
        'player/qml/redesign/RedesignVolume.qml',
        'player/qml/PlaybackSpeed.qml',

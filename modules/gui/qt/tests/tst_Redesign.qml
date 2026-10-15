@@ -35,7 +35,7 @@ TestCase {
         // VideoSurface accepts hover events in the integrated player.
         videoContent: MouseArea {
             hoverEnabled: true
-            acceptedButtons: Qt.NoButton
+            acceptedButtons: testCase.consumeVideoHover ? Qt.AllButtons : Qt.NoButton
             enabled: testCase.consumeVideoHover
         }
         libraryContent: RedesignLibraryView {
@@ -82,6 +82,9 @@ TestCase {
     SignalSpy { id: audioSpy; target: player; signalName: "audioTracksRequested" }
     SignalSpy { id: subtitleSpy; target: player; signalName: "subtitleTracksRequested" }
     SignalSpy { id: toolbarVisibilitySpy; target: player; signalName: "bottomVisibleChanged" }
+    SignalSpy { id: folderSpy; target: player; signalName: "mediaFolderRequested" }
+    SignalSpy { id: artistSpy; target: player; signalName: "artistRequested" }
+    SignalSpy { id: compactCategorySpy; target: player.libraryItem; signalName: "categoryRequested" }
 
     RedesignSettingSlider {
         id: settingControl
@@ -123,6 +126,12 @@ TestCase {
         trackPreferencesSpy.clear()
         player.libraryOpen = false
         player.libraryExpanded = false
+        player.miniPlayerVisible = true
+        player.mediaFolderTitle = "Shows"
+        player.artist = ""
+        findChild(player, "redesignMiniPlayer").userMoved = false
+        folderSpy.clear(); artistSpy.clear()
+        compactCategorySpy.clear()
         player.queueOpen = false
         player.settingsPage = ""
         player.playing = false
@@ -570,10 +579,99 @@ TestCase {
         player.libraryExpanded = true
         wait(20)
         const viewport = findChild(player, "redesignViewport")
-        verify(viewport.width > 0 && viewport.width <= 320)
-        verify(viewport.height === 180)
+        compare(viewport.width, 371)
+        compare(viewport.height, 371 * 9 / 16)
         player.libraryOpen = false
         verify(!player.libraryExpanded)
+    }
+    function openMiniPlayer() {
+        player.libraryOpen = true
+        player.libraryExpanded = true
+        wait(20)
+        const mini = findChild(player, "redesignMiniPlayer")
+        verify(mini.visible)
+        return mini
+    }
+    function test_miniPlayerMatchesCardAndKeepsOneVideoSurface() {
+        consumeVideoHover = true
+        const video = player.videoItem
+        const mini = openMiniPlayer()
+        compare(mini.width, 391)
+        compare(mini.height, 339)
+        verify(!findChild(player, "redesignToolbar").visible)
+        compare(findChild(player, "redesignLibraryPanel").height, player.height - 40)
+        compare(findChild(player, "redesignViewport").parent, mini.videoArea)
+        compare(player.videoItem, video)
+        player.artist = "Artist"
+        mouseClick(findChild(mini, "miniPlayerFolderButton"))
+        compare(folderSpy.count, 1)
+        mouseClick(findChild(mini, "miniPlayerArtistButton"))
+        compare(artistSpy.count, 1)
+        mouseClick(findChild(mini, "miniPlayerQueueButton"))
+        compare(player.queueOpen, true)
+        player.queueOpen = false
+        mouseMove(mini, 160, 80)
+        const play = findChild(mini, "miniPlayerPlayButton")
+        tryVerify(() => play.visible)
+        mouseClick(play)
+        compare(player.playing, true)
+        mouseClick(findChild(mini, "miniPlayerCloseButton"))
+        verify(!mini.visible)
+        verify(player.started && player.playing)
+        player.libraryExpanded = false
+        player.libraryExpanded = true
+        wait(20)
+        mouseMove(mini, 160, 80)
+        mouseClick(findChild(mini, "miniPlayerExpandButton"))
+        compare(player.libraryOpen, false)
+        compare(player.libraryExpanded, false)
+        compare(player.videoItem, video)
+        compare(findChild(player, "redesignViewport").parent, player)
+        // Reparenting the surface must leave the compact library above video.
+        player.libraryOpen = true
+        wait(220)
+        mouseClick(findChild(player.libraryItem, "libraryCategory2"))
+        compare(compactCategorySpy.count, 1)
+    }
+    function test_miniPlayerDragMovesVideoWithoutSeekingAndStaysInBounds() {
+        const mini = openMiniPlayer()
+        const before = player.position
+        const title = findChild(mini, "miniPlayerTitle")
+        mousePress(title, 90, title.height / 2)
+        mouseMove(testCase, 400, 350, 50)
+        mouseMove(testCase, 60, 100, 50)
+        mouseRelease(testCase, 60, 100)
+        verify(mini.userMoved)
+        verify(mini.x < player.width / 2)
+        verify(mini.x >= 6 && mini.y >= 46)
+        compare(player.position, before)
+        compare(seekSpy.count, 0)
+        const viewport = findChild(player, "redesignViewport")
+        compare(viewport.mapToItem(player, 0, 0).x, mini.x + 10)
+        compare(viewport.mapToItem(player, 0, 0).y, mini.y + 10)
+        testCase.width = 640; testCase.height = 360
+        wait(20)
+        verify(mini.x + mini.width <= player.width - 6)
+        verify(mini.y + mini.height <= player.height - 6)
+    }
+    function test_miniSeekHoldsUntilReleaseAndCancelsWhenClosed() {
+        const mini = openMiniPlayer()
+        mini.draggedX = 100; mini.draggedY = 100; mini.userMoved = true
+        const seek = findChild(mini, "miniPlayerSeekBar")
+        mousePress(seek, seek.width / 2, seek.height / 2)
+        compare(seekEventOrder[0], "start")
+        mouseMove(seek, seek.width + 100, seek.height / 2, 40)
+        compare(player.position, 1)
+        compare(seekDragFinishSpy.count, 0)
+        mouseRelease(seek, seek.width + 100, seek.height / 2)
+        tryCompare(seekDragFinishSpy, "count", 1)
+        compare(seekDragFinishSpy.signalArguments[0][1], true)
+        seekDragFinishSpy.clear()
+        mousePress(seek, seek.width / 2, seek.height / 2)
+        player.libraryExpanded = false
+        tryCompare(seekDragFinishSpy, "count", 1)
+        compare(seekDragFinishSpy.signalArguments[0][1], false)
+        mouseRelease(testCase, 600, 400)
     }
     function test_audioAfterVideoRestoresHiddenControls() {
         player.fullscreen = true

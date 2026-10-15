@@ -44,6 +44,10 @@ FocusScope {
     property bool showWindowButtons: true
     property bool libraryOpen: false
     property bool libraryExpanded: false
+    property bool miniPlayerVisible: true
+    property string mediaFolderTitle: ""
+    property bool canBrowseMedia: true
+    onLibraryExpandedChanged: if (libraryExpanded) miniPlayerVisible = true
     property bool libraryInitialized: false
     onLibraryOpenChanged: if (!libraryOpen) libraryExpanded = false
     property bool queueOpen: false
@@ -64,7 +68,7 @@ FocusScope {
     property real seekPreviewImagePosition: -1
     signal seekPreviewRequested(real position)
     signal seekPreviewEnded()
-    function refreshSeekPreview() { seek.refreshPreview() }
+    function refreshSeekPreview() { if (libraryExpanded) miniPlayer.refreshPreview(); else seek.refreshPreview() }
     property Component titleBarDragContent
     property Component videoContent
     property Component libraryContent
@@ -73,10 +77,10 @@ FocusScope {
     readonly property alias videoItem: videoLoader.item
     readonly property alias libraryItem: libraryLoader.item
     readonly property alias settingsItem: settingsLoader.item
-    readonly property real positionSliderY: bottomEdge.y + toolbar.y + seek.y
+    readonly property real positionSliderY: libraryExpanded ? miniPlayer.y + miniPlayer.seekY : bottomEdge.y + toolbar.y + seek.y
     readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable
     readonly property bool topVisible: !minimalView && (!fullscreen || headerHover.hovered || header.activeFocus || revealTimer.running || controlsLocked)
-    readonly property bool bottomVisible: !minimalView && (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
+    readonly property bool bottomVisible: !minimalView && !libraryExpanded && (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
 
     signal togglePlayback()
@@ -97,6 +101,8 @@ FocusScope {
     signal openRequested()
     signal preferencesRequested()
     signal fullLibraryRequested()
+    signal mediaFolderRequested()
+    signal artistRequested()
     signal resumeRequested(bool resume)
     signal keyPressed(var event)
 
@@ -146,29 +152,31 @@ FocusScope {
     // surface geometry or trigger a new video size/aspect ratio.
     Item {
         id: viewport
+        parent: root.libraryExpanded ? miniPlayer.videoArea : root
         objectName: "redesignViewport"
-        z: root.libraryExpanded ? 1 : 0
+        visible: !root.libraryExpanded || (root.started && miniPlayer.visible)
+        z: 0
         anchors {
             top: parent.top
             bottom: parent.bottom
             left: parent.left
             right: parent.right
-            topMargin: root.minimalView ? 0 : root.libraryExpanded ? root.height - theme.dp(54 + 180 + 24) : root.fullscreen ? 0 : theme.dp(40)
-            bottomMargin: root.minimalView ? 0 : root.libraryExpanded ? theme.dp(54 + 24) : root.fullscreen ? 0 : theme.dp(54)
-            leftMargin: root.minimalView ? 0 : root.libraryExpanded ? Math.max(theme.dp(50), root.width - theme.dp(344)) : root.fullscreen ? 0 : theme.dp(10)
-            rightMargin: root.minimalView ? 0 : root.libraryExpanded ? theme.dp(24) : root.fullscreen ? 0 : theme.dp(10)
+            topMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(40)
+            bottomMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(54)
+            leftMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
+            rightMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
         }
         Rectangle { anchors.fill: parent; color: "black"; radius: theme.dp(10) }
         Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
         Rectangle {
             // The outer border leaves a rounded opening over the native video layer.
             anchors.fill: parent
-            anchors.margins: -theme.dp(10)
+            anchors.margins: -theme.dp(root.libraryExpanded ? 5 : 10)
             color: "transparent"
-            radius: theme.dp(20)
-            border.width: theme.dp(10)
+            radius: theme.dp(root.libraryExpanded ? 10 : 20)
+            border.width: theme.dp(root.libraryExpanded ? 5 : 10)
             border.color: theme.background
-            visible: !root.fullscreen && !root.minimalView
+            visible: root.libraryExpanded || (!root.fullscreen && !root.minimalView)
         }
 
 
@@ -220,6 +228,7 @@ FocusScope {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.max(0, viewport.width - theme.dp(40))
                 text: root.mediaTitle
+                visible: !root.libraryExpanded
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 color: "#e5e5e5"
@@ -228,6 +237,7 @@ FocusScope {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: root.artist; color: "#8f8f8f"; font.pixelSize: theme.dp(14)
+                visible: !root.libraryExpanded
             }
         }
         Text {
@@ -283,13 +293,14 @@ FocusScope {
     Rectangle {
         id: library
         objectName: "redesignLibraryPanel"
+        z: 1
         property real reveal: root.libraryOpen ? 1 : 0
         Behavior on reveal { NumberAnimation { duration: 150; easing.type: Easing.OutExpo } }
         visible: reveal > 0
         width: root.libraryExpanded ? root.width : Math.min(theme.dp(427), root.width * (root.width < theme.dp(900) ? 0.48 : 0.38))
         x: (reveal - 1) * width
         anchors.top: parent.top; anchors.bottom: parent.bottom
-        anchors.topMargin: header.height; anchors.bottomMargin: toolbar.height
+        anchors.topMargin: header.height; anchors.bottomMargin: root.libraryExpanded ? 0 : toolbar.height
         color: theme.panel
         clip: true
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
@@ -302,10 +313,38 @@ FocusScope {
             onLoaded: root.libraryInitialized = true
         }
     }
+    RedesignMiniPlayer {
+        id: miniPlayer
+        objectName: "redesignMiniPlayer"
+        z: 2
+        visible: root.libraryExpanded && root.libraryOpen && root.started && root.miniPlayerVisible
+        width: Math.max(theme.dp(160), Math.min(theme.dp(391), root.width - theme.dp(12), (root.height - theme.dp(182)) * 16 / 9 + theme.dp(20)))
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        playing: root.playing; started: root.started; seekable: root.seekable; pausable: root.pausable
+        hasPrevious: root.hasPrevious; hasNext: root.hasNext; hasVideo: root.hasVideo
+        position: root.position; mediaTitle: root.mediaTitle; folderTitle: root.mediaFolderTitle; artist: root.artist
+        canBrowseMedia: root.canBrowseMedia
+        previewEnabled: root.showSeekPreview && !root.presentationOnly
+        previewImage: root.seekPreviewImage; previewImagePosition: root.seekPreviewImagePosition
+        timeForPosition: root.timeForPosition
+        onTogglePlayback: root.togglePlayback()
+        onPrevious: root.previous()
+        onNext: root.next()
+        onSeekRequested: position => root.seekRequested(position)
+        onSeekDragStarted: root.seekDragStarted()
+        onSeekDragFinished: (position, commit) => root.seekDragFinished(position, commit)
+        onPreviewRequested: position => root.seekPreviewRequested(position)
+        onPreviewEnded: root.seekPreviewEnded()
+        onOpenPlayerRequested: { root.libraryExpanded = false; root.libraryOpen = false }
+        onCloseRequested: root.miniPlayerVisible = false
+        onQueueRequested: { root.settingsPage = ""; root.queueOpen = !root.queueOpen }
+        onFolderRequested: root.mediaFolderRequested()
+        onArtistRequested: root.artistRequested()
+    }
     Rectangle {
         id: rightPanel
         objectName: "redesignRightPanel"
-        z: 2
+        z: 3
         visible: root.queueOpen || root.settingsPage.length > 0
         width: Math.min(theme.dp(400), root.width * 0.48)
         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.right: parent.right
@@ -333,11 +372,13 @@ FocusScope {
     // must not hide the toolbar and then expose the detector again.
     Item {
         id: headerEdge
+        z: 4
         anchors.top: parent.top; width: parent.width; height: theme.dp(48)
         HoverHandler { id: headerHover; blocking: false }
     }
     Item {
         id: bottomEdge
+        z: 4
         anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(64)
         HoverHandler { id: bottomHover; blocking: false }
     }
@@ -372,16 +413,16 @@ FocusScope {
             ChromeButton {
                 implicitWidth: theme.dp(46)
                 objectName: "libraryToggleButton"
-                visible: !root.presentationOnly
+                visible: !root.presentationOnly && !root.libraryExpanded
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "sidebar"; text: root.libraryOpen ? qsTr("Hide library") : qsTr("Show library")
                 iconReveal: library.reveal
                 Accessible.checkable: true; Accessible.checked: root.libraryOpen
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
-            Rectangle { visible: !root.presentationOnly; Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
+            Rectangle { visible: !root.presentationOnly && !root.libraryExpanded; Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
             ChromeButton {
-                visible: !root.presentationOnly && root.width > theme.dp(700)
+                visible: !root.presentationOnly && !root.libraryExpanded && root.width > theme.dp(700)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; caption: root.locationTitle; text: qsTr("Browse library")
                 onClicked: root.libraryOpen = !root.libraryOpen
@@ -467,42 +508,15 @@ FocusScope {
                 text: root.timeText
                 color: theme.foreground; font.pixelSize: theme.dp(14)
             }
-            RedesignSeekBar {
+            RedesignPlayerSeekBar {
                 focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 id: seek
                 objectName: "seekBar"
-                property bool dragActive: false
-                property real dragPosition: 0
-                property bool pointerCancelled: false
-                function beginDrag() {
-                    finishDragTimer.stop()
-                    if (dragActive) return
-                    dragActive = true
-                    dragPosition = value
-                    root.seekDragStarted()
-                }
-                function finishDrag(commit) {
-                    if (!dragActive) return
-                    dragActive = false
-                    root.seekDragFinished(dragPosition, commit && enabled && visible && root.started)
-                }
-                onPressedChanged: {
-                    if (pressed && dragPointer.active) beginDrag()
-                    else if (!pressed && dragActive) finishDragTimer.restart()
-                }
-                // Slider commits a track click after clearing pressed.
-                Timer { id: finishDragTimer; interval: 0; onTriggered: seek.finishDrag(!seek.pointerCancelled) }
-                PointHandler {
-                    id: dragPointer
-                    acceptedButtons: Qt.LeftButton
-                    onActiveChanged: {
-                        if (active) {
-                            seek.pointerCancelled = false
-                            if (seek.pressed) seek.beginDrag()
-                        } else if (!seek.pressed && seek.dragActive) finishDragTimer.restart()
-                    }
-                    onCanceled: { seek.pointerCancelled = true; finishDragTimer.stop(); seek.finishDrag(false) }
-                }
+                mediaStarted: root.started
+                playerPosition: root.position
+                onDragStarted: root.seekDragStarted()
+                onDragFinished: (position, commit) => root.seekDragFinished(position, commit)
+                onSeekRequested: position => root.seekRequested(position)
                 Layout.fillWidth: true
                 Layout.minimumWidth: theme.dp(40)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -515,17 +529,10 @@ FocusScope {
                 timelineCues: root.subtitleTimelineCues
                 timelineState: root.subtitleTimelineState
                 durationSeconds: root.durationSeconds
-                playbackPosition: root.position
                 subtitleDelayMS: root.subtitleDelayMS
                 onSubtitleDelayRequested: milliseconds => root.subtitleDelayRequested(milliseconds)
                 onPreviewRequested: position => root.seekPreviewRequested(position)
                 onPreviewEnded: root.seekPreviewEnded()
-                Binding on value {
-                    when: !seek.pressed && !seek.dragActive
-                    value: { seek.from; seek.to; return root.position }
-                    restoreMode: Binding.RestoreBindingOrValue
-                }
-                onMoved: { dragPosition = value; root.seekRequested(value) }
             }
             Text {
                 visible: root.width > theme.dp(800)

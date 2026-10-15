@@ -15,6 +15,14 @@ FocusScope {
     readonly property real positionSliderY: view.positionSliderY
     readonly property ColorContext colorContext: ColorContext { palette: VLCStyle.palette; colorSet: ColorContext.Window }
     property bool resumeAvailable: false
+    readonly property string mediaFolderUrl: {
+        const url = String(Player.url || "")
+        return url.startsWith("file:") ? url.substring(0, url.lastIndexOf("/") + 1) : ""
+    }
+    function mediaFolderName() {
+        const name = mediaFolderUrl.replace(/\/+$/, "").split("/").pop()
+        try { return decodeURIComponent(name) } catch (error) { return name }
+    }
     Connections {
         target: Player
         function onInputChanged() { view.refreshSeekPreview() }
@@ -101,6 +109,8 @@ FocusScope {
         timeText: started ? rootPlayer.clockText(Player.time) : "00:00:00"
         lengthText: started ? rootPlayer.clockText(Player.length) : "00:00:00"
         artist: Player.artist
+        mediaFolderTitle: rootPlayer.mediaFolderName()
+        canBrowseMedia: MainCtx.mediaLibraryAvailable
         artwork: Player.artwork
         resumeAvailable: rootPlayer.resumeAvailable
         timeForPosition: value => rootPlayer.clockText(Player.length.scale(value))
@@ -123,6 +133,14 @@ FocusScope {
         onOpenRequested: DialogsProvider.simpleOpenDialog()
         onPreferencesRequested: DialogsProvider.prefsDialog()
         onFullLibraryRequested: { libraryOpen = true; libraryExpanded = !libraryExpanded }
+        onMediaFolderRequested: {
+            const library = view.libraryItem ? view.libraryItem.item : null
+            if (library && rootPlayer.mediaFolderUrl) library.openFolder(rootPlayer.mediaFolderUrl)
+        }
+        onArtistRequested: {
+            const library = view.libraryItem ? view.libraryItem.item : null
+            if (library && Player.artist) library.openArtistByName(Player.artist)
+        }
         onAudioTracksRequested: anchor => openTracks(anchor, "audio")
         onSubtitleTracksRequested: anchor => openTracks(anchor, "subtitles")
         function openTracks(anchor, page) {

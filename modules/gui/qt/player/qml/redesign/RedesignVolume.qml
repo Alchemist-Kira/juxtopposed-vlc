@@ -64,6 +64,5 @@ T.Slider {
             border.color: theme.accent
         }
     }
-    C.ToolTip.visible: root.hovered || root.visualFocus || root.pressed
-    C.ToolTip.text: qsTr("%1%").arg(Math.round(value * 100))
+    RedesignToolTip { theme: root.theme; text: qsTr("%1%").arg(Math.round(root.value * 100)); visible: root.hovered || root.visualFocus || root.pressed; delay: 0 }
 }

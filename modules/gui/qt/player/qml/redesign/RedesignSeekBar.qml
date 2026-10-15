@@ -266,6 +266,5 @@ T.Slider {
             }
         }
     }
-    C.ToolTip.visible: root.enabled && (root.hovered || root.pressed || root.visualFocus || root.cueDragging) && !root.previewReady
-    C.ToolTip.text: root.cueDragging ? qsTr("Subtitle delay: %1 s").arg((root.displayedDelayMS / 1000).toFixed(3)) : root.timeForPosition(root.previewPosition)
+    RedesignToolTip { theme: root.theme; text: root.cueDragging ? qsTr("Subtitle delay: %1 s").arg((root.displayedDelayMS / 1000).toFixed(3)) : root.timeForPosition(root.previewPosition); visible: root.enabled && (root.hovered || root.pressed || root.visualFocus || root.cueDragging) && !root.previewReady; delay: 0 }
 }

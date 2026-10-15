@@ -138,9 +138,7 @@ ColumnLayout {
                 else root.backend.stage(parent.optionName, currentValue)
                 restoreIndexBinding()
             }
-            C.ToolTip.text: parent.help
-            C.ToolTip.visible: hovered && C.ToolTip.text.length > 0
-            C.ToolTip.delay: 650
+            RedesignToolTip { theme: root.theme; text: parent.parent.help; visible: parent.hovered && text.length > 0 }
         }
     }
     component FilterSlider: RedesignSettingSlider {

@@ -787,6 +787,7 @@ qml_modules += {
        'player/qml/redesign/RedesignShortcuts.qml',
        'player/qml/redesign/RedesignTracks.qml',
        'player/qml/redesign/RedesignButton.qml',
+       'player/qml/redesign/RedesignToolTip.qml',
        'player/qml/redesign/RedesignIcon.qml',
        'player/qml/redesign/RedesignSvg.qml',
        'player/qml/redesign/RedesignActionMenu.qml',

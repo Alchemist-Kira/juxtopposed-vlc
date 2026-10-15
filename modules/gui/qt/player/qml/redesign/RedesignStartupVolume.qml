@@ -61,8 +61,7 @@ ColumnLayout {
             Text { x: field.leftPadding + valueMetrics.advanceWidth; anchors.verticalCenter: parent.verticalCenter; text: "%"; color: theme.foreground; font.pixelSize: theme.dp(14); visible: !field.activeFocus }
             onEditingFinished: invalid = !root.backend.stage("redesign-startup-volume", text)
             onActiveFocusChanged: if (activeFocus) selectAll()
-            C.ToolTip.text: qsTr("Volume on the next VLC startup (0–300%).")
-            C.ToolTip.visible: hovered
+            RedesignToolTip { theme: root.theme; text: qsTr("Volume on the next VLC startup (0–300%)."); visible: parent.hovered; delay: 0 }
         }
     }
 }

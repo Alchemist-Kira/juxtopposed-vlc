@@ -29,9 +29,11 @@ T.Button {
     focusPolicy: Qt.StrongFocus
     Accessible.name: text
     Accessible.role: Accessible.Button
-    C.ToolTip.text: text
-    C.ToolTip.visible: text.length > 0 && (hovered || visualFocus)
-    C.ToolTip.delay: 650
+    RedesignToolTip {
+        theme: root.theme
+        text: root.text
+        visible: root.text.length > 0 && (root.hovered || root.visualFocus)
+    }
 
     background: Rectangle {
         radius: theme.dp(6)

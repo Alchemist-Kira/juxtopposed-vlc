@@ -97,12 +97,11 @@ C.Menu {
         Instantiator {
             model: root.recentFilesAvailable && root.recentFilesEnabled ? root.recentModel : null
             delegate: MenuRow {
+                id: recentRow
                 required property var model
                 text: model.url; glyph: "video"
                 textElide: Text.ElideMiddle
-                C.ToolTip.visible: hovered
-                C.ToolTip.delay: 650
-                C.ToolTip.text: text
+                RedesignToolTip { theme: root.theme; text: recentRow.text; visible: recentRow.hovered }
                 onTriggered: { root.dismiss(); root.recentRequested(model.id) }
             }
             onObjectAdded: (index, object) => recentMenu.insertItem(index, object)

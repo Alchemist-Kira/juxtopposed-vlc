@@ -98,8 +98,7 @@ ColumnLayout {
                             }
                             onMoved: root.setGain(band.index, value)
                             TapHandler { onDoubleTapped: root.setGain(band.index, band.index === 0 ? 12 : 0) }
-                            C.ToolTip.text: root.frequencies[band.index] + ": " + Number(slider.value).toFixed(1) + " dB"
-                            C.ToolTip.visible: hovered || pressed
+                            RedesignToolTip { theme: root.theme; text: root.frequencies[band.index] + ": " + Number(slider.value).toFixed(1) + " dB"; visible: parent.hovered || parent.pressed; delay: 0 }
                         }
                         Text {
                             Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(24)
@@ -123,8 +122,7 @@ ColumnLayout {
                             background: Rectangle { color: root.theme.field; radius: root.theme.dp(4); border.color: valueField.invalid ? "#e56b6b" : valueField.activeFocus ? root.theme.accent : "transparent" }
                             onEditingFinished: invalid = !text.trim().length || !root.setGain(band.index, Number(text))
                             onActiveFocusChanged: if (activeFocus) selectAll()
-                            C.ToolTip.text: qsTr("Gain in dB (−20 to 20)")
-                            C.ToolTip.visible: hovered
+                            RedesignToolTip { theme: root.theme; text: qsTr("Gain in dB (−20 to 20)"); visible: parent.hovered; delay: 0 }
                         }
                     }
                 }

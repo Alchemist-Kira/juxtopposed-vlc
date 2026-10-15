@@ -66,9 +66,7 @@ ColumnLayout {
                 x: labelText.width + theme.dp(8); anchors.verticalCenter: parent.verticalCenter
                 visible: !!root.description.help && !root.compact
             }
-            C.ToolTip.text: root.description.help || ""
-            C.ToolTip.visible: rowHover.hovered && C.ToolTip.text.length > 0
-            C.ToolTip.delay: 500
+            RedesignToolTip { theme: root.theme; text: root.description.help || ""; visible: rowHover.hovered && text.length > 0; delay: 500 }
             RedesignButton {
                 objectName: "preferenceResetButton"
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
@@ -206,8 +204,7 @@ ColumnLayout {
                 }
                 onMoved: root.commit(root.description.kind === "integer" ? Math.round(value / root.factor) : value / root.factor)
                 hoverEnabled: true
-                C.ToolTip.text: Number(value).toFixed(root.presentation.decimals || 0) + (root.presentation.suffix || "")
-                C.ToolTip.visible: hovered || pressed
+                RedesignToolTip { theme: root.theme; text: Number(parent.value).toFixed(root.presentation.decimals || 0) + (root.presentation.suffix || ""); visible: parent.hovered || parent.pressed; delay: 0 }
             }
             RowLayout {
                 visible: !root.presentation.ticks

@@ -122,9 +122,7 @@ ColumnLayout {
         }
         Accessible.name: root.label
         hoverEnabled: true
-        C.ToolTip.text: Number(root.currentValue).toLocaleString(Qt.locale(), 'f', root.decimals) + root.suffix
-        C.ToolTip.visible: hovered || pressed
-        C.ToolTip.delay: 500
+        RedesignToolTip { theme: root.theme; text: Number(root.currentValue).toLocaleString(Qt.locale(), 'f', root.decimals) + root.suffix; visible: parent.hovered || parent.pressed; delay: 500 }
         background: Rectangle {
             x: slider.leftPadding; y: slider.topPadding + slider.availableHeight / 2 - height / 2
             width: slider.availableWidth; height: theme.dp(14); radius: theme.dp(5); color: theme.field

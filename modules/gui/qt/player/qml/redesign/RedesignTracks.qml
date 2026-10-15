@@ -63,9 +63,7 @@ ColumnLayout {
                 elide: Text.ElideRight
             }
         }
-        C.ToolTip.text: text
-        C.ToolTip.visible: hovered && text.length > 0
-        C.ToolTip.delay: 650
+        RedesignToolTip { theme: root.theme; text: parent.text; visible: parent.hovered && parent.text.length > 0 }
     }
     Text {
         text: root.heading; color: theme.foreground; opacity: 0.75

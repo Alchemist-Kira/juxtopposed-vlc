@@ -1745,8 +1745,11 @@ $(QML_MODULE_CACHEGEN_RSP):
 $(QML_MODULE_CACHELOADER):
 	$(cachegen_verbose)$(QMLCACHEGEN) --resource-name $(@D)_cachegen --resource=$(builddir)/$(@D)/res.qrc -o $@ @$<
 
-$(QML_MODULE_CACHEGEN_ASSETS):
-	$(AM_V_GEN)$(RCC) $(RCC_EXTRA_PARAMS) --name $(@D)_assets -o $@ $<
+# Keep the sources beside the compiled units. Qt must be able to fall back
+# when cached units are disabled or rejected by the runtime.
+$(QML_MODULE_CACHEGEN_ASSETS): Makefile
+	$(AM_V_GEN)$(RCC) $(RCC_EXTRA_PARAMS) --name $(@D)_assets \
+	-o $@ $(builddir)/$(@D)/qmldir.qrc $(builddir)/$(@D)/res.qrc
 
 
 CLEANFILES += \

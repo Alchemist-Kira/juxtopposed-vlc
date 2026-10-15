@@ -183,11 +183,9 @@ bool MainUI::setup(QQmlEngine* engine)
     {
         for(auto& error: m_component->errors())
             msg_Err(m_intf, "qml loading %s %s:%u", qtu(error.description()), qtu(error.url().toString()), error.line());
-#ifdef QT_STATIC
-            assert( !"Missing qml modules from qt contribs." );
-#else
-            msg_Err( m_intf, "Install missing modules using your packaging tool" );
-#endif
+        // A QML error can also come from an unavailable resource or a rejected
+        // compiled unit. Report the actual errors and let startup clean up.
+        msg_Err(m_intf, "Cannot load the VLC interface. See the errors above.");
         return false;
     }
     return true;

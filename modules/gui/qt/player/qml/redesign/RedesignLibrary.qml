@@ -50,8 +50,14 @@ RedesignLibraryView {
     menuForItem: (index, section) => {
         const target = targetForItem(index, section || homeSection)
         if (!target) return null
-        const navigate = ["folder", "section", "home"].includes(target.kind)
         if (selectedPlaylist && !section) { target.playlistRow = index; target.playlistKey = playlistKey }
+        if (["file", "media"].includes(target.kind)) {
+            return new Promise(resolve => MediaLib.mediaState(Qt.resolvedUrl(target.url || target.key), false, state => {
+                target.played = state.played; target.favorite = state.favorite
+                resolve(state.success ? {target: target, entries: mediaMenuEntries(target)} : null)
+            }))
+        }
+        const navigate = ["folder", "section", "home"].includes(target.kind)
         return {target: target, entries: [
             {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play"},
             {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
@@ -64,7 +70,23 @@ RedesignLibraryView {
             ] : [])}
     }
     onItemActionRequested: (target, action) => {
-        if (["earlier", "later", "remove-entry"].includes(action)) {
+        if (action === "watched" || action === "favorite") {
+            MediaLib.setMediaState(Qt.resolvedUrl(target.url || target.key), action === "watched" ? "played" : "favorite",
+                action === "watched" ? !target.played : !target.favorite, result => {
+                    if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
+                })
+        } else if (action === "stream" || action === "convert") DialogsProvider.streamingDialog([Qt.resolvedUrl(target.url || target.key)], action === "convert")
+        else if (action === "explorer") Qt.openUrlExternally(folderPath.parentFolder(target.url || target.key))
+        else if (action === "source") {
+            const url = target.url || target.key
+            if (url.startsWith("file:")) openFolder(folderPath.parentFolder(url), target.category)
+            else Qt.openUrlExternally(url)
+        } else if (action === "properties") {
+            MediaLib.mediaState(Qt.resolvedUrl(target.url || target.key), true, result => {
+                if (result.success) DialogsProvider.mediaInfoDialog(MediaLib.deserializeMlItemIdFromString(result.id))
+                else DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
+            })
+        } else if (["earlier", "later", "remove-entry"].includes(action)) {
             if (!playlistEditing || target.playlistKey !== playlistKey) return
             const id = MediaLib.deserializeMlItemIdFromString(target.key)
             playlistMedia.editItem(target.playlistRow, target.playlistRow + (action === "earlier" ? -1 : action === "later" ? 1 : 0), action === "remove-entry", id, selectedPlaylist)
@@ -135,6 +157,25 @@ RedesignLibraryView {
     emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
     RedesignLibraryPath { id: folderPath }
+    function mediaMenuEntries(target) {
+        return [
+            {action: "play", label: qsTr("Play"), icon: "play", accent: true},
+            {action: "watched", label: target.played ? qsTr("Mark as Unwatched") : qsTr("Mark as Watched"), icon: "watched", accent: true},
+            {action: "favorite", label: target.favorite ? qsTr("Remove from Favorites") : qsTr("Favorite"), icon: target.favorite ? "favorite-active" : "favorite", accent: true},
+            {action: "stream", label: qsTr("Stream"), icon: "stream", accent: true},
+            {action: "convert", label: qsTr("Convert"), icon: "convert", accent: true},
+            {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true},
+            {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true}
+        ].concat(target.kind === "file" ? [{action: "explorer", label: qsTr("Show in File Explorer"), icon: "folder", accent: true}] : [])
+            .concat([{action: "source", label: qsTr("Go to Source"), icon: "source", accent: true},
+                {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"},
+                {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"}])
+            .concat(playlistEditing && target.playlistKey === playlistKey ? [
+                {action: "earlier", label: qsTr("Move earlier"), icon: "sort", enabled: target.playlistRow > 0 && !playlistBusy},
+                {action: "later", label: qsTr("Move later"), icon: "sort", enabled: target.playlistRow < itemCount - 1 && !playlistBusy},
+                {action: "remove-entry", label: qsTr("Remove from playlist"), icon: "remove", enabled: !playlistBusy}
+            ] : [])
+    }
     RedesignLibraryPins { id: pinStore; ctx: MainCtx }
     function pinTarget(kind, key, name, category, icon, artwork, section) {
         return pinStore.normalize({kind: kind, key: key, name: name, category: category, icon: icon, artwork: artwork ? artwork.toString() : "", section: section})
@@ -143,9 +184,11 @@ RedesignLibraryView {
         const category = item.isVideo === false ? 2 : item.isVideo === true ? 1 : defaultCategory
         const url = (item.mrl || item.url || "").toString()
         const local = url.startsWith("file:")
-        return pinTarget(local ? "file" : "media", local ? folderPath.location(url) : item.id.toString(),
+        const target = pinTarget(local ? "file" : "media", local ? folderPath.location(url) : item.id.toString(),
             item.title || item.name || nameFromUrl(url), category, category === 3 ? "network" : category === 2 ? "music" : "video",
             item.thumbnail || item.small_cover || item.cover || "", "")
+        target.url = url
+        return target
     }
     function targetForItem(index, section) {
         if (section) {

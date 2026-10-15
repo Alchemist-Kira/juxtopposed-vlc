@@ -62,6 +62,8 @@ public:
     Q_INVOKABLE void reload();
 
     Q_INVOKABLE void mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback);
+    Q_INVOKABLE void mediaState(const QUrl& url, bool create, QJSValue callback);
+    Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
 
     inline bool idle() const { return m_idle; }
     inline int discoveryPending() const { return m_discoveryPending; }
@@ -174,6 +176,8 @@ signals:
     void idleChanged();
 
 private:
+    enum class MediaStateAction { Read, Ensure, Played, Favorite };
+    void requestMediaState(const QUrl& url, MediaStateAction action, bool value, QJSValue callback);
     static void onMediaLibraryEvent( void* data, const vlc_ml_event_t* event );
 
 private:

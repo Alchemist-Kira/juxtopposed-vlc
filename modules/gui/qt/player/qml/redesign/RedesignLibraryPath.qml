@@ -2,6 +2,12 @@
 import QtQuick
 
 QtObject {
+    function parentFolder(value) {
+        const path = split(value)
+        if (!path || !path.parts.length) return value.toString()
+        const rootLength = path.windows ? 1 : 0
+        return urlFor(path, Math.max(rootLength, path.parts.length - 1))
+    }
     function decode(segment) {
         try { return decodeURIComponent(segment) } catch (error) { return segment }
     }

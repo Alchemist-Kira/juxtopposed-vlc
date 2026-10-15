@@ -116,12 +116,19 @@ Item {
         })
         sortPopup.popup(anchor, 0, anchor.height)
     }
+    property int menuRequest: 0
+    onBreadcrumbsChanged: { ++menuRequest; itemMenu.close() }
     function openItemMenu(anchor, index, point, section) {
+        const request = ++menuRequest
         const context = menuForItem(index, section || "")
-        if (!context || !context.target || !context.entries.length) return
-        itemMenu.target = context.target
-        itemMenu.entries = context.entries
-        itemMenu.popup(anchor, point)
+        function show(context) {
+            if (request !== menuRequest || !anchor || !root.visible || !context || !context.target || !context.entries.length) return
+            itemMenu.target = context.target
+            itemMenu.entries = context.entries
+            itemMenu.popup(anchor, point)
+        }
+        if (context && typeof context.then === "function") context.then(show)
+        else show(context)
     }
     RedesignActionMenu {
         id: itemMenu

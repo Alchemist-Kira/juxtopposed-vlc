@@ -398,6 +398,7 @@ QVariant MLPlaylistModel::itemRoleData(const MLItem *item, int role) const /* ov
         case MEDIA_IS_NEW:
             return QVariant::fromValue(media->isNew());
         case MEDIA_IS_VIDEO:
+            if (media->type() == VLC_ML_MEDIA_TYPE_UNKNOWN) return {};
             return media->type() == VLC_ML_MEDIA_TYPE_VIDEO;
         case MEDIA_ICON_NAME:
             return media->type() == VLC_ML_MEDIA_TYPE_AUDIO ? QStringLiteral("music") : QStringLiteral("video");

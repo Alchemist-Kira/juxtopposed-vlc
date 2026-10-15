@@ -247,6 +247,49 @@ void MediaLib::reload()
     });
 }
 
+void MediaLib::mediaState(const QUrl& url, bool create, QJSValue callback)
+{
+    requestMediaState(url, create ? MediaStateAction::Ensure : MediaStateAction::Read, false, callback);
+}
+
+void MediaLib::setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback)
+{
+    if (field != QLatin1String("played") && field != QLatin1String("favorite")) return;
+    requestMediaState(url, field == QLatin1String("played") ? MediaStateAction::Played : MediaStateAction::Favorite, value, callback);
+}
+
+void MediaLib::requestMediaState(const QUrl& url, MediaStateAction action, bool value, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    struct Result { bool success = false; bool played = false; bool favorite = false; QString id; QString error; };
+    const auto uri = url.toEncoded();
+    const bool valid = url.isValid() && !url.scheme().isEmpty();
+    runOnMLThread<Result>(this,
+        [uri, valid, action, value](vlc_medialibrary_t* ml, Result& result) {
+            result.error = qtr("VLC cannot read this media. Select the file again.");
+            if (!valid) return;
+            ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
+            if (!media && action != MediaStateAction::Read) media.reset(vlc_ml_new_external_media(ml, uri.constData()));
+            if (!media && action != MediaStateAction::Read) return;
+            if (media) {
+                result.error = qtr("VLC cannot save this change. Try again.");
+                if (action == MediaStateAction::Played && vlc_ml_media_set_played(ml, media->i_id, value) != VLC_SUCCESS) return;
+                if (action == MediaStateAction::Favorite && vlc_ml_media_set_favorite(ml, media->i_id, value) != VLC_SUCCESS) return;
+                result.played = action == MediaStateAction::Played ? value : media->i_playcount > 0;
+                result.favorite = action == MediaStateAction::Favorite ? value : media->b_is_favorite;
+                result.id = MLItemId(media->i_id, VLC_ML_PARENT_UNKNOWN).toString();
+            }
+            result.success = true;
+            result.error.clear();
+        },
+        [this, callback](quint64, const Result& result) mutable {
+            if (auto engine = qjsEngine(this)) {
+                const QVariantMap state {{"success", result.success}, {"played", result.played}, {"favorite", result.favorite}, {"id", result.id}, {"error", result.error}};
+                callback.call({engine->toScriptValue(state)});
+            }
+        }, "redesign-media-state");
+}
+
 void MediaLib::mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback)
 {
     if (!callback.isCallable()) // invalid argument

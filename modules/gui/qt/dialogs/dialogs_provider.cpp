@@ -434,8 +434,9 @@ void DialogsProvider::mediaInfoDialog( const MLItemId& itemId )
     vlc_medialibrary_t* const ml = vlc_ml_instance_get( p_intf );
     assert( ml );
 
+    if (!itemId.isValid() || itemId.hasParent()) return;
     input_item_t * const inputItem = vlc_ml_get_input_item( ml, itemId.id );
-    assert( inputItem );
+    if (!inputItem) return;
 
     const SharedInputItem sharedInputItem { inputItem, false };
     if ( input_item_IsPreparsed( inputItem ) )

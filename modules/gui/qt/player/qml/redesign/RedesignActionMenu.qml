@@ -47,6 +47,7 @@ C.Menu {
                     sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio)
                     name: row.modelData.icon || ""
                     color: row.modelData.accent ? root.theme.accent : root.theme.foreground
+                    detailColor: root.theme.foreground
                 }
                 Text {
                     Layout.fillWidth: true

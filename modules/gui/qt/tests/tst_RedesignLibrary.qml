@@ -254,6 +254,37 @@ TestCase {
         compare(menu.target.key, "0")
         compare(homeSpy.count, 0)
     }
+    function test_delayedItemMenuUsesOnlyTheLatestRequest() {
+        const pending = []
+        library.menuForItem = (index, section) => new Promise(resolve => pending.push(resolve))
+        const first = findChild(library, "libraryMediaItem0")
+        const second = findChild(library, "libraryMediaItem1")
+        library.openItemMenu(first, 0, Qt.point(0, first.height), "")
+        library.openItemMenu(second, 1, Qt.point(0, second.height), "")
+        pending[1]({target: {key: "second"}, entries: [{action: "favorite", label: "Favorite"}]})
+        const menu = findChild(library, "libraryItemMenu")
+        tryCompare(menu, "opened", true)
+        compare(menu.target.key, "second")
+        pending[0]({target: {key: "first"}, entries: [{action: "favorite", label: "Favorite"}]})
+        wait(0); compare(menu.target.key, "second"); compare(activateSpy.count, 0)
+    }
+    function test_navigationCancelsADelayedItemMenu() {
+        let finish
+        library.menuForItem = (index, section) => new Promise(resolve => finish = resolve)
+        const button = findChild(library, "libraryMediaItem0")
+        library.openItemMenu(button, 0, Qt.point(0, button.height), "")
+        library.breadcrumbs = [{label: "Other location"}]
+        finish({target: {key: "old"}, entries: [{action: "favorite", label: "Favorite"}]})
+        wait(0)
+        verify(!findChild(library, "libraryItemMenu").visible)
+    }
+    function test_parentFolderPreservesEncodedPathsAndRoots() {
+        compare(folderPath.parentFolder("file:///home/user/Film%20%26%20Cat.mkv"), "file:///home/user")
+        compare(folderPath.parentFolder("file:///C:/Film.mkv"), "file:///C:/")
+        compare(folderPath.parentFolder("file://server/Share/Film.mkv"), "file://server/Share")
+        compare(folderPath.parentFolder("file://server/Share"), "file://server/Share")
+        compare(folderPath.parentFolder("file:///"), "file:///")
+    }
     function test_currentLocationCanBePinnedFromMoreMenu() {
         library.locationPinTarget = {kind: "folder", key: "shows", name: "Shows"}
         const button = findChild(library, "libraryMoreButton")

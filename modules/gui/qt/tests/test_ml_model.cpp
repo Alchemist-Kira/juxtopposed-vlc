@@ -351,6 +351,68 @@ private slots:
         QCOMPARE(changes.count(), 2);
     }
 
+    void testPlaylistTrackTargets()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(), QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(), engine.rootContext());
+        engine.newQObject(m_medialib.get());
+        m_env->mediaGet = [](int query, va_list args) -> void* {
+            if (query != VLC_ML_GET_PLAYLIST || va_arg(args, int64_t) != 42) return nullptr;
+            auto* item = static_cast<vlc_ml_playlist_t*>(calloc(1, sizeof(vlc_ml_playlist_t)));
+            item->i_id = 42; item->psz_name = strdup("Saved playlist");
+            return item;
+        };
+        bool empty = false, reject = false;
+        m_env->mediaList = [&](int query, const vlc_ml_query_params_t*, va_list args) {
+            if (query != VLC_ML_LIST_PLAYLIST_MEDIA || va_arg(args, int64_t) != 42 || reject) return VLC_EGENERIC;
+            auto** output = va_arg(args, vlc_ml_media_list_t**);
+            auto* list = static_cast<vlc_ml_media_list_t*>(calloc(1, sizeof(vlc_ml_media_list_t) + 4 * sizeof(vlc_ml_media_t)));
+            list->i_nb_items = empty ? 0 : 4;
+            for (size_t i = 0; i < list->i_nb_items; ++i) {
+                auto& item = list->p_items[i];
+                item.i_id = i == 2 ? 11 : 11 + i;
+                item.psz_filename = strdup("Same name.mkv");
+                if (i == 3) continue; // A media record with no usable main file.
+                item.p_files = static_cast<vlc_ml_file_list_t*>(calloc(1, sizeof(vlc_ml_file_list_t) + 2 * sizeof(vlc_ml_file_t)));
+                item.p_files->i_nb_items = 2;
+                item.p_files->p_items[0].i_type = VLC_ML_FILE_TYPE_SUBTITLE;
+                item.p_files->p_items[0].psz_mrl = strdup("file:///captions.srt");
+                auto& file = item.p_files->p_items[1];
+                file.i_type = VLC_ML_FILE_TYPE_MAIN;
+                file.psz_mrl = strdup(i == 1 ? "file:///missing/video.mkv" : "file:///one/video%20%26%20fran%C3%A7ais.mkv");
+                file.b_present = i != 1;
+            }
+            *output = list;
+            return VLC_SUCCESS;
+        };
+        auto request = [&](const MLItemId& id) {
+            engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));
+            m_medialib->playlistTrackTargets(id, engine.evaluate("(function(value) { answer = value; })"));
+            if (!QTest::qWaitFor([&] { return !engine.globalObject().property("answer").isNull(); }))
+                qFatal("Playlist track targets did not finish");
+            return engine.globalObject().property("answer");
+        };
+        const MLItemId id(42, VLC_ML_PARENT_PLAYLIST);
+        auto result = request(id);
+        QVERIFY(result.property("success").toBool());
+        QCOMPARE(result.property("name").toString(), QStringLiteral("Saved playlist"));
+        auto items = result.property("items");
+        QCOMPARE(items.property("length").toInt(), 2);
+        QCOMPARE(items.property(0).property("url").toString(), QStringLiteral("file:///one/video%20%26%20fran%C3%A7ais.mkv"));
+        QVERIFY(items.property(0).property("enabled").toBool());
+        QVERIFY(!items.property(1).property("enabled").toBool());
+        QVERIFY(items.property(0).property("location").toString().contains(QStringLiteral("français")));
+        empty = true;
+        result = request(id);
+        QVERIFY(result.property("success").toBool());
+        QCOMPARE(result.property("items").property("length").toInt(), 0);
+        reject = true;
+        QVERIFY(!request(id).property("success").toBool());
+        QVERIFY(!request(MLItemId(99, VLC_ML_PARENT_PLAYLIST)).property("success").toBool());
+        QVERIFY(!request(MLItemId(42, VLC_ML_PARENT_UNKNOWN)).property("success").toBool());
+    }
+
     void testSavedPlaylistExport()
     {
         QTemporaryDir directory;

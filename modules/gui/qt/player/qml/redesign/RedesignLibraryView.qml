@@ -145,6 +145,9 @@ Item {
             { action: "add", label: root.addLabel, icon: "add", enabled: !root.playlistOpen || !root.playlistBusy },
             { action: "settings", label: qsTr("Library settings"), icon: "settings" }
         ].concat(root.playlistOpen ? [{action: "edit-playlist", label: root.playlistEditing ? qsTr("Done") : qsTr("Edit playlist"), icon: root.playlistEditing ? "check" : "drag", enabled: !root.playlistBusy}] : [])
+            .concat(root.playlistOpen && root.locationPinTarget ? [
+                {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
+                {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"}] : [])
             .concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
             .concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
         onActionRequested: action => {
@@ -152,6 +155,7 @@ Item {
             if (action === "add") root.addMedia()
             else if (action === "edit-playlist") root.playlistEditRequested()
             else if (action === "pin") root.pinLocationRequested()
+            else if (action === "add-playlist" || action === "properties") root.itemActionRequested(root.locationPinTarget, action)
             else if (action === "compact") root.fullLibraryRequested()
             else root.preferencesRequested()
         }

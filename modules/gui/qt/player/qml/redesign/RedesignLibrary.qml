@@ -93,8 +93,12 @@ RedesignLibraryView {
                     if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
                 })
         } else if (action === "stream" || action === "convert") DialogsProvider.streamingDialog([Qt.resolvedUrl(target.url || target.key)], action === "convert")
-        else if (action === "subtitle-tracks" || action === "audio-tracks")
-            DialogsProvider.addMediaTracksDialog(Qt.resolvedUrl(target.url || target.key), action === "subtitle-tracks")
+        else if (action === "subtitle-tracks" || action === "audio-tracks") {
+            if (target.kind === "playlist") {
+                const request = playlistTracks.begin(target.key, action === "subtitle-tracks")
+                if (request >= 0) MediaLib.playlistTrackTargets(MediaLib.deserializeMlItemIdFromString(target.key), result => playlistTracks.load(request, result))
+            } else DialogsProvider.addMediaTracksDialog(Qt.resolvedUrl(target.url || target.key), action === "subtitle-tracks")
+        }
         else if (action === "explorer") Qt.openUrlExternally(folderPath.parentFolder(target.url || target.key))
         else if (action === "source") {
             const url = target.url || target.key
@@ -183,9 +187,9 @@ RedesignLibraryView {
             {action: "shuffle", label: qsTr("Shuffle"), icon: "shuffle", accent: true, enabled: target.count > 0},
             {action: "export", label: qsTr("Export Playlist"), icon: "save", accent: true},
             {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true, enabled: target.count > 0},
-            {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
-            {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"},
-            {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: "sidebar"}
+            {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles", accent: true, enabled: target.count > 0},
+            {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio", accent: true, enabled: target.count > 0},
+            {action: "properties", label: qsTr("Properties & Metadata"), icon: "info"}
         ]
     }
     function mediaMenuEntries(target) {
@@ -469,9 +473,18 @@ RedesignLibraryView {
         onSaveRequested: (key, name, cover, request) => MediaLib.savePlaylistDetails(
             MediaLib.deserializeMlItemIdFromString(key), name, cover, result => playlistProperties.finish(request, result))
     }
+    RedesignPlaylistTrackTarget {
+        id: playlistTracks
+        parent: C.Overlay.overlay
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        onTracksRequested: (media, subtitles) => {
+            DialogsProvider.addMediaTracksDialog(media, subtitles)
+            playlistTracks.finish()
+        }
+    }
     Binding {
         target: MainCtx; property: "useGlobalShortcuts"; value: false
-        when: playlistProperties.visible; restoreMode: Binding.RestoreBindingOrValue
+        when: playlistProperties.visible || playlistTracks.visible; restoreMode: Binding.RestoreBindingOrValue
     }
     Connections {
         target: MediaLib

@@ -466,6 +466,20 @@ TestCase {
         finally { library.playlistEditRequested.disconnect(toggle) }
         compare(playlistEditSpy.count, 1)
     }
+    function test_openPlaylistMoreMenuKeepsCopyPropertiesAndPinActions() {
+        library.category = 4; library.playlistOpen = true
+        library.locationPinTarget = {kind:"playlist",key:"VLC_ML_PARENT_PLAYLIST - 42",name:"Saved playlist"}
+        const button = findChild(library,"libraryMoreButton"), menu = findChild(library,"libraryMoreMenu")
+        for (const action of ["add-playlist","properties"]) {
+            mouseClick(button); tryCompare(menu,"opened",true)
+            const entry = findChild(menu,"libraryAction_"+action)
+            verify(waitForRendering(entry)); mouseClick(entry)
+            compare(itemActionSpy.signalArguments[itemActionSpy.count-1][0].key,"VLC_ML_PARENT_PLAYLIST - 42")
+            compare(itemActionSpy.signalArguments[itemActionSpy.count-1][1],action)
+        }
+        mouseClick(button); tryCompare(menu,"opened",true)
+        mouseClick(findChild(menu,"libraryAction_pin")); compare(pinLocationSpy.count,1)
+    }
     function test_playlistEditingSelectsWithoutPlayingAndUsesRowIdentity() {
         const view = beginPlaylistEditing()
         const item = view.itemAtIndex(0)

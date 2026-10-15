@@ -65,6 +65,7 @@ public:
     Q_INVOKABLE void mediaState(const QUrl& url, bool create, QJSValue callback);
     Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
     Q_INVOKABLE void playlistState(const MLItemId& id, QJSValue callback);
+    Q_INVOKABLE void playlistTrackTargets(const MLItemId& id, QJSValue callback);
     Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
     Q_INVOKABLE void savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback);
     Q_INVOKABLE void shuffleAndPlay(const MLItemId& id);

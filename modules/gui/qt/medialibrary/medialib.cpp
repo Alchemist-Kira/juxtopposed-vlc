@@ -273,6 +273,43 @@ void MediaLib::setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue c
     requestPlaylistState(id, true, favorite, callback);
 }
 
+void MediaLib::playlistTrackTargets(const MLItemId& id, QJSValue callback)
+{
+    if (!callback.isCallable()) return;
+    runOnMLThread<QVariantMap>(this,
+        [id](vlc_medialibrary_t* ml, QVariantMap& result) {
+            result = {{"success", false}, {"error", qtr("VLC cannot read this playlist. Select it again.")}};
+            if (id.type != VLC_ML_PARENT_PLAYLIST || id.id <= 0) return;
+            ml_unique_ptr<vlc_ml_playlist_t> playlist(vlc_ml_get_playlist(ml, id.id));
+            if (!playlist) return;
+            auto query = vlc_ml_query_params_create();
+            ml_unique_ptr<vlc_ml_media_list_t> media(vlc_ml_list_playlist_media(ml, &query, id.id));
+            if (!media) return;
+            QVariantList items;
+            QSet<int64_t> seen;
+            for (const auto& item : ml_range_iterate<vlc_ml_media_t>(media)) {
+                if (seen.contains(item.i_id) || !item.p_files) continue;
+                seen.insert(item.i_id);
+                for (const auto& file : ml_range_iterate<vlc_ml_file_t>(item.p_files)) {
+                    if (file.i_type != VLC_ML_FILE_TYPE_MAIN) continue;
+                    const QUrl url(qfu(file.psz_mrl));
+                    if (!url.isValid() || url.scheme().isEmpty()) continue;
+                    QString name = qfu(item.psz_filename);
+                    if (name.isEmpty()) name = url.fileName();
+                    if (name.isEmpty()) name = qfu(item.psz_title);
+                    if (name.isEmpty()) name = url.toDisplayString();
+                    items.push_back(QVariantMap{{"name", name}, {"url", url.toString(QUrl::FullyEncoded)},
+                        {"location", url.toDisplayString(QUrl::PreferLocalFile)}, {"enabled", file.b_present}});
+                    break;
+                }
+            }
+            result = {{"success", true}, {"error", QString()}, {"name", qfu(playlist->psz_name)}, {"items", items}};
+        },
+        [this, callback](quint64, const QVariantMap& result) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-playlist-tracks");
+}
+
 void MediaLib::requestPlaylistState(const MLItemId& id, bool update, bool favorite, QJSValue callback)
 {
     if (!callback.isCallable()) return;

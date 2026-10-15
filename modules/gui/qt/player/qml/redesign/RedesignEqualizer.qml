@@ -40,7 +40,7 @@ ColumnLayout {
                 anchors.leftMargin: root.theme.dp(16); anchors.rightMargin: root.theme.dp(16)
                 spacing: theme.dp(10)
                 Text { Layout.fillWidth: root.compact; text: root.compact ? root.expanded ? qsTr("Collapse Settings") : qsTr("Expand Settings") : root.expanded ? qsTr("Close Equalizer") : qsTr("Open Equalizer"); color: root.theme.foreground; font.pixelSize: root.theme.dp(14) }
-                RedesignIcon { name: root.expanded ? "chevron-down" : "chevron-right"; color: root.theme.foreground; width: root.theme.dp(20); height: width }
+                RedesignIcon { name: root.expanded ? "chevron-down" : "chevron-right"; color: root.theme.foreground; Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20) }
             }
         }
         onClicked: root.expanded = !root.expanded

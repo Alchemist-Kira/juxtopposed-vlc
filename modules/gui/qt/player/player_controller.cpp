@@ -74,11 +74,15 @@ PlayerControllerPrivate::~PlayerControllerPrivate()
     // Finish cancelled reads before the interface and queued callbacks die.
     m_subtitleTimelineWorkers.waitForDone();
 
-    vlc_player_locker locker{m_player}; //this also locks the player
-    vlc_player_vout_RemoveListener( m_player, m_player_vout_listener );
-    vlc_player_aout_RemoveListener( m_player, m_player_aout_listener );
-    vlc_player_RemoveListener( m_player, m_player_listener );
-    vlc_player_RemoveTimer( m_player, m_player_timer );
+    {
+        vlc_player_locker locker{m_player};
+        vlc_player_vout_RemoveListener( m_player, m_player_vout_listener );
+        vlc_player_aout_RemoveListener( m_player, m_player_aout_listener );
+        vlc_player_RemoveListener( m_player, m_player_listener );
+        vlc_player_RemoveTimer( m_player, m_player_timer );
+    }
+    // Artwork completion takes the player lock. Never hold it while waiting
+    // for preparser workers, including callbacks delivered during cancellation.
     if (m_preparser != nullptr)
         vlc_preparser_Delete(m_preparser);
     if (m_seekPreparser != nullptr)

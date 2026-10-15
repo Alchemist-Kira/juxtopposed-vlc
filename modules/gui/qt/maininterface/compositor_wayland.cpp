@@ -158,6 +158,14 @@ void CompositorWayland::destroyMainInterface()
 
 void CompositorWayland::unloadGUI()
 {
+#ifdef QT_WAYLAND_HAS_CUSTOM_MARGIN_SUPPORT
+    if (m_mainCtx)
+        disconnect(m_mainCtx, nullptr, this, nullptr);
+    if (m_qmlView) {
+        disconnect(m_qmlView.get(), &QWindow::widthChanged, this, &CompositorWayland::adjustQuickWindowMask);
+        disconnect(m_qmlView.get(), &QWindow::heightChanged, this, &CompositorWayland::adjustQuickWindowMask);
+    }
+#endif
     //needs to be released before the window
     m_interfaceWindowHandler.reset();
 
@@ -296,10 +304,11 @@ bool CompositorWayland::unloadWaylandModule()
 #ifdef QT_WAYLAND_HAS_CUSTOM_MARGIN_SUPPORT
 void CompositorWayland::adjustQuickWindowMask()
 {
-    assert(m_intf);
-    assert(m_intf->p_mi);
+    // Window destruction can still deliver resize events after unloadGUI().
+    if (!m_mainCtx || !m_qmlView)
+        return;
     // Assuming no overflow:
-    const auto maskMargin = static_cast<int>(m_intf->p_mi->windowExtendedMargin()) - m_intf->p_mi->CSDBorderSize();
+    const auto maskMargin = static_cast<int>(m_mainCtx->windowExtendedMargin()) - m_mainCtx->CSDBorderSize();
     if (maskMargin > 0)
     {
         // WARNING: Be careful here, if Qt platform plugin applies decoration (CSD handled by the Qt platform plugin),

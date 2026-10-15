@@ -306,6 +306,8 @@ struct vlc_player_t
         struct vlc_list stop_inputs;
         struct vlc_list stopping_inputs;
         struct vlc_list joinable_inputs;
+        bool cleaning_resources;
+        bool notify_stopped;
     } mainloop;
 
     struct vlc_player_timer timer;

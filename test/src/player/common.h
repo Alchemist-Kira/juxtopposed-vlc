@@ -14,6 +14,16 @@
 #include <vlc_vector.h>
 #include <vlc_filter.h>
 
+#ifdef OUTPUT_TEARDOWN_TEST
+struct window_teardown_test {
+    vlc_mutex_t lock;
+    vlc_cond_t wait;
+    bool blocked;
+    bool entered;
+};
+extern struct window_teardown_test window_teardown;
+#endif
+
 #if defined(ZVBI_COMPILED)
 # define TELETEXT_DECODER "zvbi,"
 #elif defined(TELX_COMPILED)

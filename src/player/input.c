@@ -348,6 +348,13 @@ vlc_player_input_HandleState(struct vlc_player_input *input,
 
     if (send_event)
     {
+        if (input->state == VLC_PLAYER_STATE_STOPPED)
+        {
+            /* STOPPED permits synchronous media changes. Publish it only
+             * after the mainloop has released the output resources. */
+            player->mainloop.notify_stopped = true;
+            return;
+        }
         assert(player->global_state != input->state);
         player->global_state = input->state;
         vlc_player_SendEvent(player, on_state_changed, player->global_state);

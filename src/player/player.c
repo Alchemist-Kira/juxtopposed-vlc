@@ -174,7 +174,8 @@ vlc_player_destructor_AddJoinableInput(vlc_player_t *player,
 
 static bool vlc_player_destructor_IsEmpty(vlc_player_t *player)
 {
-    return vlc_list_is_empty(&player->mainloop.stop_inputs)
+    return !player->mainloop.cleaning_resources
+        && vlc_list_is_empty(&player->mainloop.stop_inputs)
         && vlc_list_is_empty(&player->mainloop.stopping_inputs)
         && vlc_list_is_empty(&player->mainloop.joinable_inputs);
 }
@@ -275,12 +276,36 @@ vlc_player_mainloop_Thread(void *data)
         if (inputs_changed)
         {
             const bool started = player->started;
+            /* Window teardown can wait for the UI. Keep new inputs deferred
+             * while the resource lock is held without the player lock. */
+            player->mainloop.cleaning_resources = true;
             vlc_player_Unlock(player);
             if (!started)
                 input_resource_StopFreeVout(player->resource);
             if (!keep_sout)
                 input_resource_TerminateSout(player->resource);
             vlc_player_Lock(player);
+            player->mainloop.cleaning_resources = false;
+            if (player->mainloop.notify_stopped)
+            {
+                player->mainloop.notify_stopped = false;
+                player->global_state = VLC_PLAYER_STATE_STOPPED;
+                vlc_player_SendEvent(player, on_state_changed, player->global_state);
+            }
+            if (!player->deleting && !player->input
+             && vlc_player_destructor_IsEmpty(player)
+             && (player->next_media || player->releasing_media))
+            {
+                vlc_player_OpenNextMedia(player);
+                if (player->input && player->started)
+                {
+                    /* Apply the normal start options, including start-paused. */
+                    player->started = false;
+                    vlc_player_Start(player);
+                }
+                if (!player->input)
+                    player->started = false;
+            }
         }
     }
     vlc_mutex_unlock(&player->lock);
@@ -2145,6 +2170,8 @@ vlc_player_New(vlc_object_t *parent, enum vlc_player_lock_type lock_type)
     vlc_list_init(&player->mainloop.stop_inputs);
     vlc_list_init(&player->mainloop.stopping_inputs);
     vlc_list_init(&player->mainloop.joinable_inputs);
+    player->mainloop.cleaning_resources = false;
+    player->mainloop.notify_stopped = false;
     player->start_paused = false;
     player->pause_on_cork = false;
     player->corked = false;

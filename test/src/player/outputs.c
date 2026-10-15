@@ -9,6 +9,49 @@
 #include <vlc_configuration.h>
 #include <math.h>
 
+struct window_teardown_test window_teardown = { .lock = VLC_STATIC_MUTEX };
+
+static void test_reopen_during_window_teardown(struct ctx *ctx)
+{
+    test_log("test_reopen_during_window_teardown\n");
+    vlc_player_t *player = ctx->player;
+    vlc_cond_init(&window_teardown.wait);
+    assert(var_SetString(ctx->vlc->p_libvlc_int, "window", "test-window-teardown") == 0);
+    struct media_params params = DEFAULT_MEDIA_PARAMS(VLC_TICK_FROM_SEC(10));
+    vlc_player_SetStartPaused(player, true);
+    player_set_current_mock_media(ctx, "first", &params, false);
+    player_start(ctx);
+    wait_state(ctx, VLC_PLAYER_STATE_PAUSED);
+
+    vlc_mutex_lock(&window_teardown.lock);
+    window_teardown.blocked = true;
+    vlc_mutex_unlock(&window_teardown.lock);
+    assert(vlc_player_Stop(player) == VLC_SUCCESS);
+    vlc_player_Unlock(player);
+    vlc_mutex_lock(&window_teardown.lock);
+    const vlc_tick_t deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(5);
+    while (!window_teardown.entered)
+        assert(vlc_cond_timedwait(&window_teardown.wait, &window_teardown.lock, deadline) == 0);
+    vlc_mutex_unlock(&window_teardown.lock);
+    vlc_player_Lock(player);
+
+    /* These requests must return before the window's UI thread can finish
+     * cleanup. The last selected media must play once cleanup is released. */
+    input_item_t *superseded = create_mock_media("superseded", &params);
+    assert(vlc_player_SetCurrentMedia(player, superseded) == VLC_SUCCESS);
+    input_item_Release(superseded);
+    player_set_current_mock_media(ctx, "last", &params, false);
+    player_start(ctx);
+    vlc_mutex_lock(&window_teardown.lock);
+    window_teardown.blocked = false;
+    vlc_cond_signal(&window_teardown.wait);
+    vlc_mutex_unlock(&window_teardown.lock);
+
+    wait_state(ctx, VLC_PLAYER_STATE_PAUSED);
+    assert(vlc_player_GetCurrentMedia(player) == ctx->played_medias.data[1]);
+    test_end(ctx);
+}
+
 static void
 test_no_outputs(struct ctx *ctx)
 {
@@ -166,6 +209,10 @@ main(void)
     ctx_init(&ctx, 0);
     test_outputs(&ctx);
     test_audio_defaults(&ctx);
+    ctx_destroy(&ctx);
+
+    ctx_init(&ctx, 0);
+    test_reopen_during_window_teardown(&ctx);
     ctx_destroy(&ctx);
 
     return 0;

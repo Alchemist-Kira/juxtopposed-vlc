@@ -7,6 +7,44 @@
 
 #include "common.h"
 
+#ifdef OUTPUT_TEARDOWN_TEST
+#include <vlc_window.h>
+
+static int teardown_window_Enable(vlc_window_t *window, const vlc_window_cfg_t *cfg)
+{
+    vlc_window_ReportSize(window, cfg->width, cfg->height);
+    return VLC_SUCCESS;
+}
+
+static void teardown_window_Disable(vlc_window_t *window)
+{
+    (void) window;
+    vlc_mutex_lock(&window_teardown.lock);
+    if (window_teardown.blocked)
+    {
+        window_teardown.entered = true;
+        vlc_cond_signal(&window_teardown.wait);
+        const vlc_tick_t deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(5);
+        while (window_teardown.blocked)
+            assert(vlc_cond_timedwait(&window_teardown.wait,
+                                     &window_teardown.lock, deadline) == 0);
+    }
+    vlc_mutex_unlock(&window_teardown.lock);
+}
+
+static int teardown_window_Open(vlc_window_t *window)
+{
+    static const struct vlc_window_operations ops = {
+        .enable = teardown_window_Enable,
+        .disable = teardown_window_Disable,
+        .resize = vlc_window_ReportSize,
+    };
+    window->type = VLC_WINDOW_TYPE_DUMMY;
+    window->ops = &ops;
+    return VLC_SUCCESS;
+}
+#endif
+
 #ifdef VIDEO_FILTER_TEST
 #include <stdatomic.h>
 #include <vlc_vout_display.h>
@@ -255,6 +293,12 @@ vlc_module_begin()
     add_submodule()
     add_shortcut("test-video-display")
     set_callback_display(video_display_Open, 0)
+#endif
+#ifdef OUTPUT_TEARDOWN_TEST
+    add_submodule()
+    set_capability("vout window", 0)
+    add_shortcut("test-window-teardown")
+    set_callback(teardown_window_Open)
 #endif
 vlc_module_end()
 

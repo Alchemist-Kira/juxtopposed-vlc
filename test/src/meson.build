@@ -283,6 +283,7 @@ vlc_tests += {
 
 vlc_tests += {
     'name' : 'test_src_player_outputs',
+    'c_args' : ['-DOUTPUT_TEARDOWN_TEST'],
     'sources' : files(
         'player/common.h',
         'player/modules.c',

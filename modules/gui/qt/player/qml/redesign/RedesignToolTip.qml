@@ -5,17 +5,17 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls.Basic as C
-import VLC.MainInterface
 
 C.ToolTip {
     id: tip
+    objectName: "redesignToolTip"
     property RedesignTheme theme
     readonly property real s: theme ? theme.scaleFactor : 1
 
     // Windowed: a real popup so it is never clipped at the window edge. Fullscreen: in-window,
     // because a separate surface takes pointer hover from the main window and the auto-hiding
     // bars would hide under it (show/hide loop). The window is the whole screen there anyway.
-    popupType: MainCtx.intfMainWindow && MainCtx.intfMainWindow.visibility === Window.FullScreen
+    popupType: parent && parent.Window.window && parent.Window.window.visibility === Window.FullScreen
                ? C.Popup.Item : C.Popup.Window
     delay: 650
     margins: 6 * s

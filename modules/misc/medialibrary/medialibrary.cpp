@@ -2531,6 +2531,13 @@ int MediaLibrary::listPlaylist( int listQuery, const medialibrary::QueryParamete
             }
 
             medialibrary::Query<medialibrary::IPlaylist> query;
+            // All playlists includes empty and unavailable playlists in listAll().
+            // Use the same scope for search, so an empty destination can be found.
+            auto playlistParams = paramsPtr ? *paramsPtr : medialibrary::QueryParameters {};
+            if (mlPlaylistType == medialibrary::PlaylistType::All) {
+                playlistParams.includeMissing = true;
+                paramsPtr = &playlistParams;
+            }
             if ( pattern != nullptr )
                 query = m_ml->searchPlaylists( pattern, mlPlaylistType, paramsPtr );
             else

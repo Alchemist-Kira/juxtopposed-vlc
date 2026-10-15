@@ -2561,7 +2561,7 @@ int MediaLibrary::listPlaylist( int listQuery, const medialibrary::QueryParamete
             if ( pattern != nullptr )
                 query = playlist->searchMedia( pattern, paramsPtr );
             else
-                query = playlist->media( nullptr );
+                query = playlist->media( paramsPtr );
             if ( query == nullptr )
                 return VLC_EGENERIC;
             switch ( listQuery )

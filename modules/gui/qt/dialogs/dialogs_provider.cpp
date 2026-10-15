@@ -1280,9 +1280,15 @@ bool DialogsProvider::applySavedTrackAssignments(const QVariantList& saved, bool
     const auto change = changes.constFind(QUrl(qfu(uri))); free(uri);
     if (change == changes.cend()) return false;
     removeSavedSlaves(current.get());
-    for (const auto& track : change->added)
-        THEMIM->AddAssociatedMedia(subtitles ? SPU_ES : AUDIO_ES,
-            track.toString(QUrl::FullyEncoded), false, false, false);
+    const auto category = subtitles ? SPU_ES : AUDIO_ES;
+    vlc_player_Lock(p_intf->p_player);
+    bool select = vlc_player_GetSelectedTrack(p_intf->p_player, category) == nullptr;
+    vlc_player_Unlock(p_intf->p_player);
+    for (const auto& track : change->added) {
+        if (THEMIM->AddAssociatedMedia(category,
+            track.toString(QUrl::FullyEncoded), select, false, false) == VLC_SUCCESS)
+            select = false;
+    }
     // The running demuxer has no remove-associated-media operation.
     return !change->removed.isEmpty();
 }

@@ -619,8 +619,8 @@ InputStatsPanel::InputStatsPanel( QWidget *parent ): QWidget( parent )
     video->setExpanded( true );
     audio->setExpanded( true );
 
-    StatsTree->resizeColumnToContents( 0 );
-    StatsTree->setColumnWidth( 1 , 200 );
+    StatsTree->header()->setSectionResizeMode( 0, QHeaderView::ResizeToContents );
+    StatsTree->header()->setSectionResizeMode( 1, QHeaderView::ResizeToContents );
 
     layout->addWidget(StatsTree, 4 );
 

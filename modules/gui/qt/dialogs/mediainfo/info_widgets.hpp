@@ -35,13 +35,17 @@ public:
     void addValue( float );
     void reset();
 
+protected:
+    void changeEvent( QEvent * ) override;
+
 private:
+    void updateColors();
     void addHistoryValue( float );
     void drawRulers( const QRectF & );
     QGraphicsScene *viewScene;
-    QGraphicsPolygonItem *totalbitrateShape;
-    QGraphicsPolygonItem *historyShape;
-    QGraphicsLineItem *rulers[3];
+    QGraphicsPolygonItem *totalbitrateShape = nullptr;
+    QGraphicsPolygonItem *historyShape = nullptr;
+    QGraphicsLineItem *rulers[3] = {};
     unsigned int historymergepointer;
     unsigned int blocksize;
     float valuesaccumulator;

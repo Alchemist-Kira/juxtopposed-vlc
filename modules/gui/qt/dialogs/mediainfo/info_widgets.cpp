@@ -27,6 +27,7 @@
 #include <QPolygonF>
 #include <QGraphicsPolygonItem>
 #include <QGraphicsLineItem>
+#include <QEvent>
 
 #define STATS_LENGTH 60
 #define ADD_LABEL(row, color, text) \
@@ -59,8 +60,36 @@ VLCStatsView::VLCStatsView( QWidget *parent ) : QGraphicsView( parent )
     linepen.setBrush( QBrush( QColor( 33, 33, 33 ) ) );
     for ( int i=0; i<3; i++ )
         rulers[i] = viewScene->addLine( QLineF(), linepen );
+    updateColors();
 }
 #undef ADD_LABEL
+
+void VLCStatsView::updateColors()
+{
+    if ( !historyShape || !totalbitrateShape )
+        return;
+    QColor history = palette().color( QPalette::Text );
+    history.setAlpha( 100 );
+    historyShape->setBrush( history );
+    QColor total = palette().color( QPalette::Highlight );
+    total.setAlpha( 160 );
+    totalbitrateShape->setBrush( total );
+    for ( auto *ruler : rulers )
+    {
+        if ( !ruler )
+            continue;
+        QPen pen = ruler->pen();
+        pen.setColor( history );
+        ruler->setPen( pen );
+    }
+}
+
+void VLCStatsView::changeEvent( QEvent *event )
+{
+    QGraphicsView::changeEvent( event );
+    if ( event->type() == QEvent::PaletteChange )
+        updateColors();
+}
 
 void VLCStatsView::reset()
 {

@@ -27,6 +27,8 @@
 
 #include "mediainfo.hpp"
 #include "player/player_controller.hpp"
+#include "maininterface/mainctx.hpp"
+#include "util/color_scheme_model.hpp"
 
 #include <vlc_url.h>
 
@@ -35,6 +37,9 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
+#include <QApplication>
+#include <QStyleHints>
+#include <QScrollArea>
 
 /* This Dialog has two main modes:
     - General Mode that shows the current Played item, and the stats
@@ -52,6 +57,8 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
     else
         setWindowTitle( qtr( "Media Information" ) );
     setWindowRole( "vlc-media-info" );
+    setObjectName( "redesignMediaInfo" );
+    setAttribute( Qt::WA_StyledBackground );
 
     setWindowFlags( Qt::Window | Qt::CustomizeWindowHint |
                     Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint );
@@ -60,7 +67,11 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
     infoTabW = new QTabWidget;
 
     MP = new MetaPanel( infoTabW, p_intf );
-    infoTabW->insertTab( META_PANEL, MP, qtr( "&General" ) );
+    auto *metaScrollArea = new QScrollArea( infoTabW );
+    metaScrollArea->setWidgetResizable( true );
+    metaScrollArea->setFrameShape( QFrame::NoFrame );
+    metaScrollArea->setWidget( MP );
+    infoTabW->insertTab( META_PANEL, metaScrollArea, qtr( "&General" ) );
     EMP = new ExtraMetaPanel( infoTabW );
     infoTabW->insertTab( EXTRAMETA_PANEL, EMP, qtr( "&Metadata" ) );
     IP = new InfoPanel( infoTabW );
@@ -75,13 +86,14 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
 
     /* No need to use a QDialogButtonBox here */
     saveMetaButton = new QPushButton( qtr( "&Save Metadata" ) );
+    saveMetaButton->setObjectName( "saveMetadataButton" );
     saveMetaButton->hide();
     QPushButton *closeButton = new QPushButton( qtr( "&Close" ) );
     closeButton->setMaximumWidth(closeButton->minimumSizeHint().width());
     closeButton->setDefault( true );
 
     QLabel *uriLabel = new QLabel( qtr( "Location:" ) );
-    uriLabel->setMaximumWidth(uriLabel->minimumSizeHint().width());
+    uriLabel->setSizePolicy( QSizePolicy::Fixed, QSizePolicy::Preferred );
     uriLine = new QLineEdit;
     uriLine->setReadOnly( true );
 
@@ -131,7 +143,61 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
     if( p_item )
         updateAllTabs( p_item );
 
-    restoreWidgetPosition( "Mediainfo", QSize( 600 , 480 ) );
+    const auto applyTheme = [this] {
+        const auto ctx = p_intf->p_mi;
+        if (!ctx) return;
+        const auto scheme = ctx->getColorScheme()->currentScheme();
+        const bool light = scheme == ColorSchemeModel::Day ||
+            (scheme == ColorSchemeModel::System && qApp->styleHints()->colorScheme() == Qt::ColorScheme::Light);
+        const QString background = light ? "#acacac" : "#1b1b1b";
+        const QString field = light ? "#dedede" : "#090909";
+        const QString foreground = light ? "#404040" : "#8f8f8f";
+        const QString bright = light ? "#2e2e2e" : "#e5e5e5";
+        const QString border = light ? "#969696" : "#292929";
+        const QString hover = light ? "#d5d5d5" : "#292929";
+        const auto accent = ctx->redesignAccent().name();
+        const auto dp = [ctx](int value) { return qRound(value * ctx->getIntfScaleFactor()); };
+        QPalette colors = palette();
+        colors.setColor(QPalette::Window, QColor(background));
+        colors.setColor(QPalette::WindowText, QColor(foreground));
+        colors.setColor(QPalette::Base, QColor(field));
+        colors.setColor(QPalette::AlternateBase, QColor(background));
+        colors.setColor(QPalette::Text, QColor(bright));
+        colors.setColor(QPalette::Button, QColor(field));
+        colors.setColor(QPalette::ButtonText, QColor(foreground));
+        colors.setColor(QPalette::Highlight, QColor(accent));
+        colors.setColor(QPalette::HighlightedText, QColor("#161616"));
+        colors.setColor(QPalette::Link, QColor(accent));
+        setPalette(colors);
+        setStyleSheet(QStringLiteral(
+            "QWidget { font-family: Inter; font-size: %1px; color: %2; }"
+            "QWidget#redesignMediaInfo, QDialog, QTabWidget::pane { background: %3; border: none; }"
+            "QLineEdit, QTextEdit, QAbstractItemView { background: %4; alternate-background-color: %3; color: %5; border: 1px solid %6; border-radius: 4px; padding: 5px; selection-background-color: %7; selection-color: #161616; }"
+            "QLineEdit:focus, QTextEdit:focus { border-color: %7; }"
+            "QPushButton { background: %4; border: 1px solid transparent; border-radius: 4px; padding: 6px 16px; min-height: 18px; }"
+            "QPushButton:hover { background: %8; }"
+            "QPushButton:focus { border-color: %7; }"
+            "QPushButton:pressed { background: %7; color: #161616; }"
+            "QPushButton#saveMetadataButton { background: %7; color: #161616; }"
+            "QPushButton#saveMetadataButton:hover { border-color: %5; }"
+            "QWidget:disabled { color: %6; }"
+            "QTabBar::tab { background: %4; padding: 10px 16px; border-bottom: 2px solid transparent; }"
+            "QTabBar::tab:selected { color: %5; border-bottom-color: %7; }"
+            "QTabBar::tab:hover { background: %8; }"
+            "QHeaderView::section { background: %8; color: %5; border: none; padding: 6px; }"
+            "QTableCornerButton::section { background: %8; border: none; }"
+            "QGraphicsView { background: %4; border: none; }"
+            "QScrollArea, QScrollArea > QWidget > QWidget { background: %3; border: none; }")
+            .arg(dp(14)).arg(foreground, background, field, bright, border, accent, hover));
+    };
+    applyTheme();
+    if (p_intf->p_mi) {
+        connect(p_intf->p_mi, &MainCtx::redesignAccentChanged, this, applyTheme);
+        connect(p_intf->p_mi, &MainCtx::intfScaleFactorChanged, this, applyTheme);
+        connect(p_intf->p_mi->getColorScheme(), &ColorSchemeModel::currentChanged, this, applyTheme);
+        connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, applyTheme);
+    }
+    restoreWidgetPosition( "Mediainfo", QSize( 720 , 720 ) );
 }
 
 MediaInfoDialog::~MediaInfoDialog()

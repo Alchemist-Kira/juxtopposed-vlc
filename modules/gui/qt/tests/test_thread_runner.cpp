@@ -19,6 +19,7 @@
 #include <QTest>
 #include <QSignalSpy>
 #include <QWaitCondition>
+#include <QSemaphore>
 #include "../medialibrary/mlthreadpool.hpp"
 #include "qtestcase.h"
 
@@ -88,6 +89,17 @@ class TestThreadRunner : public QObject
 
 private:
 
+    void pumpCompletions(const int& completed, int total)
+    {
+        QDeadlineTimer deadline(15000);
+        while (completed < total && !deadline.hasExpired()) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents);
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            QThread::yieldCurrentThread();
+        }
+        QCOMPARE(completed, total);
+    }
+
     ThreadRunner* getRunner()
     {
         QFETCH_GLOBAL(bool, threaded);
@@ -146,6 +158,70 @@ private slots:
                 ret = FAILED;
         });
         CHECK_TASK_COMPLETE(ret);
+    }
+
+    void testFastCompletions_data()
+    {
+        QTest::addColumn<bool>("serial");
+        QTest::newRow("parallel") << false;
+        QTest::newRow("serial") << true;
+    }
+
+    void testFastCompletions()
+    {
+        QFETCH(bool, serial);
+        auto runner = getRunner();
+        Dummy target;
+        int completed = 0;
+        const int total = 4000;
+        for (int i = 0; i < total; ++i) {
+            runner->runOnThread<Ctx>(&target, [i](Ctx& ctx) { ctx.id = i; },
+                [&completed, i](quint64, Ctx& ctx) { QCOMPARE(ctx.id, i); ++completed; },
+                serial ? "fast-completions" : nullptr);
+        }
+        pumpCompletions(completed, total);
+        // Drain deferred QObject deletion while the final pool wrappers finish.
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    }
+
+    void testSerialCompletionWithTargetDestruction()
+    {
+        auto runner = getRunner();
+        Dummy survivor;
+        int completed = 0;
+        for (int wave = 0; wave < 100; ++wave) {
+            auto target = std::make_unique<Dummy>();
+            for (int i = 0; i < 20; ++i) {
+                runner->runOnThread<Ctx>(target.get(), [](Ctx&) {}, [](quint64, Ctx&) {}, "destroyed-targets");
+                runner->runOnThread<Ctx>(&survivor, [](Ctx&) {}, [&completed](quint64, Ctx&) { ++completed; }, "surviving-target");
+            }
+            QCoreApplication::processEvents();
+            target.reset();
+        }
+        pumpCompletions(completed, 2000);
+    }
+
+    void testCancelLastQueuedTaskKeepsSerialOrder()
+    {
+        auto runner = getRunner();
+        runner->setMaxThreadCount(2);
+        Dummy target;
+        QSemaphore firstStarted, releaseFirst, nextStarted;
+        int completed = 0;
+        runner->runOnThread<Ctx>(&target, [&](Ctx&) {
+            firstStarted.release();
+            releaseFirst.acquire();
+        }, [&](quint64, Ctx&) { ++completed; }, "serial-cancel");
+        QVERIFY(firstStarted.tryAcquire(1, 1000));
+        const auto canceled = runner->runOnThread<Ctx>(&target, [](Ctx&) {},
+            [](quint64, Ctx&) { QFAIL("Canceled task reached its callback"); }, "serial-cancel");
+        runner->cancelTask(&target, canceled);
+        runner->runOnThread<Ctx>(&target, [&](Ctx&) { nextStarted.release(); },
+            [&](quint64, Ctx&) { ++completed; }, "serial-cancel");
+        const bool overlapped = nextStarted.tryAcquire(1, 100);
+        releaseFirst.release();
+        pumpCompletions(completed, 2);
+        QVERIFY2(!overlapped, "Canceling the last queued task started a second serial executor");
     }
 
     void testParallelTask()

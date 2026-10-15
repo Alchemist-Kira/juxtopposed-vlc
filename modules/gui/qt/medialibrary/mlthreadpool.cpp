@@ -22,6 +22,22 @@
 #include <QThread>
 #include <QOperatingSystemVersion>
 
+// The pool owns this wrapper through the end of run(). The worker reference
+// keeps the QObject alive even if its queued completion is handled immediately.
+class MLThreadPoolTask : public QRunnable
+{
+public:
+    MLThreadPoolTask(ThreadRunner* pool, RunOnThreadBaseRunner* task) : m_pool(pool), m_task(task) { m_task->retain(); }
+    ~MLThreadPoolTask() override { m_task->release(); }
+    void run() override {
+        { QMutexLocker lock(&m_pool->m_lock); m_task->m_queuedWrapper = nullptr; }
+        m_task->run();
+    }
+private:
+    ThreadRunner* m_pool;
+    RunOnThreadBaseRunner* m_task;
+};
+
 ThreadRunner::ThreadRunner()
 {
 #if (QT_VERSION >= QT_VERSION_CHECK(6, 9, 0))
@@ -38,6 +54,7 @@ ThreadRunner::ThreadRunner()
 
 ThreadRunner::~ThreadRunner()
 {
+    m_threadPool.waitForDone();
     assert(m_objectTasks.empty());
     assert(m_runningTasks.empty());
 }
@@ -48,11 +65,12 @@ void ThreadRunner::setMaxThreadCount(size_t threadCount)
 }
 
 
-void ThreadRunner::start(QRunnable* task, const char* queue)
+void ThreadRunner::start(RunOnThreadBaseRunner* task, const char* queue)
 {
     if (queue == nullptr)
     {
-        m_threadPool.start(task);
+        task->m_queuedWrapper = new MLThreadPoolTask(this, task);
+        m_threadPool.start(task->m_queuedWrapper);
     }
     else
     {
@@ -63,18 +81,21 @@ void ThreadRunner::start(QRunnable* task, const char* queue)
         }
         else
         {
-            m_serialTasks[queue] = QQueue<QRunnable*>();
+            m_serialTasks[queue] = QQueue<RunOnThreadBaseRunner*>();
             m_serialTasks[queue].push_back(task);
             processQueueLocked(queue);
         }
     }
 }
 
-bool ThreadRunner::tryTake(QRunnable* task)
+bool ThreadRunner::tryTake(RunOnThreadBaseRunner* task)
 {
-    bool ret = m_threadPool.tryTake(task);
-    if (ret)
+    if (task->m_queuedWrapper) {
+        if (!m_threadPool.tryTake(task->m_queuedWrapper)) return false;
+        delete task->m_queuedWrapper;
+        task->m_queuedWrapper = nullptr;
         return true;
+    }
 
     {
         QMutexLocker lock(&m_serialTaskLock);
@@ -85,8 +106,8 @@ bool ThreadRunner::tryTake(QRunnable* task)
             if (taskIt != queue.end())
             {
                 queue.erase(taskIt);
-                if (queue.empty())
-                    m_serialTasks.erase(queueIt);
+                // The active executor still owns this queue. Removing its last
+                // pending task must not allow a second executor to start.
                 return true;
             }
         }
@@ -95,7 +116,7 @@ bool ThreadRunner::tryTake(QRunnable* task)
 }
 
 
-QRunnable* ThreadRunner::getNextTaskFromQueue(const QString& queueName)
+RunOnThreadBaseRunner* ThreadRunner::getNextTaskFromQueue(const QString& queueName)
 {
     QMutexLocker lock(&m_serialTaskLock);
     auto& queue = m_serialTasks[queueName];
@@ -104,7 +125,8 @@ QRunnable* ThreadRunner::getNextTaskFromQueue(const QString& queueName)
         m_serialTasks.remove(queueName);
         return nullptr;
     }
-    QRunnable* task = queue.front();
+    auto task = queue.front();
+    task->retain();
     queue.pop_front();
     return task;
 }
@@ -118,24 +140,25 @@ void ThreadRunner::processQueueLocked(const QString& queueName)
     struct Ctx{};
     auto runnable = new RunOnThreadRunner<Ctx>(taskId, this,
         [this, queueName](Ctx&){
-            QRunnable* task = getNextTaskFromQueue(queueName);
+            auto task = getNextTaskFromQueue(queueName);
             if (!task)
             {
                 return;
             }
             task->run();
-            if (task->autoDelete())
-                delete task;
+            task->release();
         },
         [this, queueName](quint64, const Ctx&){
+             QMutexLocker tasksLock(&m_lock);
              QMutexLocker lock(&m_serialTaskLock);
-             processQueueLocked(queueName);
+             if (!m_shuttingDown) processQueueLocked(queueName);
         });
     connect(runnable, &RunOnThreadBaseRunner::done, this, &ThreadRunner::runOnThreadDone);
     m_runningTasks.insert(taskId, runnable);
     m_objectTasks.insert(this, taskId);
 
-    m_threadPool.start(runnable);
+    runnable->m_queuedWrapper = new MLThreadPoolTask(this, runnable);
+    m_threadPool.start(runnable->m_queuedWrapper);
 }
 
 void ThreadRunner::destroy()
@@ -150,7 +173,7 @@ void ThreadRunner::destroy()
         auto task = m_runningTasks.value(key, nullptr);
         if (tryTake(task))
         {
-            delete task;
+            task->release();
             m_runningTasks.remove(key);
             taskIt = m_objectTasks.erase(taskIt);
             if (m_objectTasks.count(object) == 0)
@@ -175,9 +198,8 @@ void ThreadRunner::cancelTask(const QObject* object, quint64 taskId)
     if (!task)
         return;
     task->cancel();
-    bool removed = tryTake(task);
-    if (removed)
-        delete task;
+    tryTake(task);
+    task->release();
     m_runningTasks.remove(taskId);
     m_objectTasks.remove(object, taskId);
     if (m_objectTasks.count(object) == 0)
@@ -189,9 +211,10 @@ void ThreadRunner::runOnThreadDone(RunOnThreadBaseRunner* runner, quint64 target
     QMutexLocker locker{&m_lock};
     if (!m_runningTasks.contains(target))
     {
-        runner->deleteLater();
         return;
     }
+
+    const auto owner = std::shared_ptr<RunOnThreadBaseRunner>(runner, [](auto* task) { task->release(); });
 
     m_runningTasks.remove(target);
     m_objectTasks.remove(object, target);
@@ -202,7 +225,6 @@ void ThreadRunner::runOnThreadDone(RunOnThreadBaseRunner* runner, quint64 target
     {
         if (m_runningTasks.empty())
             deleteLater();
-        runner->deleteLater();
         return;
     }
 
@@ -211,17 +233,15 @@ void ThreadRunner::runOnThreadDone(RunOnThreadBaseRunner* runner, quint64 target
         if (object->thread() == this->thread())
         {
             locker.unlock();
-            runner->runUICallback();
-            runner->deleteLater();
+            owner->runUICallback();
         }
         else
         {
             //run the callback in the object thread
             QMetaObject::invokeMethod(
                 const_cast<QObject*>(object),
-                [runner](){
-                    runner->runUICallback();
-                    runner->deleteLater();
+                [owner](){
+                    owner->runUICallback();
                 }
             );
         }
@@ -237,9 +257,9 @@ void ThreadRunner::runOnThreadTargetDestroyed(QObject * object)
         {
             auto task = m_runningTasks.value(taskId, nullptr);
             assert(task);
-            bool removed = tryTake(task);
-            if (removed)
-                delete task;
+            tryTake(task);
+            task->cancel();
+            task->release();
             m_runningTasks.remove(taskId);
         }
         m_objectTasks.remove(object);

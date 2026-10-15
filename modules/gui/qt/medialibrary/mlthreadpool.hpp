@@ -25,6 +25,8 @@
 #include <QMap>
 #include <QThreadPool>
 #include <QMutex>
+#include <atomic>
+#include <memory>
 
 class RunOnThreadBaseRunner;
 
@@ -65,23 +67,24 @@ private:
      * ran sequentially, if queue is null, task will be run without additional specific
      * constraint (like on QThreadPool)
      */
-    void start(QRunnable* task, const char* queue = nullptr);
+    void start(RunOnThreadBaseRunner* task, const char* queue = nullptr);
 
     /**
      * @brief tryTake atempt to the specified task from the queue if the task has not started
      * @return true if the task has been removed from the queue and was not started yet
      */
-    bool tryTake(QRunnable* task);
+    bool tryTake(RunOnThreadBaseRunner* task);
 
-    QRunnable* getNextTaskFromQueue(const QString& queueName);
+    RunOnThreadBaseRunner* getNextTaskFromQueue(const QString& queueName);
     void processQueueLocked(const QString& queueName);
 
 private:
     QThreadPool m_threadPool;
 
     friend class MLThreadPoolSerialTask;
+    friend class MLThreadPoolTask;
     QMutex m_serialTaskLock;
-    QMap<QString, QQueue<QRunnable*>> m_serialTasks;
+    QMap<QString, QQueue<RunOnThreadBaseRunner*>> m_serialTasks;
 
     bool m_shuttingDown = false;
     quint64 m_taskId = 1;
@@ -97,8 +100,17 @@ public:
     virtual ~RunOnThreadBaseRunner() = default;
     virtual void runUICallback() = 0;
     virtual void cancel() = 0;
+    void retain() { m_references.fetch_add(1, std::memory_order_relaxed); }
+    void release() {
+        if (m_references.fetch_sub(1, std::memory_order_acq_rel) == 1) deleteLater();
+    }
 signals:
     void done(RunOnThreadBaseRunner* runner, quint64 target, const QObject* object, int status);
+private:
+    friend class ThreadRunner;
+    friend class MLThreadPoolTask;
+    std::atomic_uint m_references {1}; // owner, plus any executing pool wrapper
+    QRunnable* m_queuedWrapper = nullptr; // protected by ThreadRunner::m_lock
 };
 
 template<typename Ctx>

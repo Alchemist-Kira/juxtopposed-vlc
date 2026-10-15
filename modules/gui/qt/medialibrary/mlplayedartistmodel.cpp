@@ -31,7 +31,9 @@ const std::vector<int64_t>& MLPlayedArtistModel::Loader::rankedArtists(vlc_media
     std::unordered_map<int64_t, uint64_t> totals;
     vlc_ml_query_params_t query{};
     query.i_sort = VLC_ML_SORTING_PLAYCOUNT;
-    query.b_desc = true;
+    // PlayCount uses decreasing order by default in the media library. Keep
+    // zero-play history entries last so the early stop below is valid.
+    query.b_desc = false;
     query.i_nbResults = 256;
     // Work only on listening history. Clearing history also clears this list.
     bool done = false;

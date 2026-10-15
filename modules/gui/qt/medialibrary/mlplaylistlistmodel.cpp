@@ -180,7 +180,8 @@ void MLPlaylistListModel::createWithFiles(const QString& name, const QStringList
             }
             std::vector<int64_t> ids;
             for (const auto& text : urls) {
-                const auto url = QUrl::fromEncoded(text.toUtf8(), QUrl::StrictMode);
+                // Qt drops expose readable URLs; file pickers return encoded URLs.
+                const QUrl url(text, QUrl::TolerantMode);
                 if (!url.isValid() || url.scheme().isEmpty()) return;
                 const auto uri = url.toEncoded();
                 ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));

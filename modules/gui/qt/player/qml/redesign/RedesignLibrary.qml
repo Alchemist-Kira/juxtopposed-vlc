@@ -237,7 +237,7 @@ RedesignLibraryView {
         else { const folder = DialogsProvider.selectLibraryFolder(); if (folder.toString().length > 0) libraryFolders.add(folder) }
     }
     onPreferencesRequested: DialogsProvider.prefsPageDialog("library")
-    onNewPlaylistRequested: { playlistName.text = ""; createPlaylist.open(); playlistName.forceActiveFocus() }
+    onNewPlaylistRequested: createPlaylist.begin()
 
     function homeItem(section, index) {
         const model = homeModels[section]
@@ -356,15 +356,24 @@ RedesignLibraryView {
     MLFolderModel { id: libraryFolders; ctx: MainCtx }
     ListModel { id: folderEntries }
     Connections { target: libraryFolders; function onModelReset() { root.refreshFolders() } }
-    C.Dialog {
+    RedesignPlaylistDialog {
         id: createPlaylist
-        parent: root
-        anchors.centerIn: parent
-        width: Math.min(root.width - root.theme.dp(20), root.theme.dp(320))
-        title: qsTr("Create playlist")
-        modal: true
-        standardButtons: C.Dialog.Ok | C.Dialog.Cancel
-        contentItem: C.TextField { id: playlistName; placeholderText: qsTr("Playlist name"); onAccepted: createPlaylist.accept() }
-        onAccepted: if (playlistName.text.trim().length > 0) playlists.create(playlistName.text.trim(), [])
+        parent: C.Overlay.overlay
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        onFilesRequested: addFiles(DialogsProvider.selectPlaylistFiles())
+        onCoverRequested: { const image = DialogsProvider.selectPlaylistCover(); if (image.toString().length) cover = image }
+        onSaveRequested: (name, urls, cover) => playlists.createWithFiles(name, urls, cover)
+    }
+    Binding {
+        target: MainCtx; property: "useGlobalShortcuts"; value: false
+        when: createPlaylist.visible; restoreMode: Binding.RestoreBindingOrValue
+    }
+    Connections {
+        target: playlists
+        function onPlaylistCreated(success, id, error) {
+            const name = createPlaylist.playlistName.trim()
+            createPlaylist.finish(success, error)
+            if (success) root.openTarget(root.pinTarget("playlist", id.toString(), name, 4, "playlist", "", ""))
+        }
     }
 }

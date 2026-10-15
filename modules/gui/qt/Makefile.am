@@ -1212,6 +1212,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignStartupVolume.qml \
 	player/qml/redesign/RedesignConfirmationDialog.qml \
 	player/qml/redesign/RedesignNetworkDialog.qml \
+	player/qml/redesign/RedesignPlaylistDialog.qml \
 	player/qml/redesign/RedesignNetworkStreams.qml \
 	player/qml/redesign/RedesignPreferencesWindow.qml \
 	player/qml/redesign/RedesignSettingSlider.qml \
@@ -2060,6 +2061,8 @@ EXTRA_DIST += tests/tst_RedesignQueue.qml
 TESTS += tests/tst_RedesignQueue.qml
 EXTRA_DIST += tests/tst_RedesignNetwork.qml
 TESTS += tests/tst_RedesignNetwork.qml
+EXTRA_DIST += tests/tst_RedesignPlaylist.qml
+TESTS += tests/tst_RedesignPlaylist.qml
 TESTS += tests/tst_RedesignSubtitleTimeline.qml
 TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 endif

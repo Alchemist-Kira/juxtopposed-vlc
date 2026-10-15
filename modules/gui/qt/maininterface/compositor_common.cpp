@@ -24,6 +24,7 @@
 #include <QAccessible>
 #endif
 #include <QQuickItem>
+#include <QQuickRenderControl>
 
 #ifdef QT5_DECLARATIVE_PRIVATE
 #include <private/qquickwindow_p.h>
@@ -188,3 +189,8 @@ void CompositorOffscreenWindow::focusOutEvent(QFocusEvent *ev)
 
 
 
+
+QWindow* vlc::CompositorOffscreenWindow::renderWindow() const
+{
+    return QQuickRenderControl::renderWindowFor(const_cast<CompositorOffscreenWindow*>(this));
+}

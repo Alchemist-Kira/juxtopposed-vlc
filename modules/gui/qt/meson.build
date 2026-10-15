@@ -1043,6 +1043,7 @@ qml_tests = {
     'tst_RedesignOnboarding': files('tests/tst_RedesignOnboarding.qml'),
     'tst_RedesignPlayerPreset': files('tests/tst_RedesignPlayerPreset.qml'),
     'tst_RedesignMenu': files('tests/tst_RedesignMenu.qml'),
+    'tst_RedesignToolTip': files('tests/tst_RedesignToolTip.qml'),
     'tst_RedesignSubtitles': files('tests/tst_RedesignSubtitles.qml'),
 }
 

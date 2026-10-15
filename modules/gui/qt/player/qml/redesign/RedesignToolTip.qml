@@ -10,12 +10,15 @@ C.ToolTip {
     id: tip
     objectName: "redesignToolTip"
     property RedesignTheme theme
+    readonly property var controlWindow: parent ? parent.Window.window : null
+    readonly property var hostWindow: controlWindow && controlWindow.renderWindow !== undefined
+                                      ? controlWindow.renderWindow : controlWindow
     readonly property real s: theme ? theme.scaleFactor : 1
 
-    // Windowed: a real popup so it is never clipped at the window edge. Fullscreen: in-window,
-    // because a separate surface takes pointer hover from the main window and the auto-hiding
-    // bars would hide under it (show/hide loop). The window is the whole screen there anyway.
-    popupType: parent && parent.Window.window && parent.Window.window.visibility === Window.FullScreen
+    // Offscreen render controls cannot display native popup windows. Fullscreen
+    // also uses an item popup to keep pointer hover on the player controls.
+    popupType: (hostWindow && hostWindow !== controlWindow)
+               || (hostWindow && hostWindow.visibility === Window.FullScreen)
                ? C.Popup.Item : C.Popup.Window
     delay: 650
     margins: 6 * s

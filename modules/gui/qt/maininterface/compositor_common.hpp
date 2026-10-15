@@ -64,9 +64,11 @@ private:
 class CompositorOffscreenWindow : public QQuickWindow
 {
     Q_OBJECT
+    Q_PROPERTY(QWindow* renderWindow READ renderWindow CONSTANT FINAL)
 public:
     explicit CompositorOffscreenWindow(QQuickRenderControl* renderControl);
 
+    QWindow* renderWindow() const;
     void setWindowStateExt(Qt::WindowState);
 
     void setPseudoVisible(bool visible);

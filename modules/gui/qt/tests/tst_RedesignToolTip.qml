@@ -11,6 +11,13 @@ TestCase {
     width: 600; height: 400
     visible: true; when: windowShown
     RedesignButton { id: button; x: 20; y: 100; text: "Playback settings" }
+    Window {
+        id: offscreenWindow
+        property var renderWindow: testCase.Window.window
+        width: 300; height: 200
+        visible: false
+        RedesignButton { id: offscreenButton; text: "Audio" }
+    }
     function init() {
         testCase.Window.window.visibility = Window.Windowed
         button.scaleFactor = 1; button.lightTheme = false
@@ -34,6 +41,11 @@ TestCase {
         button.lightTheme = true; button.scaleFactor = 1.5
         compare(tip.background.color, button.theme.panel)
         compare(tip.font.pixelSize, 18)
+    }
+    function test_offscreenRenderingUsesAnItemPopup() {
+        const tip = findChild(offscreenButton, "redesignToolTip")
+        compare(tip.hostWindow, testCase.Window.window)
+        compare(tip.popupType, C.Popup.Item)
     }
     function test_fullscreenUsesTheControlsWindow() {
         const tip = findChild(button, "redesignToolTip")

@@ -24,6 +24,10 @@
 
 #include <algorithm>
 #include <vlc_services_discovery.h>
+#ifdef _WIN32
+# include <vlc_fs.h>
+# include <sys/stat.h>
+#endif
 #include <medialibrary/IDeviceLister.h>
 #include <medialibrary/filesystem/IDevice.h>
 #include <medialibrary/IMediaLibrary.h>
@@ -37,6 +41,53 @@ namespace vlc {
   namespace medialibrary {
 
 using namespace ::medialibrary;
+
+#ifdef _WIN32
+// A UNC share need not have a drive letter or appear in WNet's connected-drive
+// list. Resolve explicitly selected shares through the Windows file API instead
+// of depending on LAN discovery. The share root is also a stable device ID, so
+// saved entry points can be resolved after a restart.
+static std::shared_ptr<IDevice> uncDevice(const std::string& mrl)
+{
+    try
+    {
+        vlc::url url{ mrl };
+        if (!url.psz_protocol || strcasecmp(url.psz_protocol, "file") || !url.psz_host ||
+            !*url.psz_host || !strcasecmp(url.psz_host, "localhost") ||
+            url.psz_username || url.psz_password || url.i_port ||
+            !url.psz_path || url.psz_path[0] != '/' || !url.psz_path[1])
+            return nullptr;
+
+        const std::string path = url.psz_path;
+        auto end = path.find('/', 1);
+        std::string share = path.substr(0, end);
+        if (share == "/." || share == "/..")
+            return nullptr;
+        share += '/';
+        url.psz_path = share.data();
+        url.psz_option = nullptr;
+        auto root = vlc::wrap_cptr(vlc_uri_compose(&url));
+        if (!root)
+            return nullptr;
+        auto localPath = vlc::wrap_cptr(vlc_uri2path(root.get()));
+        struct stat st;
+        if (!localPath || vlc_stat(localPath.get(), &st) || !S_ISDIR(st.st_mode))
+            return nullptr;
+
+        std::string uuid = root.get();
+        std::transform(uuid.begin(), uuid.end(), uuid.begin(), [](unsigned char c) {
+            return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+        });
+        auto device = std::make_shared<SDDevice>("unc:" + uuid, "file://", true, true);
+        device->addMountpoint(root.get());
+        return device;
+    }
+    catch (const vlc::url::invalid&)
+    {
+        return nullptr;
+    }
+}
+#endif
 
 SDFileSystemFactory::SDFileSystemFactory(vlc_object_t *parent,
                                          const std::string &scheme)
@@ -82,6 +133,10 @@ SDFileSystemFactory::createFile(const std::string& mrl)
 std::shared_ptr<IDevice>
 SDFileSystemFactory::createDevice(const std::string &uuid)
 {
+#ifdef _WIN32
+    if (m_scheme == "file://" && uuid.compare(0, 4, "unc:") == 0)
+        return uncDevice(uuid.substr(4));
+#endif
     vlc::threads::mutex_locker locker(m_mutex);
 
     assert( isStarted() == true );
@@ -92,6 +147,11 @@ SDFileSystemFactory::createDevice(const std::string &uuid)
 std::shared_ptr<IDevice>
 SDFileSystemFactory::createDeviceFromMrl(const std::string &mrl)
 {
+#ifdef _WIN32
+    if (m_scheme == "file://")
+        if (auto device = uncDevice(mrl))
+            return device;
+#endif
     vlc::threads::mutex_locker locker(m_mutex);
 
     assert( isStarted() == true );
@@ -196,6 +256,10 @@ void vlc::medialibrary::SDFileSystemFactory::onDeviceUnmounted(const std::string
 bool SDFileSystemFactory::waitForDevice(const std::string& mrl,
                                         uint32_t timeout) const
 {
+#ifdef _WIN32
+    if (m_scheme == "file://" && uncDevice(mrl))
+        return true;
+#endif
     auto deadline = vlc_tick_now() + VLC_TICK_FROM_MS(timeout);
     vlc::threads::mutex_locker lock{ m_mutex };
     while ( deviceByMrl(mrl) == nullptr )

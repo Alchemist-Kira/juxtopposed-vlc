@@ -59,6 +59,7 @@ void applyRedesignWidgetTheme(QWidget* widget, MainCtx* ctx)
             "QTabBar::tab { background: %4; padding: 10px 16px; border-bottom: 2px solid transparent; }"
             "QTabBar::tab:selected { color: %5; border-bottom-color: %7; }"
             "QTabBar::tab:hover { background: %8; }"
+            "QHeaderView { background: %8; border: none; padding: 0; border-radius: 0; }"
             "QHeaderView::section { background: %8; color: %5; border: none; padding: 6px; }"
             "QTableCornerButton::section { background: %8; border: none; }"
             "QGraphicsView { background: %4; border: none; }"

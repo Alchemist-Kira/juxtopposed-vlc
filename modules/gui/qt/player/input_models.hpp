@@ -48,6 +48,12 @@ class TrackListModel : public QAbstractListModel
     Q_PROPERTY(bool multiSelect READ getMultiSelect WRITE setMultiSelect NOTIFY multiSelectChanged FINAL)
 
 public:
+    enum Role {
+        ExternalRole = Qt::UserRole + 1,
+        SourceNameRole,
+        SourceUriRole,
+    };
+
     TrackListModel(vlc_player_t* player, QObject* parent = nullptr);
 
     Qt::ItemFlags flags(const QModelIndex &) const  override;
@@ -78,6 +84,7 @@ signals:
     void multiSelectChanged(bool multiSelect);
 
 private:
+    void sourceNamesChanged();
     vlc_player_t* m_player;
     class Data {
     public:

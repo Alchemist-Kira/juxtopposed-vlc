@@ -12,7 +12,19 @@ ColumnLayout {
     property var trackModel
     property string heading
     property bool allowDisable: false
-    readonly property int count: choices.count
+    property int trackGroup: -1 // All tracks, embedded tracks, or external tracks.
+    property bool showEmptyMessage: true
+    property bool editableTracks: false
+    property bool canEditTracks: true
+    property bool refreshable: false
+    readonly property int count: {
+        let total = 0
+        for (let i = 0; i < choices.count; ++i) {
+            const row = choices.itemAt(i)
+            if (row && row.accepted) ++total
+        }
+        return total
+    }
     readonly property bool hasSelection: {
         for (let i = 0; i < choices.count; ++i) {
             const row = choices.itemAt(i)
@@ -23,11 +35,15 @@ ColumnLayout {
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal selectionRequested(int index, bool selected)
     signal disableRequested()
+    signal editRequested()
+    signal addRequested()
+    signal refreshRequested()
     spacing: 0
 
     component TrackChoice: T.Button {
         id: choice
         property bool chosen: false
+        property string description: text
         Layout.fillWidth: true
         implicitHeight: root.theme.dp(44)
         hoverEnabled: true
@@ -63,14 +79,45 @@ ColumnLayout {
                 elide: Text.ElideRight
             }
         }
-        RedesignToolTip { theme: root.theme; text: parent.text; visible: parent.hovered && parent.text.length > 0 }
+        RedesignToolTip { theme: root.theme; text: parent.description; visible: (parent.hovered || parent.visualFocus) && parent.description.length > 0 }
     }
-    Text {
-        text: root.heading; color: theme.foreground; opacity: 0.75
-        font.pixelSize: theme.dp(14)
-        Layout.leftMargin: theme.dp(28)
-        Layout.topMargin: theme.dp(22)
-        Layout.bottomMargin: theme.dp(14)
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.leftMargin: theme.dp(28); Layout.rightMargin: theme.dp(24)
+        Layout.topMargin: theme.dp(22); Layout.bottomMargin: theme.dp(14)
+        spacing: theme.dp(12)
+        Text {
+            text: root.heading; color: root.theme.foreground; opacity: 0.75
+            font.pixelSize: root.theme.dp(14)
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+        }
+        RedesignButton {
+            objectName: "editExternalTracks"
+            visible: root.editableTracks
+            enabled: root.canEditTracks && root.count > 0
+            Layout.preferredWidth: root.theme.dp(28); Layout.preferredHeight: root.theme.dp(24)
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            iconName: "edit"; iconSize: root.theme.dp(20); text: qsTr("Edit external tracks")
+            onClicked: root.editRequested()
+        }
+        RedesignButton {
+            objectName: "addExternalTracks"
+            visible: root.editableTracks
+            enabled: root.canEditTracks
+            Layout.preferredWidth: root.theme.dp(28); Layout.preferredHeight: root.theme.dp(24)
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            iconName: "add"; iconSize: root.theme.dp(20); text: qsTr("Add external tracks")
+            onClicked: root.addRequested()
+        }
+        RedesignButton {
+            objectName: "refreshTrackDevices"
+            visible: root.refreshable
+            Layout.preferredWidth: root.theme.dp(28); Layout.preferredHeight: root.theme.dp(24)
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            iconName: "refresh-two-tone"; iconSize: root.theme.dp(20); text: qsTr("Refresh output devices")
+            onClicked: root.refreshRequested()
+        }
     }
     TrackChoice {
         objectName: "disableTracks"
@@ -87,19 +134,26 @@ ColumnLayout {
             required property int index
             required property string display
             required property bool checked
+            required property var model
+            readonly property bool external: typeof model.external === "boolean" && model.external
+            readonly property bool accepted: root.trackGroup < 0 || external === (root.trackGroup === 1)
+            readonly property string sourceName: typeof model.sourceName === "string" ? model.sourceName : ""
+            readonly property string sourceUri: model.sourceUri === undefined ? "" : String(model.sourceUri)
+            visible: accepted
             Layout.fillWidth: true
-            implicitHeight: root.theme.dp(44)
+            implicitHeight: accepted ? root.theme.dp(44) : 0
             TrackChoice {
                 anchors.fill: parent
                 objectName: "trackChoice_" + track.index
-                text: track.display
+                text: track.external && track.sourceName.length ? track.sourceName : track.display
+                description: track.external && track.sourceUri.length ? text + "\n" + track.sourceUri : text
                 chosen: track.checked
                 onClicked: root.selectionRequested(track.index, true)
             }
         }
     }
     Text {
-        visible: choices.count === 0 && !root.allowDisable
+        visible: root.count === 0 && !root.allowDisable && root.showEmptyMessage
         text: qsTr("No tracks available"); color: theme.foreground
         font.pixelSize: theme.dp(13)
         Layout.leftMargin: theme.dp(28); Layout.bottomMargin: theme.dp(16)

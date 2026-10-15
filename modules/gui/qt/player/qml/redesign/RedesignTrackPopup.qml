@@ -23,13 +23,15 @@ C.Popup {
     property var videoTracks
     property var audioTracks
     property var subtitleTracks
+    property bool canAddTracks: true
     property var audioDevices
     readonly property var currentTracks: page === "video" ? videoTracks : page === "audio" ? audioTracks : subtitleTracks
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal preferencesRequested(string page)
     signal selectionRequested(var model, int index, bool selected)
     signal disableRequested(var model)
-    signal addSubtitleFileRequested()
+    signal addTracksRequested(string page)
+    signal editTracksRequested(string page)
     width: Math.max(0, Math.min(placementArea.width - theme.dp(40), theme.dp(400)))
     height: Math.max(0, Math.min(placementArea.height - theme.dp(134), theme.dp(524)))
     padding: 0
@@ -88,6 +90,7 @@ C.Popup {
         }
         C.ScrollView {
             id: scroll
+            objectName: "trackScrollView"
             Layout.fillWidth: true; Layout.fillHeight: true
             contentWidth: availableWidth
             clip: true
@@ -101,32 +104,41 @@ C.Popup {
                     heading: qsTr("Embedded Tracks")
                     trackModel: root.currentTracks
                     allowDisable: true
+                    trackGroup: 0
                     onSelectionRequested: (index, selected) => root.selectionRequested(trackModel, index, selected)
                     onDisableRequested: root.disableRequested(trackModel)
                 }
+                RedesignTracks {
+                    id: externalChoices
+                    objectName: "externalTrackChoices"
+                    Layout.fillWidth: true
+                    Layout.topMargin: root.theme.dp(16)
+                    visible: root.page === "subtitles" || count > 0
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    heading: qsTr("External Tracks"); trackModel: root.currentTracks
+                    trackGroup: 1; showEmptyMessage: false
+                    editableTracks: root.page !== "video"; canEditTracks: root.canAddTracks
+                    onSelectionRequested: (index, selected) => root.selectionRequested(trackModel, index, selected)
+                    onEditRequested: { root.close(); root.editTracksRequested(root.page) }
+                    onAddRequested: { root.close(); root.addTracksRequested(root.page) }
+                }
                 Rectangle {
-                    visible: root.page === "audio" || root.page === "subtitles"
+                    visible: root.page === "audio"
                     Layout.fillWidth: true; Layout.preferredHeight: theme.dp(1)
                     Layout.topMargin: theme.dp(12)
                     color: theme.border
                 }
                 RedesignTracks {
+                    objectName: "outputDeviceChoices"
                     Layout.fillWidth: true
                     visible: root.page === "audio"
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     heading: qsTr("Output Device"); trackModel: root.audioDevices
+                    refreshable: true
+                    onRefreshRequested: if (root.audioDevices) root.audioDevices.refresh()
                     onSelectionRequested: (index, selected) => root.selectionRequested(trackModel, index, selected)
                 }
-                RedesignButton {
-                    visible: root.page === "subtitles"
-                    Layout.fillWidth: true
-                    Layout.leftMargin: theme.dp(20); Layout.rightMargin: theme.dp(20)
-                    Layout.topMargin: theme.dp(16)
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    leftAligned: true
-                    iconName: "add"; caption: qsTr("Add subtitle file"); text: caption
-                    onClicked: root.addSubtitleFileRequested()
-                }
+
             }
         }
         RedesignButton {

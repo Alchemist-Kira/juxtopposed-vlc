@@ -283,7 +283,9 @@ FocusScope {
             for (let i = 0; i < model.count; ++i)
                 model.setData(model.index(i, 0), false, Qt.CheckStateRole)
         }
-        onAddSubtitleFileRequested: DialogsProvider.loadSubtitlesFile()
+        canAddTracks: Player.isStarted
+        onAddTracksRequested: page => page === "audio" ? DialogsProvider.loadAudioFile() : DialogsProvider.loadSubtitlesFile()
+        onEditTracksRequested: page => page === "audio" ? DialogsProvider.loadAudioFile() : DialogsProvider.loadSubtitlesFile()
         onPreferencesRequested: page => view.settingsPage = page
     }
 

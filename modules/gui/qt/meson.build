@@ -1422,6 +1422,16 @@ if qt6_dep.found()
     qtest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['Test'], required: false)
     if qtest_qt6_dep.found()
         vlc_tests += {
+            'name': 'test_qt_track_list_model',
+            'sources': files('tests/test_track_list_model.cpp', 'player/input_models.cpp', 'util/vlctick.cpp'),
+            'moc_sources': files('tests/test_track_list_model.cpp'),
+            'moc_headers': files('player/input_models.hpp', 'util/vlctick.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore],
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
             'name': 'test_qt_audio_device_model',
             'sources': files('tests/test_audio_device_model.cpp', 'util/audio_device_model.cpp'),
             'moc_sources': files('tests/test_audio_device_model.cpp'),

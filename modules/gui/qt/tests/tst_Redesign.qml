@@ -59,8 +59,8 @@ TestCase {
         id: tracks
         property int refreshCount: 0
         function refresh() { refreshCount++ }
-        ListElement { display: "English"; checked: true }
-        ListElement { display: "Japanese"; checked: false }
+        ListElement { display: "English"; checked: true; external: false; sourceName: ""; sourceUri: "" }
+        ListElement { display: "Japanese"; checked: false; external: false; sourceName: ""; sourceUri: "" }
     }
     RedesignTrackPopup {
         id: trackPicker
@@ -78,6 +78,8 @@ TestCase {
     }
     SignalSpy { id: trackSelectionSpy; target: trackPicker; signalName: "selectionRequested" }
     SignalSpy { id: trackPreferencesSpy; target: trackPicker; signalName: "preferencesRequested" }
+    SignalSpy { id: addTracksSpy; target: trackPicker; signalName: "addTracksRequested" }
+    SignalSpy { id: editTracksSpy; target: trackPicker; signalName: "editTracksRequested" }
     SignalSpy { id: seekSpy; target: player; signalName: "seekRequested" }
     SignalSpy { id: seekDragStartSpy; target: player; signalName: "seekDragStarted" }
     SignalSpy { id: seekDragFinishSpy; target: player; signalName: "seekDragFinished" }
@@ -127,10 +129,12 @@ TestCase {
         trackPicker.parent = testCase
         trackPicker.x = 20; trackPicker.y = 20
         trackPicker.page = "subtitles"
-        tracks.setProperty(0, "checked", true)
-        tracks.setProperty(1, "checked", false)
+        tracks.clear()
+        tracks.append({display:"English", checked:true, external:false, sourceName:"", sourceUri:""})
+        tracks.append({display:"Japanese", checked:false, external:false, sourceName:"", sourceUri:""})
+        trackPicker.canAddTracks = true
         trackSelectionSpy.clear()
-        trackPreferencesSpy.clear()
+        trackPreferencesSpy.clear(); addTracksSpy.clear(); editTracksSpy.clear()
         player.libraryOpen = false
         player.libraryExpanded = false
         player.miniPlayerVisible = true
@@ -353,6 +357,61 @@ TestCase {
         trackPicker.page = "audio"
         wait(2100)
         compare(tracks.refreshCount, before)
+    }
+    function test_externalTracksKeepTheirOriginalSelectionIndex() {
+        tracks.append({display:"Track 3",checked:false,external:true,sourceName:"captions.srt",sourceUri:"file:///tracks/captions.srt"})
+        trackPicker.open(); tryCompare(trackPicker,"opened",true)
+        const embedded=findChild(trackPicker,"embeddedTrackChoices"), external=findChild(trackPicker,"externalTrackChoices")
+        tryCompare(embedded,"count",2); tryCompare(external,"count",1)
+        verify(!findChild(embedded,"trackChoice_2").visible)
+        verify(!findChild(external,"trackChoice_0").visible)
+        const source=findChild(external,"trackChoice_2")
+        compare(source.text,"captions.srt")
+        tryVerify(() => source.width > 0)
+        mouseClick(source)
+        compare(trackSelectionSpy.count,1)
+        compare(trackSelectionSpy.signalArguments[0][1],2)
+        verify(tracks.get(2).checked)
+        verify(!findChild(embedded,"disableTracks").chosen)
+        mouseClick(findChild(embedded,"disableTracks"))
+        for (let i=0;i<tracks.count;++i) verify(!tracks.get(i).checked)
+        verify(findChild(embedded,"disableTracks").chosen)
+        tracks.remove(0)
+        tryCompare(embedded,"count",1); tryCompare(external,"count",1)
+        mouseClick(findChild(external,"trackChoice_1"))
+        compare(trackSelectionSpy.signalArguments[1][1],1)
+        verify(tracks.get(1).checked)
+    }
+    function test_externalTrackActionsClosePopup() {
+        trackPicker.open(); tryCompare(trackPicker,"opened",true)
+        const external=findChild(trackPicker,"externalTrackChoices")
+        verify(!findChild(external,"editExternalTracks").enabled)
+        mouseClick(findChild(external,"addExternalTracks"))
+        compare(addTracksSpy.count,1); compare(addTracksSpy.signalArguments[0][0],"subtitles")
+        tryCompare(trackPicker,"visible",false)
+        tracks.append({display:"French",checked:false,external:true,sourceName:"french.srt",sourceUri:"file:///tracks/french.srt"})
+        trackPicker.open(); tryCompare(trackPicker,"opened",true)
+        mouseClick(findChild(external,"editExternalTracks"))
+        compare(editTracksSpy.count,1); compare(editTracksSpy.signalArguments[0][0],"subtitles")
+        tryCompare(trackPicker,"visible",false)
+        trackPicker.canAddTracks=false; trackPicker.open(); tryCompare(trackPicker,"opened",true)
+        verify(!findChild(external,"addExternalTracks").enabled)
+    }
+    function test_externalAudioTracksAndDeviceRefresh() {
+        tracks.append({display:"Commentary",checked:false,external:true,sourceName:"commentary.wav",sourceUri:"file:///tracks/commentary.wav"})
+        trackPicker.page="audio"; trackPicker.open(); tryCompare(trackPicker,"opened",true)
+        const external=findChild(trackPicker,"externalTrackChoices")
+        verify(external.visible); compare(external.count,1)
+        const choice=findChild(external,"trackChoice_2")
+        tryVerify(() => choice.width > 0)
+        mouseClick(choice); verify(tracks.get(2).checked)
+        const scroll=findChild(trackPicker,"trackScrollView").contentItem
+        scroll.contentY=Math.max(0,scroll.contentHeight-scroll.height)
+        wait(30)
+        const before=tracks.refreshCount
+        mouseClick(findChild(findChild(trackPicker,"outputDeviceChoices"),"refreshTrackDevices"))
+        compare(tracks.refreshCount,before+1)
+        tracks.remove(2); tryCompare(external,"visible",false)
     }
     function test_trackPickerSelectsAndDisablesTracks() {
         trackPicker.open()

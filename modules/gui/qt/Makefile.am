@@ -2046,6 +2046,19 @@ check_PROGRAMS += test_vlc_dialog_model
 TESTS += test_vlc_dialog_model
 
 
+test_qt_track_list_model_SOURCES = \
+	tests/test_track_list_model.cpp player/input_models.cpp player/input_models.hpp util/vlctick.cpp util/vlctick.hpp
+nodist_test_qt_track_list_model_SOURCES = \
+	tests/test_track_list_model.moc player/input_models.moc.cpp util/vlctick.moc.cpp
+BUILT_SOURCES += tests/test_track_list_model.moc
+CLEANFILES += tests/test_track_list_model.moc
+test_qt_track_list_model_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_track_list_model_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_track_list_model_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_track_list_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_track_list_model
+TESTS += test_qt_track_list_model
+
 test_qt_navigation_model_SOURCES = \
 	tests/vlc_stub_modules.cpp \
 	tests/test_navigation_model.cpp \

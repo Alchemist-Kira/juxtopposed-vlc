@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  *****************************************************************************/
 #include "input_models.hpp"
+#include <QUrl>
 
 #include "player/player_controller.hpp"
 
@@ -29,32 +30,47 @@ TrackListModel::TrackListModel(vlc_player_t *player, QObject *parent)
 {
 }
 
-Qt::ItemFlags TrackListModel::flags(const QModelIndex &) const
+Qt::ItemFlags TrackListModel::flags(const QModelIndex &index) const
 {
-    return Qt::ItemIsUserCheckable;
+    return index.isValid() ? Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable : Qt::NoItemFlags;
 }
 
-int TrackListModel::rowCount(const QModelIndex &) const
+int TrackListModel::rowCount(const QModelIndex &parent) const
 {
-    return m_data.size();
+    return parent.isValid() ? 0 : m_data.size();
 }
 
 QVariant TrackListModel::data(const QModelIndex &index, int role) const
 {
     int row = index.row();
-    if (row >= m_data.size())
+    if (!index.isValid() || row < 0 || row >= m_data.size())
         return QVariant{};
     if (role == Qt::DisplayRole)
         return m_data[row].m_title;
     else if (role == Qt::CheckStateRole)
         return QVariant::fromValue<bool>(m_data[row].m_selected);
+    const char* source = vlc_es_id_GetSourceUri(m_data[row].m_id.get());
+    if (role == ExternalRole) return source != nullptr;
+    if (source && role == SourceUriRole)
+        return QUrl(qfu(source)).adjusted(QUrl::RemoveUserInfo);
+    if (source && role == SourceNameRole) {
+        const QUrl url(qfu(source));
+        auto name = url.fileName();
+        if (name.isEmpty()) name = url.toDisplayString(QUrl::RemoveUserInfo);
+        const auto count = std::count_if(m_data.cbegin(), m_data.cend(), [source](const Data& track) {
+            const auto uri = vlc_es_id_GetSourceUri(track.m_id.get());
+            return uri && !strcmp(uri, source);
+        });
+        if (count > 1) name += QStringLiteral(" (%1)").arg(m_data[row].m_title);
+        return name;
+    }
     return QVariant{};
 }
 
 bool TrackListModel::setData(const QModelIndex &index, const QVariant &value, int role)
 {
     int row = index.row();
-    if (row >= m_data.size())
+    if (!index.isValid() || row < 0 || row >= m_data.size())
         return false;
     if ( role != Qt::CheckStateRole )
         return false;
@@ -85,6 +101,7 @@ void TrackListModel::updateTracks(vlc_player_list_action action, const vlc_playe
         beginInsertRows({}, m_data.size(), m_data.size());
         m_data.append(Data{ track_info });
         endInsertRows();
+        sourceNamesChanged();
         emit countChanged();
         break;
     }
@@ -100,6 +117,7 @@ void TrackListModel::updateTracks(vlc_player_list_action action, const vlc_playe
         beginRemoveRows({}, pos, pos);
         m_data.erase(it);
         endRemoveRows();
+        sourceNamesChanged();
         emit countChanged();
         break;
     }
@@ -120,7 +138,8 @@ void TrackListModel::updateTracks(vlc_player_list_action action, const vlc_playe
         if (!found)
             return;
         QModelIndex dataIndex = index(pos);
-        emit dataChanged(dataIndex, dataIndex, { Qt::DisplayRole, Qt::CheckStateRole });
+        emit dataChanged(dataIndex, dataIndex, { Qt::DisplayRole, Qt::CheckStateRole, ExternalRole, SourceUriRole });
+        sourceNamesChanged();
         break;
     }
     }
@@ -143,6 +162,7 @@ void TrackListModel::updateTrackSelection(vlc_es_id_t *trackid, bool selected)
 
 void TrackListModel::clear()
 {
+    if (m_data.isEmpty()) return;
     beginRemoveRows({}, 0, m_data.size() - 1);
     m_data.clear();
     endRemoveRows();
@@ -153,7 +173,15 @@ QHash<int, QByteArray> TrackListModel::roleNames() const
 {
     QHash<int, QByteArray> roleNames = this->QAbstractListModel::roleNames();
     roleNames[Qt::CheckStateRole] = QByteArrayLiteral("checked");
+    roleNames[ExternalRole] = QByteArrayLiteral("external");
+    roleNames[SourceNameRole] = QByteArrayLiteral("sourceName");
+    roleNames[SourceUriRole] = QByteArrayLiteral("sourceUri");
     return roleNames;
+}
+
+void TrackListModel::sourceNamesChanged()
+{
+    if (!m_data.isEmpty()) emit dataChanged(index(0), index(m_data.size() - 1), {SourceNameRole});
 }
 
 void TrackListModel::setMultiSelect(bool multiSelect)

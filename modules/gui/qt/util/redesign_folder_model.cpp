@@ -2,6 +2,7 @@
 #include "redesign_folder_model.hpp"
 #include <QTimer>
 #include <QDir>
+#include <QDateTime>
 #include <QThreadPool>
 #include <algorithm>
 
@@ -66,6 +67,16 @@ void RedesignFolderModel::setSortReversed(bool reversed)
     m_sortReversed = reversed;
     scheduleRefresh();
     emit sortReversedChanged();
+}
+
+void RedesignFolderModel::setSortCriteria(const QString& criteria)
+{
+    if (criteria != "title" && criteria != "insertion" && criteria != "uri")
+        return;
+    if (m_sortCriteria == criteria) return;
+    m_sortCriteria = criteria;
+    scheduleRefresh();
+    emit sortCriteriaChanged();
 }
 
 int RedesignFolderModel::directoryCount() const
@@ -135,19 +146,34 @@ void RedesignFolderModel::scan()
     const auto filters = m_nameFilters;
     const auto serial = m_serial;
     const auto reversed = m_sortReversed;
+    const auto sort = m_sortCriteria;
     const auto search = m_searchPattern;
-    QThreadPool::globalInstance()->start([results, folder, filters, serial, reversed, search] {
+    QThreadPool::globalInstance()->start([results, folder, filters, serial, reversed, sort, search] {
         QFileInfoList entries;
         if (folder.isLocalFile()) {
             QDir directory(folder.toLocalFile());
             entries = directory.entryInfoList(filters,
                 QDir::AllEntries | QDir::AllDirs | QDir::Readable | QDir::NoDotAndDotDot,
-                QDir::Name | QDir::DirsFirst | QDir::IgnoreCase | (reversed ? QDir::Reversed : QDir::SortFlag(0)));
+                QDir::NoSort);
         }
         if (!search.isEmpty())
             entries.erase(std::remove_if(entries.begin(), entries.end(), [&search](const QFileInfo& file) {
                 return !file.fileName().contains(search, Qt::CaseInsensitive);
             }), entries.end());
+        std::sort(entries.begin(), entries.end(), [&sort, reversed](const QFileInfo& a, const QFileInfo& b) {
+            if (a.isDir() != b.isDir()) return a.isDir();
+            int primary;
+            if (sort == "insertion") {
+                const auto av = a.lastModified();
+                const auto bv = b.lastModified();
+                primary = av < bv ? -1 : av > bv ? 1 : 0;
+            } else if (sort == "uri") {
+                primary = QUrl::fromLocalFile(a.absoluteFilePath()).toEncoded().compare(
+                    QUrl::fromLocalFile(b.absoluteFilePath()).toEncoded());
+            } else primary = QString::compare(a.fileName(), b.fileName(), Qt::CaseInsensitive);
+            if (primary) return reversed ? primary > 0 : primary < 0;
+            return a.fileName() < b.fileName();
+        });
         emit results->ready(serial, entries);
     });
 }

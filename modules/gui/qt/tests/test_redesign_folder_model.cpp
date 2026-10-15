@@ -3,6 +3,7 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QDir>
+#include <QDateTime>
 #include "util/redesign_folder_model.hpp"
 
 class TestRedesignFolderModel : public QObject
@@ -13,6 +14,35 @@ class TestRedesignFolderModel : public QObject
         QVERIFY(file.open(QIODevice::WriteOnly));
     }
 private slots:
+    void sortDatesAndEncodedUrisKeepDirectoriesFirst() {
+        QTemporaryDir directory;
+        QDir dir(directory.path());
+        QVERIFY(dir.mkdir("folder"));
+        touch(dir.filePath("a.mp4"));
+        touch(dir.filePath("z.mp4"));
+        touch(dir.filePath("é.mp4"));
+        for (const auto& pair : QList<QPair<QString, int>>{{"a.mp4",300},{"z.mp4",100},{"é.mp4",200}}) {
+            QFile file(dir.filePath(pair.first));
+            QVERIFY(file.open(QIODevice::ReadWrite));
+            QVERIFY(file.setFileTime(QDateTime::fromSecsSinceEpoch(1600000000 + pair.second), QFileDevice::FileModificationTime));
+        }
+        RedesignFolderModel model;
+        model.setFolder(QUrl::fromLocalFile(directory.path()));
+        QTRY_COMPARE(model.count(), 4);
+        model.setSortCriteria("insertion");
+        model.setSortReversed(true);
+        QTRY_COMPARE(model.get(2, "fileName").toString(), "é.mp4");
+        QCOMPARE(model.get(1, "fileName").toString(), "a.mp4");
+        QCOMPARE(model.get(0, "fileName").toString(), "folder");
+        model.setSortReversed(false);
+        QTRY_COMPARE(model.get(1, "fileName").toString(), "z.mp4");
+        model.setSortCriteria("uri");
+        QTRY_COMPARE(model.get(1, "fileName").toString(), "é.mp4");
+        QCOMPARE(model.get(0, "fileName").toString(), "folder");
+        model.setSortReversed(true);
+        QTRY_COMPARE(model.get(1, "fileName").toString(), "z.mp4");
+        QCOMPARE(model.get(3, "fileName").toString(), "é.mp4");
+    }
     void absoluteLibraryPathIsLocal() {
         QTemporaryDir directory;
         touch(QDir(directory.path()).filePath("movie.mp4"));

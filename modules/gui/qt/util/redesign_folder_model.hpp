@@ -25,6 +25,7 @@ class RedesignFolderModel : public QAbstractListModel
     Q_PROPERTY(QUrl folder READ folder WRITE setFolder NOTIFY folderChanged FINAL)
     Q_PROPERTY(QStringList nameFilters READ nameFilters WRITE setNameFilters NOTIFY nameFiltersChanged FINAL)
     Q_PROPERTY(bool sortReversed READ sortReversed WRITE setSortReversed NOTIFY sortReversedChanged FINAL)
+    Q_PROPERTY(QString sortCriteria READ sortCriteria WRITE setSortCriteria NOTIFY sortCriteriaChanged FINAL)
     Q_PROPERTY(int count READ count NOTIFY countChanged FINAL)
     Q_PROPERTY(int directoryCount READ directoryCount NOTIFY countChanged FINAL)
     Q_PROPERTY(QString searchPattern READ searchPattern WRITE setSearchPattern NOTIFY searchPatternChanged FINAL)
@@ -37,6 +38,8 @@ public:
     void setNameFilters(const QStringList& filters);
     bool sortReversed() const { return m_sortReversed; }
     void setSortReversed(bool reversed);
+    QString sortCriteria() const { return m_sortCriteria; }
+    void setSortCriteria(const QString& criteria);
     int count() const { return m_entries.size(); }
     int directoryCount() const;
     QString searchPattern() const { return m_searchPattern; }
@@ -49,6 +52,7 @@ signals:
     void folderChanged();
     void nameFiltersChanged();
     void sortReversedChanged();
+    void sortCriteriaChanged();
     void countChanged();
     void searchPatternChanged();
 private:
@@ -60,6 +64,7 @@ private:
     QStringList m_nameFilters;
     QUrl m_folder;
     QString m_searchPattern;
+    QString m_sortCriteria = QStringLiteral("title");
     QFileInfoList m_entries;
     quint64 m_serial = 0;
     bool m_sortReversed = false;

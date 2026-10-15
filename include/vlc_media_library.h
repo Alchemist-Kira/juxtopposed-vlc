@@ -159,6 +159,8 @@ typedef struct vlc_ml_file_t
     bool b_external;
     bool b_removable;
     bool b_present;
+    /** This associated file was excluded by an explicit saved track choice. */
+    bool b_unselected;
 } vlc_ml_file_t;
 
 typedef struct vlc_ml_file_list_t
@@ -244,6 +246,8 @@ typedef struct vlc_ml_media_t
             int i_disc_nb;
         } album_track;
     };
+    bool b_subtitle_track_selection;
+    bool b_soundtrack_track_selection;
 } vlc_ml_media_t;
 
 typedef struct vlc_ml_group_t
@@ -663,10 +667,11 @@ enum vlc_ml_control
     VLC_ML_GENRE_SET_FAVORITE, /**< arg1: genre id; arg2: bool; can fail */
     VLC_ML_PLAYLIST_SET_FAVORITE, /**< arg1: playlist id; arg2: bool; can fail */
 
-    /** Replace external subtitle or soundtrack associations for one media.
+    /** Save subtitle or soundtrack file choices for one media.
      * arg1: media id; arg2: vlc_ml_file_type_t; arg3: const char* const*;
-     * arg4: size_t count. An empty list removes associations of this type.
-     * Other files and disk contents are preserved. Atomic for this media.
+     * arg4: size_t count. An empty list unselects all files of this type.
+     * Discovered records, other files and disk contents are preserved.
+     * External associations and the selected list change atomically.
      */
     VLC_ML_MEDIA_SET_EXTERNAL_MRLS,
 };

@@ -330,12 +330,12 @@ void MediaLib::playlistTrackTargets(const MLItemId& id, QJSValue callback)
 }
 
 namespace {
-QStringList externalTracks(const vlc_ml_media_t* media, vlc_ml_file_type_t type)
+QStringList selectedTracks(const vlc_ml_media_t* media, vlc_ml_file_type_t type)
 {
     QStringList tracks;
     if (media && media->p_files) {
         for (const auto& file : ml_range_iterate<vlc_ml_file_t>(media->p_files))
-            if (file.i_type == type && file.b_external)
+            if (file.i_type == type && !file.b_unselected)
                 tracks.append(QUrl(qfu(file.psz_mrl)).toString(QUrl::FullyEncoded));
     }
     tracks.removeDuplicates();
@@ -409,7 +409,8 @@ void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJ
                 if (name.isEmpty()) name = url.toDisplayString();
                 rows.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", name},
                     {"location", url.toDisplayString(QUrl::PreferLocalFile)},
-                    {"baseline", externalTracks(media.get(), type)}});
+                    {"explicitSelection", media && (subtitles ? media->b_subtitle_track_selection : media->b_soundtrack_track_selection)},
+                    {"baseline", selectedTracks(media.get(), type)}});
             }
             result.insert("success", true); result.insert("error", QString()); result.insert("rows", rows);
         },
@@ -488,7 +489,7 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                 seen.insert(url);
                 const auto uri = url.toEncoded();
                 ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
-                if (!sameTracks(before, externalTracks(media.get(), type))) {
+                if (!sameTracks(before, selectedTracks(media.get(), type))) {
                     result["error"] = qtr("The saved tracks changed. Close this window and select the files again."); return;
                 }
                 if (!media && (!url.isLocalFile() || !QFileInfo(url.toLocalFile()).isFile())) {
@@ -501,7 +502,7 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                     }
                     if (media && media->p_files) {
                         for (const auto& file : ml_range_iterate<vlc_ml_file_t>(media->p_files)) {
-                            if (QUrl(qfu(file.psz_mrl)) == track && (file.i_type != type || !file.b_external)) {
+                            if (QUrl(qfu(file.psz_mrl)) == track && file.i_type != type) {
                                 result["error"] = qtr("VLC already uses this file for another track: %1").arg(track.fileName()); return;
                             }
                         }
@@ -517,7 +518,7 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
             for (const auto& edit : edits) {
                 const auto uri = edit.url.toEncoded();
                 ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media_by_mrl(ml, uri.constData()));
-                if (!sameTracks(edit.before, externalTracks(media.get(), type))) {
+                if (!sameTracks(edit.before, selectedTracks(media.get(), type))) {
                     result["error"] = qtr("The saved tracks changed. Close this window and select the files again."); return;
                 }
                 if (!media) media.reset(vlc_ml_new_external_media(ml, uri.constData()));

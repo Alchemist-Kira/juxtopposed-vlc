@@ -21,6 +21,7 @@ medialibrary: medialibrary-$(MEDIALIBRARY_VERSION).tar.bz2 .sum-medialibrary
 	$(APPLY) $(SRC)/medialibrary/0002-exclude-associated-tracks-from-media-lookup.patch
 	$(APPLY) $(SRC)/medialibrary/0003-wait-for-transient-sqlite-locks.patch
 	$(APPLY) $(SRC)/medialibrary/0004-replace-external-track-assignments.patch
+	$(APPLY) $(SRC)/medialibrary/0005-persist-discovered-track-selections.patch
 	$(MOVE)
 
 .medialibrary: medialibrary crossfile.meson

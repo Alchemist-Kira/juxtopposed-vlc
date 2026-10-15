@@ -1,0 +1,192 @@
+Subject: [PATCH] media: persist track choices independently of discovered files
+
+Keep discovered file records intact while saving an explicit subtitle or
+soundtrack selection. Commit selections and external file edits together.
+Use dedicated metadata types, preserve the IMedia vtable, and distinguish
+an empty selection from discovery defaults. Cover managed tracks, rollback,
+independent categories, restart persistence and URI serialization.
+
+---
+--- a/include/medialibrary/IMedia.h
++++ b/include/medialibrary/IMedia.h
+@@ -97,8 +97,10 @@
+ 
+         // Various
+         ApplicationSpecific = 250,
++        SubtitleFileSelection = 251,
++        SoundtrackFileSelection = 252,
+     };
+-    static constexpr size_t NbMeta = 17;
++    static constexpr size_t NbMeta = 19;
+ 
+     /**
+      * @brief The ProgressResult enum describes the result for setLastPosition
+@@ -502,13 +504,23 @@
+ };
+ 
+ #define MEDIALIBRARY_HAS_EXTERNAL_TRACK_REPLACEMENT 1
++#define MEDIALIBRARY_HAS_TRACK_SELECTIONS 1
+ /** Replace external subtitle or soundtrack associations atomically.
+  * Main, part, managed files and the other track type are retained.
+- * An empty list removes associations of this type. No disk file is removed.
++ * The list is also the explicit selection for discovered files of this type.
++ * An empty list unselects all tracks and removes external associations.
++ * No disk file is removed.
+  * On failure, all previous associations are retained.
+  * This free function preserves the IMedia vtable ABI.
+  */
+ bool setExternalTracks( IMedia& media, IFile::Type type,
+                         const std::vector<std::string>& mrls );
+ 
++/** Read an explicit track selection. False means use discovery defaults.
++ * An explicit empty list disables all associated files of this type.
++ * Discovered file records remain intact when they are not selected.
++ */
++bool getTrackSelection( const IMedia& media, IFile::Type type,
++                        std::vector<std::string>& mrls );
++
+ }
+--- a/src/Media.cpp
++++ b/src/Media.cpp
+@@ -1225,6 +1225,52 @@
+     return res;
+ }
+ 
++namespace {
++IMedia::MetadataType trackSelectionType( IFile::Type type )
++{
++    return type == IFile::Type::Subtitles ? IMedia::MetadataType::SubtitleFileSelection
++                                         : IMedia::MetadataType::SoundtrackFileSelection;
++}
++}
++
++bool getTrackSelection( const IMedia& media, IFile::Type type, std::vector<std::string>& mrls )
++{
++    mrls.clear();
++    if ( type != IFile::Type::Subtitles && type != IFile::Type::Soundtrack )
++        return false;
++    const auto& value = media.metadata( trackSelectionType( type ) );
++    if ( value.isSet() == false )
++        return false;
++    const auto& text = value.asStr();
++    if ( text.compare( 0, 2, "1|" ) != 0 )
++        return false;
++    std::vector<std::string> parsed;
++    size_t offset = 2;
++    try
++    {
++        while ( offset < text.size() )
++        {
++            const auto end = text.find( ':', offset );
++            if ( end == std::string::npos || end == offset )
++                return false;
++            for ( size_t i = offset; i < end; ++i )
++                if ( text[i] < '0' || text[i] > '9' )
++                    return false;
++            const auto length = std::stoull( text.substr( offset, end - offset ) );
++            if ( length == 0 || length > text.size() - end - 1 )
++                return false;
++            parsed.emplace_back( text.substr( end + 1, static_cast<size_t>( length ) ) );
++            offset = end + 1 + static_cast<size_t>( length );
++        }
++    }
++    catch ( const std::exception& )
++    {
++        return false;
++    }
++    mrls = std::move( parsed );
++    return true;
++}
++
+ bool setExternalTracks( IMedia& media, IFile::Type type, const std::vector<std::string>& mrls )
+ {
+     auto* concrete = dynamic_cast<Media*>( &media );
+@@ -1251,18 +1297,29 @@
+         std::vector<FilePtr> removed;
+         for ( const auto& file : previous )
+         {
+-            if ( file->type() == type && file->isExternal() )
++            if ( file->type() == type )
+             {
+-                if ( wanted.erase( file->mrl() ) == 0 )
++                if ( wanted.erase( file->mrl() ) == 0 && file->isExternal() )
+                 {
+                     removed.push_back( file );
+                     continue;
+                 }
+             }
+             else if ( wanted.count( file->mrl() ) != 0 )
+-                return false; // Never replace a main, managed or other-type file.
++                return false; // Never replace a main or other-type file.
+             replacement.push_back( file );
+         }
++        // Length prefixes preserve arbitrary URI characters and an explicit
++        // empty selection. Keep discovery records separate from user choices.
++        std::string selection = "1|";
++        std::unordered_set<std::string> serialized;
++        for ( const auto& mrl : mrls )
++            if ( serialized.insert( mrl ).second )
++                selection += std::to_string( mrl.size() ) + ":" + mrl;
++        if ( m_metadata.isReady() == false )
++            m_metadata.init( m_id, IMedia::NbMeta );
++        auto& selectionRecord = static_cast<Metadata::Record&>( m_metadata.get(
++            static_cast<uint32_t>( trackSelectionType( type ) ) ) );
+         auto transaction = m_ml->getConn()->newTransaction();
+         for ( const auto& mrl : mrls )
+         {
+@@ -1276,7 +1333,14 @@
+         for ( const auto& file : removed )
+             if ( std::static_pointer_cast<File>( file )->destroy() == false )
+                 return false;
++        const auto request = "INSERT OR REPLACE INTO " + Metadata::Table::Name +
++            "(id_media, entity_type, type, value) VALUES(?, ?, ?, ?)";
++        if ( sqlite::Tools::executeInsert( m_ml->getConn(), request, m_id,
++                IMetadata::EntityType::Media, static_cast<uint32_t>( trackSelectionType( type ) ),
++                selection ) == false )
++            return false;
+         transaction->commit();
++        selectionRecord.set( selection );
+         m_files = std::move( replacement );
+         return true;
+     }
+--- a/test/unittest/ExternalTrackAssignments.cpp
++++ b/test/unittest/ExternalTrackAssignments.cpp
+@@ -96,6 +96,38 @@
+         media=ml->media(id); other=ml->media(otherId);
+         check(tracks(media,IFile::Type::Subtitles).empty(),"Removal survives restart");
+         check(tracks(other,IFile::Type::Subtitles)==std::vector<std::string>{kept},"Shared track retained on other media");
++        // Discovery owns these file records. A user's track choice must not
++        // delete them or be undone by another discovery pass.
++        const std::string managed = "file:///managed.srt";
++        auto discovered = media->addExternalMrl(managed,IFile::Type::Subtitles);
++        check(discovered!=nullptr,"Create discovered-track fixture");
++        const auto managedId=discovered->id();
++        sqlite::Tools::executeRequest(ml->getConn(),"UPDATE File SET is_external=0 WHERE id_file="+std::to_string(managedId));
++        discovered.reset(); media.reset(); other.reset(); ml.reset(); ml=open(directory);
++        media=ml->media(id); other=ml->media(otherId);
++        check(!media->files().back()->isExternal(),"Load discovered file");
++        std::vector<std::string> selection;
++        check(getTrackSelection(*media,IFile::Type::Subtitles,selection) && selection.empty(),"Empty selection survives restart");
++        check(setExternalTracks(*media,IFile::Type::Subtitles,{managed,kept}),"Select discovered and external tracks together");
++        check(getTrackSelection(*media,IFile::Type::Subtitles,selection) && selection==std::vector<std::string>({managed,kept}),"Selected order retained");
++        check(setExternalTracks(*media,IFile::Type::Subtitles,{}),"Unselect discovered track");
++        check(tracks(media,IFile::Type::Subtitles)==std::vector<std::string>{managed},"Discovery record remains intact");
++        check(getTrackSelection(*media,IFile::Type::Subtitles,selection) && selection.empty(),"No discovered tracks selected");
++        check(setExternalTracks(*media,IFile::Type::Soundtrack,{"file:///audio.wav"}),"Save independent audio selection");
++        check(getTrackSelection(*media,IFile::Type::Soundtrack,selection) && selection==std::vector<std::string>{"file:///audio.wav"},"Audio selection retained");
++        sqlite::Tools::executeRequest(ml->getConn(),"CREATE TRIGGER FailTrackChoice BEFORE INSERT ON Metadata WHEN NEW.type=251 BEGIN SELECT RAISE(ABORT,'injected selection failure'); END");
++        check(!setExternalTracks(*media,IFile::Type::Subtitles,{managed,kept}),"Selection and file writes fail together");
++        check(tracks(media,IFile::Type::Subtitles)==std::vector<std::string>{managed},"No partial file write after selection failure");
++        check(getTrackSelection(*media,IFile::Type::Subtitles,selection) && selection.empty(),"Cached choice retained after selection failure");
++        sqlite::Tools::executeRequest(ml->getConn(),"DROP TRIGGER FailTrackChoice");
++        media.reset(); other.reset(); ml.reset(); ml=open(directory); media=ml->media(id);
++        check(getTrackSelection(*media,IFile::Type::Subtitles,selection) && selection.empty(),"Unselected discovery track remains off after restart");
++        check(tracks(media,IFile::Type::Subtitles)==std::vector<std::string>{managed},"Managed record survives selection rollback and restart");
++        check(getTrackSelection(*media,IFile::Type::Soundtrack,selection) && selection==std::vector<std::string>{"file:///audio.wav"},"Other track selection survives restart");
++        const std::string unusual = "file:///captions:with%20spaces%0Aand%26.srt";
++        check(setExternalTracks(*media,IFile::Type::Subtitles,{unusual,unusual}),"Select URI with punctuation");
++        check(getTrackSelection(*media,IFile::Type::Subtitles,selection) && selection==std::vector<std::string>{unusual},"URI serialization and duplicate handling");
++        check(std::ifstream(disk).good(),"Selection edits preserve disk file");
+         std::cout<<"External track replacement, duplicate handling, protected files, shared tracks, rollback, restart and disk preservation passed\n";
+         return 0;
+     } catch (const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }

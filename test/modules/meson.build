@@ -19,7 +19,7 @@ vlc_tests += {
     'sources': files('misc/media_tracks.c'),
     'suite': ['modules', 'test_modules'],
     'link_with': [libvlc, libvlccore],
-    'module_depends': ['medialibrary'],
+    'module_depends': ['medialibrary', 'wav', 'araw', 'adummy', 'subtitle', 'subsdec'],
     'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
 }
 

@@ -48,14 +48,57 @@ vlc_player_input_RestoreMlStates(struct vlc_player_input* input, bool force_pos)
     vlc_ml_media_t* media = vlc_ml_get_media_by_mrl( ml, item->psz_uri);
     if (!media)
         return;
+    if (media->b_subtitle_track_selection)
+    {
+        /* An explicit empty choice must also suppress the filesystem's
+         * automatic subtitle search. This input has not started yet. */
+        var_Create(input->thread, "sub-autodetect-file", VLC_VAR_BOOL);
+        var_SetBool(input->thread, "sub-autodetect-file", false);
+    }
     /* Associated tracks are independent of saved playback preferences. */
     vlc_mutex_lock(&item->lock);
+    if (media->b_subtitle_track_selection)
+    {
+        for (int j = 0; j < item->i_slaves;)
+        {
+            input_item_slave_t *slave = item->pp_slaves[j];
+            bool selected = slave->i_type != SLAVE_TYPE_SPU;
+            if (media->p_files)
+                for (size_t i = 0; i < media->p_files->i_nb_items; ++i)
+                {
+                    const vlc_ml_file_t *file = &media->p_files->p_items[i];
+                    if (file->i_type == VLC_ML_FILE_TYPE_SUBTITLE &&
+                        !file->b_unselected && file->psz_mrl &&
+                        !strcmp(file->psz_mrl, slave->psz_uri))
+                        selected = true;
+                }
+            if (!selected)
+            {
+                input_item_slave_Delete(slave);
+                TAB_ERASE(item->i_slaves, item->pp_slaves, j);
+            }
+            else ++j;
+        }
+    }
     if (media->p_files)
     {
         for (size_t i = 0; i < media->p_files->i_nb_items; ++i)
         {
             const vlc_ml_file_t *file = &media->p_files->p_items[i];
+            if (file->b_unselected && file->psz_mrl)
+            {
+                for (int j = 0; j < item->i_slaves;)
+                {
+                    if (!strcmp(item->pp_slaves[j]->psz_uri, file->psz_mrl))
+                    {
+                        input_item_slave_Delete(item->pp_slaves[j]);
+                        TAB_ERASE(item->i_slaves, item->pp_slaves, j);
+                    }
+                    else ++j;
+                }
+            }
             if (!file->psz_mrl || !strcmp(file->psz_mrl, item->psz_uri) ||
+                file->b_unselected ||
                 (file->i_type != VLC_ML_FILE_TYPE_SUBTITLE &&
                                   file->i_type != VLC_ML_FILE_TYPE_SOUNDTRACK))
                 continue;

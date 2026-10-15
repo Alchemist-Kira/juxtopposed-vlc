@@ -639,6 +639,28 @@ private slots:
         QVERIFY(result.property("success").toBool());
         QCOMPARE(result.property("sources").property("length").toInt(), 2);
         QCOMPARE(result.property("sources").property(0).property("name").toString(), QStringLiteral("captions.IDX"));
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            if (query != VLC_ML_GET_MEDIA_BY_MRL) return nullptr;
+            const auto uri = QUrl(QString::fromUtf8(va_arg(args, const char*)));
+            if (uri.fileName() != "Show_S01E02.mkv") return nullptr;
+            auto* media = static_cast<vlc_ml_media_t*>(calloc(1, sizeof(vlc_ml_media_t)));
+            media->b_subtitle_track_selection = true;
+            media->p_files = static_cast<vlc_ml_file_list_t*>(calloc(1,
+                sizeof(vlc_ml_file_list_t) + 2 * sizeof(vlc_ml_file_t)));
+            media->p_files->i_nb_items = 2;
+            for (int i = 0; i < 2; ++i) {
+                auto& file = media->p_files->p_items[i];
+                file.i_type = VLC_ML_FILE_TYPE_SUBTITLE; file.b_external = false;
+                file.b_unselected = i == 1;
+                file.psz_mrl = strdup(QUrl::fromLocalFile(directory.filePath(
+                    i ? "captions.IDX" : "Show_S01E02.en.srt")).toEncoded().constData());
+            }
+            return media;
+        };
+        result = request(false, folder);
+        QVERIFY(result.property("rows").property(0).property("explicitSelection").toBool());
+        QCOMPARE(result.property("rows").property(0).property("baseline").property("length").toInt(), 1);
+        QVERIFY(result.property("rows").property(0).property("baseline").property(0).toString().endsWith("Show_S01E02.en.srt"));
         QVERIFY(!request(true, QUrl("https://example.test/folder")).property("success").toBool());
         QVERIFY(!request(false, QUrl::fromLocalFile(directory.filePath("missing"))).property("success").toBool());
         QCOMPARE(writes, 0); // Opening, scanning and cancelling do not create media records.
@@ -683,7 +705,7 @@ private slots:
             files[1].i_type = VLC_ML_FILE_TYPE_SOUNDTRACK; files[1].b_external = true;
             files[1].psz_mrl = strdup(audio.toEncoded().constData());
             for (int i = 0; i < assignments[id].size(); ++i) {
-                files[i + 2].i_type = VLC_ML_FILE_TYPE_SUBTITLE; files[i + 2].b_external = true;
+                files[i + 2].i_type = VLC_ML_FILE_TYPE_SUBTITLE; files[i + 2].b_external = false;
                 files[i + 2].psz_mrl = strdup(assignments[id][i].toUtf8().constData());
             }
             return item;

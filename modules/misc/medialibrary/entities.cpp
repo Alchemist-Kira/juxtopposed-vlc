@@ -266,6 +266,26 @@ bool Convert( const medialibrary::IMedia* input, vlc_ml_media_t& output )
     output.p_files = ml_convert_list<vlc_ml_file_list_t, vlc_ml_file_t>( files );
     if ( output.p_files == nullptr )
         return false;
+    output.b_subtitle_track_selection = output.b_soundtrack_track_selection = false;
+#ifdef MEDIALIBRARY_HAS_TRACK_SELECTIONS
+    std::vector<std::string> subtitles, soundtracks;
+    output.b_subtitle_track_selection = medialibrary::getTrackSelection(
+        *input, medialibrary::IFile::Type::Subtitles, subtitles );
+    output.b_soundtrack_track_selection = medialibrary::getTrackSelection(
+        *input, medialibrary::IFile::Type::Soundtrack, soundtracks );
+    for ( size_t i = 0; i < output.p_files->i_nb_items; ++i )
+    {
+        auto& file = output.p_files->p_items[i];
+        const bool subtitle = file.i_type == VLC_ML_FILE_TYPE_SUBTITLE;
+        if ( (subtitle && output.b_subtitle_track_selection) ||
+             (file.i_type == VLC_ML_FILE_TYPE_SOUNDTRACK && output.b_soundtrack_track_selection) )
+        {
+            const auto& selection = subtitle ? subtitles : soundtracks;
+            file.b_unselected = file.psz_mrl == nullptr ||
+                std::find( selection.cbegin(), selection.cend(), file.psz_mrl ) == selection.cend();
+        }
+    }
+#endif
     if ( strdup_helper( input->fileName(), output.psz_filename ) == false )
         return false;
 
@@ -317,6 +337,7 @@ bool Convert( const medialibrary::IFile* input, vlc_ml_file_t& output )
     }
 
     output.b_external = input->isExternal();
+    output.b_unselected = false;
     return true;
 }
 

@@ -276,7 +276,7 @@ test_src_preparser_fetcher_shutdown_SOURCES = src/preparser/fetcher_shutdown.c \
     ../src/preparser/art.c ../src/misc/interrupt.c ../src/misc/objects.c \
     ../src/misc/variables.c ../src/input/item.c ../src/text/strings.c
 test_src_preparser_fetcher_shutdown_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src
-test_src_preparser_fetcher_shutdown_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_preparser_fetcher_shutdown_LDADD = $(LIBVLCCORE) $(LIBVLC) ../compat/libcompat.la $(SOCKET_LIBS)
 test_src_preparser_thumbnail_SOURCES = src/preparser/thumbnail.c
 test_src_preparser_thumbnail_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_preparser_thumbnail_to_files_SOURCES = src/preparser/thumbnail_to_files.c

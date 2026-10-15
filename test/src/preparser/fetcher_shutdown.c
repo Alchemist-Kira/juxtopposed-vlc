@@ -2,7 +2,10 @@
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
-#include "../../libvlc/test.h"
+#include <vlc/vlc.h>
+#include <vlc_common.h>
+#undef NDEBUG
+#include <assert.h>
 #include "../../../lib/libvlc_internal.h"
 #include <vlc_atomic.h>
 const char vlc_module_name[] = "fetcher-shutdown-test";
@@ -106,7 +109,7 @@ static void check_shutdown(vlc_object_t *owner, bool network_stage,
 
 int main(void)
 {
-    test_init();
+    /* The test runner supplies the timeout on every platform. */
     const char *args[] = { "--quiet", "--no-media-library", "--fetch-art-threads=1" };
     libvlc_instance_t *vlc = libvlc_new(ARRAY_SIZE(args), args);
     assert(vlc);

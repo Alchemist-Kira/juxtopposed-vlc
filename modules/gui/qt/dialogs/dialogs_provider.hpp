@@ -251,6 +251,8 @@ public slots:
 
     // Returns a file URL without adding the directory to the play queue.
     QUrl selectLibraryFolder();
+    QStringList selectPlaylistFiles();
+    QUrl selectPlaylistCover();
     QStringList mediaNameFilters(bool audio) const;
     void PLOpenDir();
     void PLAppendDir();

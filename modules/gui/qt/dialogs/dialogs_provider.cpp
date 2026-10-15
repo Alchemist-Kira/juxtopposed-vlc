@@ -800,6 +800,17 @@ QUrl DialogsProvider::selectLibraryFolder()
     return folder;
 }
 
+QStringList DialogsProvider::selectPlaylistFiles()
+{
+    return showSimpleOpen(qtr("Select files for playlist"));
+}
+
+QUrl DialogsProvider::selectPlaylistCover()
+{
+    return QFileDialog::getOpenFileUrl(nullptr, qtr("Select playlist thumbnail"),
+        p_intf->p_mi->getDialogFilePath(), qtr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif);;All files (*)"));
+}
+
 QString DialogsProvider::getDirectoryDialog( qt_intf_t *p_intf )
 {
     const QStringList schemes = QStringList(QStringLiteral("file"));

@@ -29,6 +29,8 @@
 MLPlaylist::MLPlaylist(const vlc_ml_playlist_t * data)
     : MLItem(MLItemId(data->i_id, VLC_ML_PARENT_PLAYLIST))
     , m_name(qfu(data->psz_name))
+    , m_artwork(qfu(data->psz_artwork_mrl))
+    , m_creationDate(data->i_creation_date)
     , m_duration(data->i_duration)
     , m_count(data->i_nb_media)
     , m_nbAudio(data->i_nb_audio)

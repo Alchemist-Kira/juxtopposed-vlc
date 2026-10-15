@@ -71,6 +71,7 @@ public:
 
 public: // Interface
     Q_INVOKABLE void create(const QString & name, const QVariantList& initialItems);
+    Q_INVOKABLE void createWithFiles(const QString& name, const QStringList& urls, const QUrl& cover);
 
     Q_INVOKABLE void append(const MLItemId & playlistId, const QVariantList & ids);
 
@@ -109,6 +110,7 @@ private: // MLBaseModel implementation
     void onVlcMlEvent(const MLEvent & event) override;
 
 signals:
+    void playlistCreated(bool success, const MLItemId& id, const QString& error);
     void coverSizeChanged   ();
     void coverDefaultChanged();
     void coverPrefixChanged ();

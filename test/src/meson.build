@@ -199,6 +199,13 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_input_item_update',
+    'sources' : files('input/item_update.c'),
+    'suite' : ['test_src'],
+    'link_with' : [libvlccore, libvlc],
+}
+
+vlc_tests += {
     'name' : 'test_src_input_subtitle_ass_text',
     'sources' : files('input/subtitle_ass_text.c'),
     'suite' : ['src', 'test_src'],

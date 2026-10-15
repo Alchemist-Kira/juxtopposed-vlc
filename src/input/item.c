@@ -1075,6 +1075,7 @@ input_item_t *input_item_Copy( input_item_t *p_input )
                         p_input->pp_slaves[i]->i_priority);
             if( unlikely(slave != NULL) )
             {
+                slave->b_forced = p_input->pp_slaves[i]->b_forced;
                 TAB_APPEND(item->i_slaves, item->pp_slaves, slave);
             }
         }
@@ -1150,13 +1151,21 @@ int input_item_Update(input_item_t *dst, input_item_t *src)
         }
     }
 
-    for( int i = 0; i < dst->i_slaves; i++ )
-        input_item_slave_Delete( dst->pp_slaves[i] );
-    TAB_CLEAN(dst->i_slaves, dst->pp_slaves );
-    dst->i_slaves = tmp->i_slaves;
-    tmp->i_slaves = 0;
-    dst->pp_slaves = tmp->pp_slaves;
-    tmp->pp_slaves = NULL;
+    /* A preparse result can be older than the current track links. Keep
+     * current links and their selection flags. Add new links from the result. */
+    for( int i = 0; i < tmp->i_slaves; ++i )
+    {
+        input_item_slave_t *slave = tmp->pp_slaves[i];
+        bool exists = false;
+        for( int j = 0; j < dst->i_slaves; ++j )
+            if( !strcmp( dst->pp_slaves[j]->psz_uri, slave->psz_uri ) )
+                exists = true;
+        if( exists )
+            input_item_slave_Delete( slave );
+        else
+            TAB_APPEND(dst->i_slaves, dst->pp_slaves, slave);
+    }
+    TAB_CLEAN(tmp->i_slaves, tmp->pp_slaves);
     vlc_mutex_unlock(&dst->lock);
 
     input_item_Release(tmp);

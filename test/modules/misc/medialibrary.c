@@ -44,6 +44,7 @@
 #include <vlc_player.h>
 #include <vlc_url.h>
 #include <vlc_configuration.h>
+#include <vlc_variables.h>
 #include <ftw.h>
 
 #include "../lib/libvlc_internal.h"
@@ -101,6 +102,9 @@ static void TestAssociatedTracks(vlc_object_t *root, vlc_medialibrary_t *ml,
     assert(lookup && lookup->i_id == media->i_id);
     vlc_ml_media_release(lookup);
 
+    /* Track discovery does not need a desktop window. */
+    var_Create(root, "video", VLC_VAR_BOOL);
+    var_SetBool(root, "video", false);
     vlc_player_t *player = vlc_player_New(root, VLC_PLAYER_LOCK_NORMAL);
     assert(player);
     vlc_cond_t changed;

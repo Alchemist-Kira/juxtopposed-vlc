@@ -663,6 +663,7 @@ int MediaLibrary::Control( int query, va_list args )
         case VLC_ML_MEDIA_SET_ALL_MEDIA_PLAYBACK_STATES:
         case VLC_ML_MEDIA_SET_THUMBNAIL:
         case VLC_ML_MEDIA_ADD_EXTERNAL_MRL:
+        case VLC_ML_MEDIA_SET_EXTERNAL_MRLS:
         case VLC_ML_MEDIA_SET_TYPE:
         case VLC_ML_MEDIA_SET_PLAYED:
         case VLC_ML_MEDIA_SET_FAVORITE:
@@ -1942,6 +1943,28 @@ int MediaLibrary::controlMedia( int query, va_list args )
             if ( m->addExternalMrl( mrl, mlType ) == nullptr )
                 return VLC_EGENERIC;
             return VLC_SUCCESS;
+        }
+        case VLC_ML_MEDIA_SET_EXTERNAL_MRLS:
+        {
+            const auto type = va_arg( args, int );
+            const auto mrls = va_arg( args, const char* const* );
+            const auto count = va_arg( args, size_t );
+            if ((type != VLC_ML_FILE_TYPE_SUBTITLE && type != VLC_ML_FILE_TYPE_SOUNDTRACK)
+                || (count != 0 && mrls == nullptr))
+                return VLC_EGENERIC;
+#ifdef MEDIALIBRARY_HAS_EXTERNAL_TRACK_REPLACEMENT
+            std::vector<std::string> tracks;
+            tracks.reserve(count);
+            for (size_t i = 0; i < count; ++i) {
+                if (!mrls[i] || !*mrls[i]) return VLC_EGENERIC;
+                tracks.emplace_back(mrls[i]);
+            }
+            const auto trackType = type == VLC_ML_FILE_TYPE_SUBTITLE
+                ? medialibrary::IFile::Type::Subtitles : medialibrary::IFile::Type::Soundtrack;
+            return medialibrary::setExternalTracks(*m, trackType, tracks) ? VLC_SUCCESS : VLC_EGENERIC;
+#else
+            return VLC_ENOTSUP;
+#endif
         }
         case VLC_ML_MEDIA_SET_TYPE:
         {

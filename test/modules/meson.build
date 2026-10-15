@@ -14,6 +14,15 @@ vlc_tests += {
     'module_depends' : ['lua'],
 }
 
+vlc_tests += {
+    'name': 'test_modules_misc_media_tracks',
+    'sources': files('misc/media_tracks.c'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['medialibrary'],
+    'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+}
+
 if not (host_system == 'windows') # missing mkdtemp()
 vlc_tests += {
     'name' : 'test_modules_misc_medialibrary',

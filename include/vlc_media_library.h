@@ -662,6 +662,13 @@ enum vlc_ml_control
     VLC_ML_ALBUM_SET_FAVORITE, /**< arg1: album id; arg2: bool; can fail */
     VLC_ML_GENRE_SET_FAVORITE, /**< arg1: genre id; arg2: bool; can fail */
     VLC_ML_PLAYLIST_SET_FAVORITE, /**< arg1: playlist id; arg2: bool; can fail */
+
+    /** Replace external subtitle or soundtrack associations for one media.
+     * arg1: media id; arg2: vlc_ml_file_type_t; arg3: const char* const*;
+     * arg4: size_t count. An empty list removes associations of this type.
+     * Other files and disk contents are preserved. Atomic for this media.
+     */
+    VLC_ML_MEDIA_SET_EXTERNAL_MRLS,
 };
 
 /**
@@ -1186,6 +1193,14 @@ static inline int vlc_ml_media_add_external_mrl( vlc_medialibrary_t* p_ml, int64
                                                  const char* psz_mrl, int i_type )
 {
     return vlc_ml_control( p_ml, VLC_ML_MEDIA_ADD_EXTERNAL_MRL, i_media_id, psz_mrl, i_type );
+}
+
+static inline int vlc_ml_media_set_external_mrls( vlc_medialibrary_t* ml,
+        int64_t media_id, vlc_ml_file_type_t type, const char* const* mrls,
+        size_t count )
+{
+    return vlc_ml_control( ml, VLC_ML_MEDIA_SET_EXTERNAL_MRLS, media_id,
+                           (int)type, mrls, count );
 }
 
 static inline int vlc_ml_media_set_type( vlc_medialibrary_t* p_ml, int64_t i_media_id,

@@ -1,0 +1,247 @@
+Subject: [PATCH] media: replace external track assignments atomically
+
+Save the complete subtitle or soundtrack assignment for one media, including
+an empty assignment. Preserve main, part, managed files, the other track type
+and all disk files. Commit the database transaction before updating the cached
+file list. Expose the operation as a free function to preserve the IMedia ABI.
+
+A standalone regression covers replacement, duplicates, shared tracks,
+protected files, partial insertion/deletion failures, cache and database
+rollback, restart persistence and disk-file preservation.
+
+---
+--- a/include/medialibrary/IMedia.h
++++ b/include/medialibrary/IMedia.h
+@@ -501,4 +501,14 @@
+     virtual const std::string& description() const = 0;
+ };
+ 
++#define MEDIALIBRARY_HAS_EXTERNAL_TRACK_REPLACEMENT 1
++/** Replace external subtitle or soundtrack associations atomically.
++ * Main, part, managed files and the other track type are retained.
++ * An empty list removes associations of this type. No disk file is removed.
++ * On failure, all previous associations are retained.
++ * This free function preserves the IMedia vtable ABI.
++ */
++bool setExternalTracks( IMedia& media, IFile::Type type,
++                        const std::vector<std::string>& mrls );
++
+ }
+--- a/src/Media.h
++++ b/src/Media.h
+@@ -284,6 +284,8 @@
+         virtual FilePtr addFile( const std::string& mrl, IFile::Type fileType ) override;
+         virtual FilePtr addExternalMrl( const std::string& mrl, IFile::Type type ) override;
+         bool removeFile( File& file );
++        bool setExternalMrls( IFile::Type type,
++                              const std::vector<std::string>& mrls );
+ 
+         virtual Query<IBookmark> bookmarks( const QueryParameters* params ) const override;
+         virtual BookmarkPtr bookmark( int64_t time ) const override;
+--- a/src/Media.cpp
++++ b/src/Media.cpp
+@@ -27,6 +27,7 @@
+ #include <algorithm>
+ #include <cassert>
+ #include <ctime>
++#include <unordered_set>
+ 
+ #include "Album.h"
+ #include "Artist.h"
+@@ -1222,6 +1223,73 @@
+     if ( m_files.empty() == false )
+         m_files.push_back( res );
+     return res;
++}
++
++bool setExternalTracks( IMedia& media, IFile::Type type, const std::vector<std::string>& mrls )
++{
++    auto* concrete = dynamic_cast<Media*>( &media );
++    return concrete != nullptr && concrete->setExternalMrls( type, mrls );
++}
++
++bool Media::setExternalMrls( IFile::Type type, const std::vector<std::string>& mrls )
++{
++    if ( type != IFile::Type::Subtitles && type != IFile::Type::Soundtrack )
++        return false;
++    std::unordered_set<std::string> wanted;
++    for ( const auto& mrl : mrls )
++    {
++        if ( mrl.empty() )
++            return false;
++        wanted.insert( mrl );
++    }
++
++    try
++    {
++        // Keep the cached list unchanged until the database commit succeeds.
++        const auto previous = files();
++        std::vector<FilePtr> replacement;
++        std::vector<FilePtr> removed;
++        for ( const auto& file : previous )
++        {
++            if ( file->type() == type && file->isExternal() )
++            {
++                if ( wanted.erase( file->mrl() ) == 0 )
++                {
++                    removed.push_back( file );
++                    continue;
++                }
++            }
++            else if ( wanted.count( file->mrl() ) != 0 )
++                return false; // Never replace a main, managed or other-type file.
++            replacement.push_back( file );
++        }
++        auto transaction = m_ml->getConn()->newTransaction();
++        for ( const auto& mrl : mrls )
++        {
++            if ( wanted.erase( mrl ) == 0 )
++                continue;
++            auto file = File::createFromExternalMedia( m_ml, m_id, type, mrl, 0, time( nullptr ) );
++            if ( file == nullptr )
++                return false;
++            replacement.push_back( file );
++        }
++        for ( const auto& file : removed )
++            if ( std::static_pointer_cast<File>( file )->destroy() == false )
++                return false;
++        transaction->commit();
++        m_files = std::move( replacement );
++        return true;
++    }
++    catch ( const fs::errors::DeviceRemoved& error )
++    {
++        LOG_ERROR( "Cannot read external track files: ", error.what() );
++        return false;
++    }
++    catch ( const sqlite::errors::Exception& error )
++    {
++        LOG_ERROR( "Failed to replace external track files: ", error.what() );
++        return false;
++    }
+ }
+ 
+ bool Media::removeFile( File& file )
+--- /dev/null
++++ b/test/unittest/ExternalTrackAssignments.cpp
+@@ -0,0 +1,102 @@
++// SPDX-License-Identifier: LGPL-2.1-or-later
++#if HAVE_CONFIG_H
++#include "config.h"
++#endif
++#include "MediaLibrary.h"
++#include "medialibrary/IMedia.h"
++#include "medialibrary/IFile.h"
++#include "database/SqliteConnection.h"
++#include "database/SqliteTools.h"
++#include "logging/IostreamLogger.h"
++#include "logging/Logger.h"
++#include "utils/Directory.h"
++#include <algorithm>
++#include <chrono>
++#include <fstream>
++#include <iostream>
++#include <memory>
++#include <stdexcept>
++#include <vector>
++#ifdef _WIN32
++#include <process.h>
++#else
++#include <unistd.h>
++#endif
++using namespace medialibrary;
++class TestLibrary : public MediaLibrary {
++public:
++    using MediaLibrary::MediaLibrary;
++    parser::Parser* getParser() const override { return nullptr; }
++    void startDeletionNotifier() override {}
++};
++static void check(bool success, const char* description) {
++    if (!success) throw std::runtime_error(description);
++}
++static std::vector<std::string> tracks(const MediaPtr& media, IFile::Type type) {
++    std::vector<std::string> result;
++    for (const auto& file : media->files()) if (file->type()==type) result.push_back(file->mrl());
++    std::sort(result.begin(), result.end()); return result;
++}
++static std::unique_ptr<TestLibrary> open(const std::string& directory) {
++    auto ml=std::unique_ptr<TestLibrary>(new TestLibrary(directory+"/ml.db",directory));
++    check(ml->initialize(nullptr)==InitializeResult::Success,"Initialize database"); return ml;
++}
++int main(int argc, char** argv) {
++    if (argc!=2) return 2;
++    Log::SetLogger(std::make_shared<IostreamLogger>()); Log::setLogLevel(LogLevel::Error);
++#ifdef _WIN32
++    const auto pid=_getpid();
++#else
++    const auto pid=getpid();
++#endif
++    const auto directory=std::string(argv[1])+"-"+std::to_string(pid)+"-"+
++        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
++    try {
++        check(utils::fs::mkdir(directory),"Create owned test directory");
++        const auto disk=directory+"/keep.srt";
++        { std::ofstream file(disk); file<<"preserve this disk file"; check(file.good(),"Create disk fixture"); }
++        const auto kept=(disk[0]=='/' ? "file://" : "file:///")+disk;
++        auto ml=open(directory);
++        auto media=ml->addExternalMedia("file:///main.mkv",0);
++        auto other=ml->addExternalMedia("file:///other.mkv",0);
++        check(media && other,"Create media"); const auto id=media->id(), otherId=other->id();
++        const auto mainId=media->files().at(0)->id();
++        check(media->addExternalMrl("file:///audio.wav",IFile::Type::Soundtrack)!=nullptr,"Add audio baseline");
++        check(media->addExternalMrl("file:///old.srt",IFile::Type::Subtitles)!=nullptr,"Add subtitle baseline");
++        check(setExternalTracks(*media,IFile::Type::Subtitles,{kept,kept}),"Replace and deduplicate subtitles");
++        check(tracks(media,IFile::Type::Subtitles)==std::vector<std::string>{kept},"Only selected subtitles remain");
++        check(tracks(media,IFile::Type::Soundtrack)==std::vector<std::string>{"file:///audio.wav"},"Other type retained");
++        check(media->files().at(0)->id()==mainId,"Main file retained");
++        check(setExternalTracks(*other,IFile::Type::Subtitles,{kept}),"Share a track between media");
++        check(!setExternalTracks(*media,IFile::Type::Subtitles,{"file:///main.mkv"}),"Reject main file as track");
++        check(!setExternalTracks(*media,IFile::Type::Subtitles,{"file:///audio.wav"}),"Reject other-type file");
++        check(!setExternalTracks(*media,IFile::Type::Subtitles,{""}),"Reject empty URI");
++        check(!setExternalTracks(*media,IFile::Type::Main,{}),"Reject main-file replacement");
++        check(!setExternalTracks(*media,IFile::Type::Part,{}),"Reject part replacement");
++        check(setExternalTracks(*media,IFile::Type::Subtitles,{kept,"file:///second-old.srt"}),"Prepare multi-file rollback");
++        auto baseline=tracks(media,IFile::Type::Subtitles);
++        auto conn=ml->getConn();
++        sqlite::Tools::executeRequest(conn,"CREATE TRIGGER FailTrackInsertion BEFORE INSERT ON File WHEN NEW.type=4 AND NEW.media_id="+std::to_string(id)+" AND (SELECT count(*) FROM File WHERE media_id="+std::to_string(id)+" AND type=4)>=3 BEGIN SELECT RAISE(ABORT,'injected insert failure'); END");
++        check(!setExternalTracks(*media,IFile::Type::Subtitles,{"file:///first-new.srt","file:///second-new.srt"}),"Report partial-insert failure");
++        check(tracks(media,IFile::Type::Subtitles)==baseline,"Cache retained after insert failure");
++        sqlite::Tools::executeRequest(conn,"DROP TRIGGER FailTrackInsertion");
++        sqlite::Tools::executeRequest(conn,"CREATE TRIGGER FailTrackRemoval BEFORE DELETE ON File WHEN OLD.mrl='file:///second-old.srt' BEGIN SELECT RAISE(ABORT,'injected delete failure'); END");
++        check(!setExternalTracks(*media,IFile::Type::Subtitles,{"file:///new.srt"}),"Report database failure");
++        check(tracks(media,IFile::Type::Subtitles)==baseline,"Cache retained after rollback");
++        sqlite::Tools::executeRequest(conn,"DROP TRIGGER FailTrackRemoval");
++        media.reset(); other.reset(); ml.reset(); ml=open(directory);
++        media=ml->media(id); other=ml->media(otherId);
++        check(tracks(media,IFile::Type::Subtitles)==baseline,"Database rollback survives restart");
++        check(other && tracks(other,IFile::Type::Subtitles)==std::vector<std::string>{kept},"Other media retained after restart");
++        check(setExternalTracks(*media,IFile::Type::Subtitles,{}),"Clear subtitles");
++        check(tracks(media,IFile::Type::Subtitles).empty(),"Subtitles removed");
++        check(tracks(media,IFile::Type::Soundtrack)==std::vector<std::string>{"file:///audio.wav"},"Audio retained after clear");
++        check(std::ifstream(disk).good(),"Association removal preserves disk file");
++        media.reset(); other.reset(); ml.reset(); ml=open(directory);
++        media=ml->media(id); other=ml->media(otherId);
++        check(tracks(media,IFile::Type::Subtitles).empty(),"Removal survives restart");
++        check(tracks(other,IFile::Type::Subtitles)==std::vector<std::string>{kept},"Shared track retained on other media");
++        std::cout<<"External track replacement, duplicate handling, protected files, shared tracks, rollback, restart and disk preservation passed\n";
++        return 0;
++    } catch (const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }
++}
+--- a/meson.build
++++ b/meson.build
+@@ -191,6 +191,15 @@
+     timeout: 15,
+     suite: ['unittest', 'Sqlite'],
+   )
++  external_track_test = executable('external_track_assignments', 'test/unittest/ExternalTrackAssignments.cpp',
++    link_with: [medialib], include_directories: includes,
++    dependencies: [sqlite_dep, threads_dep], build_by_default: false,
++  )
++  test('Media.ExternalTrackAssignments', external_track_test,
++    args: [meson.current_build_dir() / 'track-assignments'], timeout: 15,
++    suite: ['unittest', 'Media'],
++  )
++
+ endif
+ 
+ if libvlc_dep.found() and not get_option('tests').disabled()

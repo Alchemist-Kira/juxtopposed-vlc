@@ -51,5 +51,5 @@ private slots:
         QCOMPARE(collage.pixelColor(90,30),QColor(Qt::blue));
     }
 };
-QTEST_MAIN(TestCoverGenerator)
+QTEST_GUILESS_MAIN(TestCoverGenerator)
 #include "test_cover_generator.moc"

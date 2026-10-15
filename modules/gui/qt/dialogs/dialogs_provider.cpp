@@ -541,6 +541,7 @@ QMessageBox::StandardButton DialogsProvider::messageDialog(const QString &text,
 
     QVLCDialog::setWindowTransientParent(&messageBox, nullptr, p_intf);
 
+    applyRedesignWidgetTheme(&messageBox, p_intf->p_mi);
     return static_cast<QMessageBox::StandardButton>(messageBox.exec());
 }
 

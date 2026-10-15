@@ -70,9 +70,10 @@ public:
                 const QFileInfo fileInfo(m_recoveryFileName);
                 if (fileInfo.size() > 0)
                 {
-                    const auto choice = DialogsProvider::getInstance()->messageDialog(qtr("Do you want to restore the %1 model from %2?").arg(modelIdentifier.toLower(),
+                    const auto name = modelIdentifier == QStringLiteral("Playlist") ? qtr("play queue") : modelIdentifier;
+                    const auto choice = DialogsProvider::getInstance()->messageDialog(qtr("VLC did not close normally.\nRestore the %1 saved on %2?").arg(name,
                                                                                                                               fileInfo.lastModified().toString()),
-                                                                      qtr("The application closed abruptly."),
+                                                                      qtr("Restore saved items"),
                                                                       (QMessageBox::Yes | QMessageBox::No),
                                                                       QMessageBox::Yes,
                                                                       QMessageBox::Question);

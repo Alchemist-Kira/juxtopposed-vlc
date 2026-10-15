@@ -6,16 +6,21 @@
 #include "redesign_widget_theme.hpp"
 #include "maininterface/mainctx.hpp"
 #include "color_scheme_model.hpp"
+#include "colorizedsvgicon.hpp"
 #include <QApplication>
 #include <QStyleHints>
 #include <QWidget>
 #include <QPointer>
+#include <QMessageBox>
+#include <QAbstractButton>
 
 void applyRedesignWidgetTheme(QWidget* widget, MainCtx* ctx)
 {
     widget->setProperty("redesignDialog", true);
     widget->setAttribute(Qt::WA_StyledBackground);
-    const auto applyTheme = [widget, ctx = QPointer<MainCtx>(ctx)] {
+    const auto box = qobject_cast<QMessageBox*>(widget);
+    const auto messageIcon = box ? box->icon() : QMessageBox::NoIcon;
+    const auto applyTheme = [widget, messageIcon, ctx = QPointer<MainCtx>(ctx)] {
         if (!ctx) return;
         const auto scheme = ctx->getColorScheme()->currentScheme();
         const bool light = scheme == ColorSchemeModel::Day ||
@@ -40,6 +45,15 @@ void applyRedesignWidgetTheme(QWidget* widget, MainCtx* ctx)
         colors.setColor(QPalette::HighlightedText, QColor("#161616"));
         colors.setColor(QPalette::Link, QColor(accent));
         widget->setPalette(colors);
+        if (auto message = qobject_cast<QMessageBox*>(widget)) {
+            for (auto button : message->buttons()) button->setIcon({});
+            if (messageIcon == QMessageBox::Question || messageIcon == QMessageBox::Information) {
+                const auto name = messageIcon == QMessageBox::Question ? QStringLiteral("help") : QStringLiteral("info");
+                const auto icon = ColorizedSvgIcon(QStringLiteral(":/menu/%1.svg").arg(name), {}, {}, {},
+                    {{QStringLiteral("#ff950d"), accent}, {QStringLiteral("#fafafa"), background}});
+                message->setIconPixmap(icon.pixmap(QSize(dp(32), dp(32)), widget->devicePixelRatioF()));
+            }
+        }
         widget->setStyleSheet(QStringLiteral(
             "QWidget { font-family: Inter; font-size: %1px; color: %2; }"
             "QWidget[redesignDialog=\"true\"], QDialog, QTabWidget::pane { background: %3; border: none; }"

@@ -32,6 +32,7 @@ TestCase {
         onSeekDragFinished: testCase.seekEventOrder.push("finish")
         onVolumeRequested: value => volume = value
         onMuteRequested: muted = !muted
+        trackPopup: trackPicker
         // VideoSurface accepts hover events in the integrated player.
         videoContent: MouseArea {
             hoverEnabled: true
@@ -62,6 +63,7 @@ TestCase {
     RedesignTrackPopup {
         id: trackPicker
         parent: testCase
+        placementArea: player
         x: 20; y: 20
         videoTracks: tracks; audioTracks: tracks; subtitleTracks: tracks
         audioDevices: tracks
@@ -119,6 +121,8 @@ TestCase {
         player.statistics = ({})
         player.started = true
         trackPicker.close()
+        trackPicker.parent = testCase
+        trackPicker.x = 20; trackPicker.y = 20
         trackPicker.page = "subtitles"
         tracks.setProperty(0, "checked", true)
         tracks.setProperty(1, "checked", false)
@@ -137,6 +141,7 @@ TestCase {
         player.playing = false
         player.muted = false
         player.fullscreen = false
+        player.controlsHideTimeout = 1800
         player.minimalView = false
         player.started = true
         player.hasVideo = true
@@ -378,6 +383,79 @@ TestCase {
         compare(audioSpy.count, 1)
         mouseClick(findChild(player, "subtitleButton"))
         compare(subtitleSpy.count, 1)
+    }
+    function test_subtitleButtonClosesOpenPopupAndExpandedSubtitlePanel() {
+        const button = findChild(player, "subtitleButton")
+        mouseClick(button)
+        tryCompare(trackPicker, "opened", true)
+        compare(trackPicker.page, "subtitles")
+        compare(trackPicker.width, 400)
+        const popupPosition = trackPicker.contentItem.mapToItem(player, 0, 0)
+        compare(popupPosition.x + trackPicker.width, player.width - 20)
+        compare(popupPosition.y + trackPicker.height, player.height - 54 - 20)
+        verify(button.selected)
+        mouseClick(button)
+        tryCompare(trackPicker, "visible", false)
+        verify(!button.selected)
+        mouseClick(button)
+        tryCompare(trackPicker, "opened", true)
+        mouseClick(findChild(player, "audioButton"))
+        tryCompare(trackPicker, "opened", true)
+        compare(trackPicker.page, "audio")
+        mouseClick(player, 100, 200)
+        tryCompare(trackPicker, "visible", false)
+        player.settingsPage = "subtitles"
+        mouseClick(button)
+        compare(player.settingsPage, "")
+        verify(!trackPicker.visible)
+    }
+    function test_queueAndSettingsCardsHaveReferenceMargins() {
+        testCase.width = 1920; testCase.height = 1080
+        const before = videoBounds()
+        const panel = findChild(player, "redesignRightPanel")
+        player.queueOpen = true
+        compare(panel.x, 1500)
+        compare(panel.y, 60)
+        compare(panel.width, 400)
+        compare(panel.height, 946)
+        compare(panel.radius, 10)
+        compare(panel.border.width, 0)
+        compare(videoBounds(), before)
+        player.toggleSettings("video")
+        verify(!player.queueOpen)
+        compare(panel.x, 1500)
+        compare(panel.y, 60)
+        compare(panel.height, 946)
+        compare(videoBounds(), before)
+    }
+    function test_subtitlePopupKeepsFullscreenToolbarAvailable() {
+        player.fullscreen = true
+        player.controlsHideTimeout = 30
+        player.revealControls()
+        const button = findChild(player, "subtitleButton")
+        mouseClick(button)
+        tryCompare(trackPicker, "opened", true)
+        mouseMove(player, 100, 200)
+        wait(80)
+        verify(player.bottomVisible)
+        mouseClick(button)
+        tryCompare(trackPicker, "visible", false)
+        mouseMove(player, 100, 200)
+        player.forceActiveFocus()
+        wait(80)
+        verify(!player.bottomVisible)
+    }
+    function test_openTrackPopupKeepsMarginsWhenWindowShrinks() {
+        mouseClick(findChild(player, "subtitleButton"))
+        tryCompare(trackPicker, "opened", true)
+        testCase.width = 640; testCase.height = 360
+        wait(50)
+        const point = trackPicker.contentItem.mapToItem(player, 0, 0)
+        verify(point.x >= 20 && point.y >= 60)
+        verify(point.x + trackPicker.width <= player.width - 20)
+        verify(point.y + trackPicker.height <= player.height - 74)
+        mouseClick(findChild(player, "subtitleButton"))
+        tryCompare(trackPicker, "visible", false)
     }
     function test_seekUsesPointerAndKeyboard() {
         const slider = findChild(player, "seekBar")

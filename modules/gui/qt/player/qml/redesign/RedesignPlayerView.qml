@@ -75,11 +75,12 @@ FocusScope {
     property Component libraryContent
     property Component queueContent
     property Component settingsContent
+    property QtObject trackPopup
     readonly property alias videoItem: videoLoader.item
     readonly property alias libraryItem: libraryLoader.item
     readonly property alias settingsItem: settingsLoader.item
     readonly property real positionSliderY: libraryExpanded ? miniPlayer.y + miniPlayer.seekY : bottomEdge.y + toolbar.y + seek.y
-    readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable
+    readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable || !!trackPopup && trackPopup.visible
     readonly property bool topVisible: !minimalView && (!fullscreen || headerHover.hovered || header.activeFocus || revealTimer.running || controlsLocked)
     readonly property bool bottomVisible: !minimalView && !libraryExpanded && (!fullscreen || showFullscreenControls) && (!autoHideActive || bottomHover.hovered || toolbar.activeFocus || revealTimer.running || controlsLocked)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
@@ -123,8 +124,20 @@ FocusScope {
 
     function revealControls() { revealTimer.restart() }
     function toggleSettings(page: string) {
+        if (trackPopup) trackPopup.close()
         queueOpen = false
         settingsPage = settingsPage === page ? "" : page
+    }
+    function toggleTracks(anchor, page) {
+        if (!trackPopup) return
+        if (settingsPage === page) {
+            settingsPage = ""
+            trackPopup.close()
+            return
+        }
+        settingsPage = ""
+        queueOpen = false
+        trackPopup.toggleFrom(anchor, page)
     }
     function dismissPanels() {
         settingsPage = ""
@@ -365,9 +378,11 @@ FocusScope {
         visible: (root.queueOpen && !root.floatingQueue) || root.settingsPage.length > 0
         width: Math.min(theme.dp(400), root.width * 0.48)
         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.right: parent.right
-        anchors.topMargin: header.height; anchors.bottomMargin: toolbar.height
-        color: theme.panel
-        border.color: theme.border
+        anchors.topMargin: header.height + theme.dp(20); anchors.bottomMargin: toolbar.height + theme.dp(20)
+        anchors.rightMargin: theme.dp(20)
+        color: theme.floatingPanel
+        radius: theme.dp(10)
+        border.width: 0
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
         Loader {
             id: queueLoader
@@ -584,15 +599,15 @@ FocusScope {
                 visible: root.width > theme.dp(900)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "audio"; text: qsTr("Audio tracks and output")
-                selected: root.settingsPage === "audio"
-                onClicked: root.audioTracksRequested(this)
+                selected: root.settingsPage === "audio" || !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "audio"
+                onClicked: { root.toggleTracks(this, "audio"); root.audioTracksRequested(this) }
             }
             ChromeButton {
                 objectName: "subtitleButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "subtitles"; text: qsTr("Subtitle tracks")
-                selected: root.settingsPage === "subtitles"
-                onClicked: root.subtitleTracksRequested(this)
+                selected: root.settingsPage === "subtitles" || !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "subtitles"
+                onClicked: { root.toggleTracks(this, "subtitles"); root.subtitleTracksRequested(this) }
             }
             ChromeButton {
                 objectName: "playbackSettingsButton"

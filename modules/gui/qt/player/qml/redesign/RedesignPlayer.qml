@@ -141,16 +141,7 @@ FocusScope {
             const library = view.libraryItem ? view.libraryItem.item : null
             if (library && Player.artist) library.openArtistByName(Player.artist)
         }
-        onAudioTracksRequested: anchor => openTracks(anchor, "audio")
-        onSubtitleTracksRequested: anchor => openTracks(anchor, "subtitles")
-        function openTracks(anchor, page) {
-            settingsPage = ""
-            queueOpen = false
-            tracksPopup.page = page
-            tracksPopup.x = Math.max(0, Math.min(anchor.mapToItem(view, 0, 0).x, view.width - tracksPopup.width - view.theme.dp(20)))
-            tracksPopup.y = Math.max(view.theme.dp(40), view.positionSliderY - tracksPopup.height - view.theme.dp(20))
-            tracksPopup.open()
-        }
+        trackPopup: tracksPopup
         onMenuRequested: anchor => {
             const point = anchor.mapToItem(view, 0, anchor.height)
             mediaMenu.x = Math.min(point.x, view.width - mediaMenu.width)
@@ -260,6 +251,7 @@ FocusScope {
     RedesignTrackPopup {
         id: tracksPopup
         parent: view
+        placementArea: view
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
         videoTracks: Player.videoTracks
         audioTracks: Player.audioTracks

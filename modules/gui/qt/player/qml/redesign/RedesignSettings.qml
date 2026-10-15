@@ -16,7 +16,7 @@ C.Pane {
     palette.buttonText: theme.bright
     palette.highlight: theme.accent
     palette.highlightedText: "#161616"
-    background: Rectangle { color: theme.panel }
+    background: Rectangle { color: "transparent" }
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
@@ -40,6 +40,8 @@ C.Pane {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true; height: theme.dp(50); color: theme.field
+            radius: theme.dp(10)
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(10); color: parent.color }
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: theme.dp(14); anchors.rightMargin: theme.dp(14)
                 spacing: theme.dp(14)
@@ -156,6 +158,8 @@ C.Pane {
         Rectangle {
             visible: root.page !== "playback"
             Layout.fillWidth: true; height: theme.dp(125); color: theme.panel
+            radius: theme.dp(10)
+            Rectangle { anchors.top: parent.top; width: parent.width; height: theme.dp(10); color: parent.color }
             Rectangle { anchors.top: parent.top; width: parent.width; height: theme.dp(1); color: theme.border }
             ColumnLayout {
                 anchors.fill: parent; anchors.leftMargin: theme.dp(20); anchors.rightMargin: theme.dp(20); anchors.topMargin: theme.dp(20); anchors.bottomMargin: theme.dp(12)

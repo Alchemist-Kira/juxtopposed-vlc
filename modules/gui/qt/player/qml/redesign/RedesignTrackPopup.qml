@@ -9,6 +9,8 @@ C.Popup {
     property color accentColor: "#d37918"
     property bool lightTheme: false
     property string page: "subtitles"
+    property Item placementArea: parent
+    property real bottomLimit: placementArea ? placementArea.height - theme.dp(54) : 0
     property var videoTracks
     property var audioTracks
     property var subtitleTracks
@@ -19,11 +21,27 @@ C.Popup {
     signal selectionRequested(var model, int index, bool selected)
     signal disableRequested(var model)
     signal addSubtitleFileRequested()
-    width: Math.min(parent.width - theme.dp(24), theme.dp(400))
-    height: Math.min(parent.height - theme.dp(114), theme.dp(524))
+    width: Math.max(0, Math.min(placementArea.width - theme.dp(40), theme.dp(400)))
+    height: Math.max(0, Math.min(placementArea.height - theme.dp(134), theme.dp(524)))
     padding: 0
+    margins: theme.dp(20)
+    topMargin: theme.dp(60)
+    bottomMargin: theme.dp(74)
     focus: true
-    background: Rectangle { color: theme.panel; radius: theme.dp(10); border.color: theme.border }
+    closePolicy: C.Popup.CloseOnEscape | C.Popup.CloseOnPressOutsideParent
+    background: Rectangle { color: theme.floatingPanel; radius: theme.dp(10) }
+    function toggleFrom(anchor, requestedPage) {
+        if (visible && page === requestedPage) { close(); return }
+        page = requestedPage
+        // Exclude the opening button from outside-click dismissal. Its next
+        // click must close this popup, rather than dismiss and reopen it.
+        parent = anchor
+        const left = Math.max(theme.dp(20), Math.min(anchor.mapToItem(placementArea, 0, 0).x, placementArea.width - width - theme.dp(20)))
+        const top = Math.max(theme.dp(60), bottomLimit - height - theme.dp(20))
+        const point = placementArea.mapToItem(anchor, left, top)
+        x = point.x; y = point.y
+        open()
+    }
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

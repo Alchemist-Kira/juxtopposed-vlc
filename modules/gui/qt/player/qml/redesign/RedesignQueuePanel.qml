@@ -22,7 +22,7 @@ Item {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true; height: theme.dp(root.floating ? 60 : 50); color: root.floating ? theme.panel : theme.field
-            radius: root.floating ? theme.dp(14) : 0
+            radius: theme.dp(root.floating ? 14 : 10)
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(14); color: parent.color }
             Text {
                 anchors.centerIn: parent; visible: root.floating
@@ -31,6 +31,7 @@ Item {
             }
             RedesignButton {
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                visible: root.floating
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "more"; text: qsTr("Queue views")
                 enabled: root.floating || root.tab === 0
@@ -41,7 +42,7 @@ Item {
                     checkedAction: String(root.tab)
                     onAboutToShow: entries = [
                         { action: "0", label: qsTr("Queue"), icon: "queue" },
-                        { action: "1", label: qsTr("Bookmarks"), icon: "bookmark", enabled: MainCtx.mediaLibraryAvailable },
+                        { action: "1", label: qsTr("Bookmarks"), icon: "bookmarks", enabled: MainCtx.mediaLibraryAvailable },
                         { action: "2", label: qsTr("Chapters"), icon: "chapters" },
                         { action: "save", label: qsTr("Save queue to file"), enabled: !!queueBody.item && queueBody.item.itemCount > 0 },
                         { action: "clear", label: qsTr("Clear queue"), enabled: !!queueBody.item && queueBody.item.itemCount > 0 },
@@ -56,7 +57,7 @@ Item {
             }
             RowLayout {
                 visible: !root.floating
-                anchors.fill: parent; anchors.leftMargin: theme.dp(12); anchors.rightMargin: theme.dp(36)
+                anchors.fill: parent; anchors.leftMargin: theme.dp(14); anchors.rightMargin: theme.dp(14)
                 Repeater {
                     model: [qsTr("Queue"), qsTr("Bookmarks"), qsTr("Chapters")]
                     RedesignButton {
@@ -64,10 +65,12 @@ Item {
                         required property string modelData
                         Layout.fillWidth: true
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        caption: modelData; text: modelData; selected: root.tab === index
-                        iconName: ["queue", "bookmark", "chapters"][index]
+                        caption: root.width > theme.dp(360) ? modelData : ""; text: modelData; selected: root.tab === index
+                        iconName: ["queue", "bookmarks", "chapters"][index]
                         iconSize: theme.dp(20)
                         captionFontSize: 12
+                        selectedForeground: theme.foreground
+                        foreground: root.tab === index ? theme.foreground : Qt.darker(theme.foreground, 1.5)
                         background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; radius: theme.dp(6) }
                         enabled: index !== 1 || MainCtx.mediaLibraryAvailable
                         onClicked: root.tab = index

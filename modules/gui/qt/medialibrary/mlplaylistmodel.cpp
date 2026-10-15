@@ -379,7 +379,9 @@ QHash<int, QByteArray> MLPlaylistModel::roleNames() const /* override */
         { MEDIA_DISPLAY_MRL,        QByteArrayLiteral("display_mrl")        },
         { MEDIA_AUDIO_TRACK,        QByteArrayLiteral("audioDesc")          },
         { MEDIA_VIDEO_TRACK,        QByteArrayLiteral("videoDesc")          },
-        { MEDIA_TITLE_FIRST_SYMBOL, QByteArrayLiteral("title_first_symbol") }
+        { MEDIA_TITLE_FIRST_SYMBOL, QByteArrayLiteral("title_first_symbol") },
+        { MEDIA_IS_VIDEO,           QByteArrayLiteral("isVideo")            },
+        { MEDIA_ICON_NAME,          QByteArrayLiteral("iconName")           }
     };
 }
 
@@ -395,6 +397,10 @@ QVariant MLPlaylistModel::itemRoleData(const MLItem *item, int role) const /* ov
             return QVariant::fromValue(media->getId());
         case MEDIA_IS_NEW:
             return QVariant::fromValue(media->isNew());
+        case MEDIA_IS_VIDEO:
+            return media->type() == VLC_ML_MEDIA_TYPE_VIDEO;
+        case MEDIA_ICON_NAME:
+            return media->type() == VLC_ML_MEDIA_TYPE_AUDIO ? QStringLiteral("music") : QStringLiteral("video");
         case MEDIA_TITLE:
             return QVariant::fromValue(media->title());
         case MEDIA_THUMBNAIL:

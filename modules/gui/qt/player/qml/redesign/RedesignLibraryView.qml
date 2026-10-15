@@ -24,6 +24,12 @@ Item {
     property string searchText: ""
     property bool grid: false
     property bool expanded: false
+    property bool playlistOpen: false
+    property bool playlistEditing: false
+    property bool playlistBusy: false
+    property string playlistKey: ""
+    property string playlistEditMessage: ""
+    property int dragDestination: -1
     readonly property bool wideToolbar: expanded && width >= theme.dp(1000)
     readonly property bool squareCards: category === 2 || showingFolders
     property var settingsContext
@@ -40,7 +46,7 @@ Item {
     property string defaultItemIcon: category === 4 ? "queue" : category === 2 ? "music" : "video"
     property bool showingFolders: false
     property bool showAddRow: category > 0 && category < 5
-    property string addLabel: category === 4 ? qsTr("Create playlist") : category === 3 ? qsTr("Add Network Stream") : qsTr("Add")
+    property string addLabel: playlistOpen ? qsTr("Add files") : category === 4 ? qsTr("Create playlist") : category === 3 ? qsTr("Add Network Stream") : qsTr("Add")
     property string emptyText: qsTr("Add a folder to your library to see your media here.")
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal homeActivated(string section, int index)
@@ -61,6 +67,10 @@ Item {
     signal pinEnqueueRequested(var pin)
     signal pinLocationRequested()
     signal itemActionRequested(var target, string action)
+    signal playlistEditRequested()
+    signal playlistMoveRequested(int from, int to, var id)
+    signal playlistRemoveRequested(int row, var id)
+    signal playlistFilesDropped(var urls)
 
     function nameFromUrl(url) {
         const value = url.toString()
@@ -70,7 +80,8 @@ Item {
         try { return decodeURIComponent(name) } catch (error) { return name }
     }
     function addMedia() {
-        if (category === 4) newPlaylistRequested()
+        if (playlistOpen && playlistBusy) return
+        if (category === 4 && !playlistOpen) newPlaylistRequested()
         else addRequested()
     }
     RedesignLibrarySort {
@@ -124,12 +135,15 @@ Item {
         objectName: "libraryMoreMenu"
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         entries: [
-            { action: "add", label: root.addLabel, icon: "add" },
+            { action: "add", label: root.addLabel, icon: "add", enabled: !root.playlistOpen || !root.playlistBusy },
             { action: "settings", label: qsTr("Library settings"), icon: "settings" }
-        ].concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
+        ].concat(root.playlistOpen ? [{action: "edit-playlist", label: root.playlistEditing ? qsTr("Done") : qsTr("Edit playlist"), icon: root.playlistEditing ? "check" : "drag", enabled: !root.playlistBusy}] : [])
+            .concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
             .concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
         onActionRequested: action => {
+            moreMenu.close()
             if (action === "add") root.addMedia()
+            else if (action === "edit-playlist") root.playlistEditRequested()
             else if (action === "pin") root.pinLocationRequested()
             else if (action === "compact") root.fullLibraryRequested()
             else root.preferencesRequested()
@@ -162,6 +176,18 @@ Item {
         onPinActivated: pin => root.pinActivated(pin)
         onPinRemoved: pin => root.pinRemoved(pin)
         onPinEnqueueRequested: pin => root.pinEnqueueRequested(pin)
+    }
+    DropArea {
+        id: playlistDrop
+        anchors.fill: parent
+        enabled: root.playlistOpen && !root.playlistBusy
+        onEntered: drag => drag.accepted = drag.hasUrls
+        onDropped: drop => { if (drop.hasUrls) { root.playlistFilesDropped(drop.urls); drop.acceptProposedAction() } }
+    }
+    Rectangle {
+        anchors.fill: parent; anchors.leftMargin: rail.width
+        color: "transparent"; border.color: root.theme.accent; border.width: root.theme.dp(2)
+        visible: playlistDrop.containsDrag
     }
     property bool searchOpen: false
     component LibraryButton: RedesignButton {
@@ -265,7 +291,7 @@ Item {
             SortButton {}
             ViewButton {}
             SearchField { Layout.preferredWidth: Math.min(root.theme.dp(325), root.width * 0.24); Layout.leftMargin: root.theme.dp(12); Layout.rightMargin: root.theme.dp(12) }
-            LibraryButton { visible: root.showAddRow; iconName: "add"; text: root.addLabel; onClicked: root.addMedia() }
+            LibraryButton { visible: root.showAddRow; enabled: !root.playlistOpen || !root.playlistBusy; iconName: "add"; text: root.addLabel; onClicked: root.addMedia() }
             MoreButton {}
         }
     }
@@ -278,6 +304,22 @@ Item {
             sourceComponent: root.wideToolbar ? expandedToolbar : compactToolbar
         }
         Rectangle { Layout.fillWidth: true; height: theme.dp(1); color: theme.border }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.playlistEditing || root.playlistEditMessage.length > 0
+            Text {
+                Layout.fillWidth: true
+                text: root.playlistEditMessage || (root.playlistBusy ? qsTr("Saving…") : qsTr("Changes are saved automatically."))
+                color: root.playlistEditMessage.length ? root.theme.danger : root.theme.foreground
+                font.pixelSize: root.theme.dp(14); wrapMode: Text.WordWrap
+            }
+            LibraryButton {
+                objectName: "playlistDoneButton"
+                visible: root.playlistEditing
+                caption: qsTr("Done"); text: caption; enabled: !root.playlistBusy
+                onClicked: root.playlistEditRequested()
+            }
+        }
         RedesignButton {
             objectName: "libraryAddRow"
             visible: root.showAddRow && !root.expanded
@@ -286,6 +328,7 @@ Item {
             implicitHeight: theme.dp(42)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             text: root.addLabel
+            enabled: !root.playlistOpen || !root.playlistBusy
             onClicked: root.addMedia()
             contentItem: Row {
                 spacing: theme.dp(10)
@@ -335,17 +378,57 @@ Item {
                 readonly property string displayTitle: itemTitle + ((!root.expanded || !root.grid) && itemArtist ? " - " + itemArtist : "")
                 readonly property string itemArtwork: model.thumbnail || model.small_cover || model.cover || ""
                 RedesignButton {
+                    id: grip
+                    objectName: "playlistGrip" + delegate.index
+                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: theme.dp(24); implicitHeight: theme.dp(36)
+                    visible: root.playlistEditing && !root.grid; enabled: !root.playlistBusy
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    iconName: "drag"; text: qsTr("Move playlist item")
+                    onClicked: { mediaView.currentIndex = delegate.index; mediaButton.forceActiveFocus() }
+                    DragHandler {
+                        id: rowMover
+                        target: null; enabled: grip.enabled && grip.visible
+                        property int from: -1
+                        property int to: -1
+                        property var originId
+                        property string originPlaylist: ""
+                        onActiveChanged: {
+                            if (active) { from = delegate.index; to = from; originId = delegate.model.id; originPlaylist = root.playlistKey; mediaView.currentIndex = from }
+                            else if (from >= 0) {
+                                if (root.visible && root.playlistEditing && originPlaylist === root.playlistKey && from !== to)
+                                    root.playlistMoveRequested(from, to, originId)
+                                from = -1; root.dragDestination = -1
+                            }
+                        }
+                        onCentroidChanged: if (active) {
+                            const point = grip.mapToItem(mediaView, centroid.position.x, centroid.position.y)
+                            const index = mediaView.indexAt(point.x + mediaView.contentX, point.y + mediaView.contentY)
+                            to = index >= 0 ? index : point.y < 0 ? 0 : root.itemCount - 1
+                            root.dragDestination = to
+                        }
+                        onCanceled: { from = -1; root.dragDestination = -1 }
+                    }
+                }
+                RedesignButton {
                     id: mediaButton
                     objectName: "libraryMediaItem" + delegate.index
                     anchors.fill: parent
                     anchors.margins: 0
+                    anchors.leftMargin: root.playlistEditing && !root.grid ? theme.dp(28) : 0
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     text: delegate.displayTitle
                     selected: mediaView.currentIndex === delegate.index
-                    onClicked: { mediaView.currentIndex = delegate.index; root.activated(delegate.index) }
+                    onClicked: { mediaView.currentIndex = delegate.index; if (root.playlistEditing) forceActiveFocus(); else root.activated(delegate.index) }
                     Keys.onMenuPressed: root.openItemMenu(this, delegate.index, Qt.point(0, height), "")
                     Keys.onPressed: event => {
-                        if (event.key === Qt.Key_F10 && event.modifiers & Qt.ShiftModifier) {
+                        if (root.playlistEditing && !root.playlistBusy && event.key === Qt.Key_Delete) {
+                            root.playlistRemoveRequested(delegate.index, delegate.model.id); event.accepted = true
+                        } else if (root.playlistEditing && !root.playlistBusy && event.modifiers & Qt.AltModifier && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                            const target = delegate.index + (event.key === Qt.Key_Up ? -1 : 1)
+                            if (target >= 0 && target < root.itemCount) root.playlistMoveRequested(delegate.index, target, delegate.model.id)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_F10 && event.modifiers & Qt.ShiftModifier) {
                             root.openItemMenu(this, delegate.index, Qt.point(0, height), ""); event.accepted = true
                         } else event.accepted = false
                     }
@@ -384,7 +467,7 @@ Item {
                     DragHandler {
                         id: dragHandler
                         target: null
-                        enabled: root.canEnqueue
+                        enabled: root.canEnqueue && !root.playlistEditing
                     }
                     RedesignLibraryDrag {
                         handler: dragHandler
@@ -393,13 +476,16 @@ Item {
                     }
                 }
                 RedesignButton {
-                    visible: root.canEnqueue && !root.grid && (mediaButton.hovered || hovered || mediaButton.visualFocus)
+                    objectName: "libraryRowAction" + delegate.index
+                    visible: (root.playlistEditing || root.canEnqueue) && !root.grid && (root.playlistEditing || mediaButton.hovered || hovered || mediaButton.visualFocus)
                     anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     implicitWidth: theme.dp(28)
-                    iconName: "add"; text: qsTr("Add to queue")
-                    onClicked: root.enqueueRequested(delegate.index)
+                    iconName: root.playlistEditing ? "remove" : "add"; text: root.playlistEditing ? qsTr("Remove from playlist") : qsTr("Add to queue")
+                    enabled: !root.playlistEditing || !root.playlistBusy
+                    onClicked: root.playlistEditing ? root.playlistRemoveRequested(delegate.index, delegate.model.id) : root.enqueueRequested(delegate.index)
                 }
+                Rectangle { anchors.fill: parent; color: "transparent"; border.color: theme.accent; border.width: theme.dp(2); visible: root.playlistEditing && root.dragDestination === delegate.index }
             }
         }
         Text {

@@ -13,6 +13,7 @@ TestCase {
         id: library
         anchors.fill: parent
         mediaModel: ListModel {
+            id: folderItems
             ListElement { title: "Shows"; fileIsDir: true }
             ListElement { title: "Films"; fileIsDir: true }
             ListElement { title: "Anime"; fileIsDir: true }
@@ -26,6 +27,7 @@ TestCase {
         ListElement { title: "Fourth" }
     }
     ListModel { id: emptyHomeItems }
+    ListModel { id: playlistItems }
     QtObject {
         id: settings
         property string saved: "[]"
@@ -59,6 +61,9 @@ TestCase {
     SignalSpy { id: pinQueueSpy; target: library; signalName: "pinEnqueueRequested" }
     SignalSpy { id: itemActionSpy; target: library; signalName: "itemActionRequested" }
     SignalSpy { id: pinLocationSpy; target: library; signalName: "pinLocationRequested" }
+    SignalSpy { id: playlistEditSpy; target: library; signalName: "playlistEditRequested" }
+    SignalSpy { id: playlistMoveSpy; target: library; signalName: "playlistMoveRequested" }
+    SignalSpy { id: playlistRemoveSpy; target: library; signalName: "playlistRemoveRequested" }
     function init() {
         testCase.width = 427
         testCase.Window.window.width = 427
@@ -70,6 +75,14 @@ TestCase {
         library.homeSections = []
         homeSpy.clear(); homeQueueSpy.clear(); sectionSpy.clear()
         library.category = 1
+        library.playlistOpen = false; library.playlistEditing = false; library.playlistBusy = false
+        library.playlistEditMessage = ""; library.playlistKey = ""; library.dragDestination = -1
+        library.mediaModel = folderItems
+        playlistItems.clear()
+        playlistItems.append({id: "first", title: "First"})
+        playlistItems.append({id: "second", title: "Second"})
+        playlistItems.append({id: "first", title: "First again"})
+        playlistEditSpy.clear(); playlistMoveSpy.clear(); playlistRemoveSpy.clear()
         library.grid = false
         library.scaleFactor = 1
         library.expanded = false
@@ -396,6 +409,65 @@ TestCase {
         verify(!add.visible)
         library.category = 5
         verify(!add.visible)
+    }
+    function beginPlaylistEditing() {
+        library.category = 4; library.playlistOpen = true; library.playlistKey = "playlist-one"
+        library.playlistEditing = true; library.mediaModel = playlistItems
+        const view = findChild(library, "libraryMediaView")
+        tryCompare(view, "count", 3)
+        tryVerify(() => view.itemAtIndex(0) !== null)
+        return view
+    }
+    function test_openPlaylistAddAppendsInsteadOfCreatingAnotherPlaylist() {
+        library.category = 4; library.playlistOpen = true
+        const add = findChild(library, "libraryAddRow")
+        compare(add.text, "Add files")
+        mouseClick(add)
+        compare(addSpy.count, 1); compare(playlistSpy.count, 0)
+        mouseClick(findChild(library, "libraryMoreButton"))
+        const menu = findChild(library, "libraryMoreMenu")
+        tryCompare(menu, "opened", true)
+        const edit = findChild(menu, "libraryAction_edit-playlist")
+        verify(waitForRendering(edit))
+        const toggle = () => library.playlistEditing = !library.playlistEditing
+        library.playlistEditRequested.connect(toggle)
+        try { mouseClick(edit); tryCompare(menu, "visible", false) }
+        finally { library.playlistEditRequested.disconnect(toggle) }
+        compare(playlistEditSpy.count, 1)
+    }
+    function test_playlistEditingSelectsWithoutPlayingAndUsesRowIdentity() {
+        const view = beginPlaylistEditing()
+        const item = view.itemAtIndex(0)
+        const button = findChild(item, "libraryMediaItem0")
+        mouseClick(button); compare(activateSpy.count, 0)
+        keyClick(Qt.Key_Down, Qt.AltModifier)
+        compare(playlistMoveSpy.count, 1)
+        compare(Array.from(playlistMoveSpy.signalArguments[0]), [0, 1, "first"])
+        keyClick(Qt.Key_Delete)
+        compare(playlistRemoveSpy.count, 1)
+        compare(Array.from(playlistRemoveSpy.signalArguments[0]), [0, "first"])
+        mouseClick(findChild(view.itemAtIndex(2), "libraryRowAction2"))
+        compare(Array.from(playlistRemoveSpy.signalArguments[1]), [2, "first"])
+        mouseClick(findChild(library, "playlistDoneButton")); compare(playlistEditSpy.count, 1)
+    }
+    function test_playlistBusyPreventsRepeatedEdits() {
+        const view = beginPlaylistEditing()
+        library.playlistBusy = true
+        verify(!findChild(library, "libraryAddRow").enabled)
+        library.addMedia(); compare(addSpy.count, 0)
+        const row = view.itemAtIndex(0), remove = findChild(row, "libraryRowAction0")
+        verify(!remove.enabled); verify(!findChild(row, "playlistGrip0").enabled)
+        mouseClick(findChild(row, "libraryMediaItem0")); keyClick(Qt.Key_Delete); keyClick(Qt.Key_Down, Qt.AltModifier)
+        compare(playlistMoveSpy.count, 0); compare(playlistRemoveSpy.count, 0)
+    }
+    function test_playlistGripMovesWithoutStartingQueueDrag() {
+        const view = beginPlaylistEditing()
+        const grip = findChild(view.itemAtIndex(0), "playlistGrip0")
+        mouseDrag(grip, grip.width / 2, grip.height / 2, 0, 84, Qt.LeftButton)
+        compare(playlistMoveSpy.count, 1)
+        compare(Array.from(playlistMoveSpy.signalArguments[0]), [0, 2, "first"])
+        compare(queueDrop.drops, 0); compare(activateSpy.count, 0)
+        compare(library.dragDestination, -1)
     }
     function test_viewMenuShowsAndChangesCurrentChoice() {
         const button = findChild(library, "libraryViewButton")

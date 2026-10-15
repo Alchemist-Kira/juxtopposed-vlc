@@ -10,6 +10,21 @@ RedesignLibraryView {
     id: root
     readonly property var emptyParentId: MediaLib.deserializeMlItemIdFromString("")
     property var selectedPlaylist
+    property string playlistEditKey: ""
+    onSelectedPlaylistChanged: { playlistEditKey = ""; playlistEditMessage = "" }
+    playlistOpen: !!selectedPlaylist
+    playlistKey: selectedPlaylist ? selectedPlaylist.toString() : ""
+    playlistEditing: !!selectedPlaylist && playlistEditKey === playlistKey && sortState.selection.id === "original" && !searchText.length && !grid
+    playlistBusy: playlistMedia.transactionPending
+    onGridChanged: if (grid) playlistEditKey = ""
+    addLabel: selectedPlaylist ? qsTr("Add files") : category === 4 ? qsTr("Create playlist") : category === 3 ? qsTr("Add Network Stream") : qsTr("Add")
+    onPlaylistEditRequested: {
+        if (playlistEditing) playlistEditKey = ""
+        else { sortState.select("original"); searchText = ""; grid = false; playlistEditKey = playlistKey }
+    }
+    onPlaylistMoveRequested: (from, to, id) => playlistMedia.editItem(from, to, false, id, selectedPlaylist)
+    onPlaylistRemoveRequested: (row, id) => playlistMedia.editItem(row, row, true, id, selectedPlaylist)
+    onPlaylistFilesDropped: urls => playlistMedia.appendFiles(urls.map(url => String(url)))
     property var selectedCollection
     property string homeSection: ""
     property string currentFolder: ""
@@ -36,13 +51,23 @@ RedesignLibraryView {
         const target = targetForItem(index, section || homeSection)
         if (!target) return null
         const navigate = ["folder", "section", "home"].includes(target.kind)
+        if (selectedPlaylist && !section) { target.playlistRow = index; target.playlistKey = playlistKey }
         return {target: target, entries: [
             {action: navigate ? "open" : "play", label: navigate ? qsTr("Open") : qsTr("Play"), icon: "play"},
             {action: "pin", label: pinStore.contains(target) ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: pinStore.contains(target) ? "favorite-active" : "favorite", accent: true}
-        ].concat(["section", "home"].includes(target.kind) ? [] : [{action: "queue", label: qsTr("Add to queue"), icon: "queue"}])}
+        ].concat(["section", "home"].includes(target.kind) ? [] : [{action: "queue", label: qsTr("Add to queue"), icon: "queue"}])
+            .concat(playlistEditing && !section ? [
+                {action: "earlier", label: qsTr("Move earlier"), icon: "sort", enabled: index > 0 && !playlistBusy},
+                {action: "later", label: qsTr("Move later"), icon: "sort", enabled: index < itemCount - 1 && !playlistBusy},
+                {action: "remove-entry", label: qsTr("Remove from playlist"), icon: "remove", enabled: !playlistBusy}
+            ] : [])}
     }
     onItemActionRequested: (target, action) => {
-        if (action === "pin") pinStore.toggle(target)
+        if (["earlier", "later", "remove-entry"].includes(action)) {
+            if (!playlistEditing || target.playlistKey !== playlistKey) return
+            const id = MediaLib.deserializeMlItemIdFromString(target.key)
+            playlistMedia.editItem(target.playlistRow, target.playlistRow + (action === "earlier" ? -1 : action === "later" ? 1 : 0), action === "remove-entry", id, selectedPlaylist)
+        } else if (action === "pin") pinStore.toggle(target)
         else if (action === "queue") enqueueTarget(target)
         else if (action === "open") openTarget(target)
         else playTarget(target)
@@ -101,9 +126,9 @@ RedesignLibraryView {
     heading: breadcrumbs.map(entry => entry.label).join(" › ")
     canGoBack: backStack.length > 0
     canGoForward: forwardStack.length > 0
-    defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 ? "playlist" : category === 2 ? "music" : "video"
+    defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 && !selectedPlaylist ? "playlist" : category === 2 ? "music" : "video"
     showingFolders: category === 1 && !currentFolder || homeSection === "folders"
-    showAddRow: category > 0 && category < 5 && !selectedPlaylist && !selectedCollection && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
+    showAddRow: category > 0 && category < 5 && !selectedCollection && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
     canEnqueue: !(category === 2 && musicSection === "")
     emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
 
@@ -233,7 +258,8 @@ RedesignLibraryView {
         else MediaLib.addToPlaylist(activeModel.getDataAt(index).id)
     }
     onAddRequested: {
-        if (category === 3) DialogsProvider.openNetDialog()
+        if (selectedPlaylist) playlistMedia.appendFiles(DialogsProvider.selectPlaylistFiles())
+        else if (category === 3) DialogsProvider.openNetDialog()
         else { const folder = DialogsProvider.selectLibraryFolder(); if (folder.toString().length > 0) libraryFolders.add(folder) }
     }
     onPreferencesRequested: DialogsProvider.prefsPageDialog("library")
@@ -301,11 +327,14 @@ RedesignLibraryView {
         folderEntries.clear()
         for (const row of rows) folderEntries.append({fileUrl: row.key, fileName: row.name, fileIsDir: true})
     }
-    onSearchTextChanged: { refreshVisits(); refreshFolders() }
+    onSearchTextChanged: { if (searchText.length) playlistEditKey = ""; refreshVisits(); refreshFolders() }
     onHomeSectionChanged: refreshVisits()
     Connections {
         target: root.sortState
-        function onSelectionChanged() { root.refreshVisits(); root.refreshFolders() }
+        function onSelectionChanged() {
+            if (root.sortState.selection.id !== "original") root.playlistEditKey = ""
+            root.refreshVisits(); root.refreshFolders()
+        }
     }
     RedesignLibraryVisits { id: visits; ctx: MainCtx; onEntriesChanged: root.refreshVisits() }
     ListModel { id: frequentFolders }
@@ -352,6 +381,10 @@ RedesignLibraryView {
     MLRecentMediaModel { id: recent; ml: MediaLib; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder; searchPattern: root.searchText }
     MLPlaylistListModel { id: playlists; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLPlaylistModel { id: playlistMedia; ml: MediaLib; parentId: root.selectedPlaylist || root.emptyParentId; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
+    Connections {
+        target: playlistMedia
+        function onItemsEdited(playlist, success, error) { if (root.selectedPlaylist && root.playlistKey === playlist.toString()) root.playlistEditMessage = success ? "" : error }
+    }
     MLUrlModel { id: streams; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLFolderModel { id: libraryFolders; ctx: MainCtx }
     ListModel { id: folderEntries }

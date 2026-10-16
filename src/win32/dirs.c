@@ -50,9 +50,41 @@ static char *config_GetKnownFolder (KNOWNFOLDERID id)
     return result;
 }
 
-static char *config_GetAppDir (void)
+static bool config_CanWritePortableDir(const WCHAR *directory)
 {
-    /* if portable directory exists, use it */
+    WCHAR filename[MAX_PATH];
+    const DWORD pid = GetCurrentProcessId(), tick = GetTickCount();
+    for (unsigned attempt = 0; attempt < 8; ++attempt)
+    {
+        if (swprintf(filename, ARRAY_SIZE(filename),
+                     L"%ls\\vlc-write-%lu-%lu-%u.tmp", directory, pid, tick,
+                     attempt) < 0)
+            return false;
+
+        HANDLE file = CreateFileW(filename, GENERIC_WRITE | DELETE, 0, NULL,
+                                  CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY |
+                                  FILE_FLAG_DELETE_ON_CLOSE, NULL);
+        if (file != INVALID_HANDLE_VALUE)
+        {
+            DWORD written;
+            const bool writable = WriteFile(file, "v", 1, &written, NULL)
+                               && written == 1;
+            CloseHandle(file);
+            return writable;
+        }
+        if (GetLastError() != ERROR_FILE_EXISTS &&
+            GetLastError() != ERROR_ALREADY_EXISTS)
+            break;
+    }
+    return false;
+}
+
+static BOOL CALLBACK config_InitPortableDir(PINIT_ONCE once, PVOID data,
+                                           PVOID *context)
+{
+    VLC_UNUSED(once);
+    VLC_UNUSED(context);
+    WCHAR *portable = data;
     WCHAR path[MAX_PATH];
     DWORD read = GetModuleFileNameW (NULL, path, ARRAY_SIZE(path));
     if (read != 0 && read != ARRAY_SIZE(path))
@@ -65,11 +97,23 @@ static char *config_GetAppDir (void)
             {
                 DWORD attrib = GetFileAttributesW (path);
                 if (attrib != INVALID_FILE_ATTRIBUTES &&
-                        (attrib & FILE_ATTRIBUTE_DIRECTORY))
-                    return FromWide (path);
+                    (attrib & FILE_ATTRIBUTE_DIRECTORY) &&
+                    config_CanWritePortableDir(path))
+                    wcscpy_s(portable, MAX_PATH, path);
             }
         }
     }
+    return TRUE;
+}
+
+static char *config_GetAppDir (void)
+{
+    /* Keep one profile for the process, including on slow network shares. */
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    static WCHAR portable[MAX_PATH];
+    InitOnceExecuteOnce(&once, config_InitPortableDir, portable, NULL);
+    if (portable[0] != L'\0')
+        return FromWide(portable);
 
     char *psz_dir;
     char *psz_parent = config_GetKnownFolder (FOLDERID_RoamingAppData);

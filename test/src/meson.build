@@ -7,6 +7,14 @@ vlc_tests += {
 
 if host_system == 'windows'
     vlc_tests += {
+        'name': 'test_src_config_dirs_win32',
+        'sources': files('config/dirs_win32.c'),
+        'suite': ['src', 'test_src'],
+        'link_with': [libvlccore],
+        'dependencies': [cc.find_library('shell32'), cc.find_library('ole32'),
+                         cc.find_library('advapi32'), cc.find_library('uuid')],
+    }
+    vlc_tests += {
         'name' : 'test_src_misc_win32_pipe',
         'sources' : files('misc/win32_pipe.c'),
         'suite' : ['src', 'test_src'],

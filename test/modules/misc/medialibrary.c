@@ -149,6 +149,22 @@ static void ValidateThumbnail(void *data, const vlc_ml_event_t *event)
     vlc_sem_post(sem);
 }
 
+static void TestBookmarks(vlc_medialibrary_t *ml, int64_t media_id)
+{
+    assert(vlc_ml_media_add_bookmark(ml, media_id, 42023) == VLC_SUCCESS);
+    assert(vlc_ml_media_update_bookmark(ml, media_id, 42023, "DON'T BLINK", NULL) == VLC_SUCCESS);
+    vlc_ml_query_params_t params = vlc_ml_query_params_create();
+    vlc_ml_bookmark_list_t *bookmarks = vlc_ml_list_media_bookmarks(ml, &params, media_id);
+    assert(bookmarks && bookmarks->i_nb_items == 1);
+    assert(bookmarks->p_items[0].i_time == 42023);
+    assert(!strcmp(bookmarks->p_items[0].psz_name, "DON'T BLINK"));
+    vlc_ml_release(bookmarks);
+    assert(vlc_ml_media_remove_bookmark(ml, media_id, 42023) == VLC_SUCCESS);
+    bookmarks = vlc_ml_list_media_bookmarks(ml, &params, media_id);
+    assert(bookmarks && bookmarks->i_nb_items == 0);
+    vlc_ml_release(bookmarks);
+}
+
 static int OpenIntf(vlc_object_t *root)
 {
     vlc_medialibrary_t *ml = vlc_ml_instance_get(root);
@@ -174,6 +190,7 @@ static int OpenIntf(vlc_object_t *root)
     vlc_ml_event_unregister_callback(ml, listener);
 
     TestAssociatedTracks(root, ml, media, MOCK_URL);
+    TestBookmarks(ml, media->i_id);
 
     vlc_ml_media_release(media);
 

@@ -47,6 +47,13 @@
 #include <algorithm>
 #include <sstream>
 #include <initializer_list>
+#ifdef _WIN32
+# include <windows.h>
+# include <vlc_charset.h>
+# if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#  include "library_storage.hpp"
+# endif
+#endif
 
 class Logger : public medialibrary::ILogger
 {
@@ -406,6 +413,33 @@ MediaLibrary* MediaLibrary::create( vlc_medialibrary_module_t* vlc_ml )
         return nullptr;
     auto userDir = vlc::wrap_cptr( userdir );
     auto mlDir = std::string{ userDir.get() } + "/ml/";
+    const auto ruleDirectory = mlDir + "track-folders";
+#ifdef _WIN32
+# if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    if (vlc::medialibrary::isWslStorage(userDir.get()))
+    {
+        /* Windows SQLite cannot take its exclusive locks through WSL's file
+         * server. Keep each portable profile's database on the Windows disk.
+         * Configuration and folder rules still use the original profile. */
+        const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+        std::vector<wchar_t> directory(length);
+        const DWORD copied = length ? GetEnvironmentVariableW(L"LOCALAPPDATA", directory.data(), length) : 0;
+        auto local = vlc::wrap_cptr(copied && copied < length ? FromWide(directory.data()) : nullptr);
+        if (copied >= 3 && copied < length)
+        {
+            const wchar_t drive[] = {directory[0], L':', L'\\', L'\0'};
+            if (GetDriveTypeW(drive) == DRIVE_REMOTE) local.reset();
+        }
+        mlDir = local ? vlc::medialibrary::localLibraryStorage(userDir.get(), local.get()) : std::string{};
+        if (mlDir.empty())
+        {
+            msg_Err(vlc_ml, "Cannot find a local Windows directory for the library database");
+            return nullptr;
+        }
+        msg_Dbg(vlc_ml, "WSL profile: using local library storage at %s", mlDir.c_str());
+    }
+# endif
+#endif
     auto dbPath = mlDir + "ml.db";
     auto mlFolderPath = mlDir + "mlstorage/";
     medialibrary::SetupConfig cfg;
@@ -431,7 +465,7 @@ MediaLibrary* MediaLibrary::create( vlc_medialibrary_module_t* vlc_ml )
     if ( !ml )
         return nullptr;
 
-    return new MediaLibrary( vlc_ml, ml, mlDir + "track-folders" );
+    return new MediaLibrary( vlc_ml, ml, ruleDirectory );
 }
 
 MediaLibrary::MediaLibrary( vlc_medialibrary_module_t* vlc_ml,

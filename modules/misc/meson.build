@@ -61,6 +61,7 @@ if medialibrary_dep.found()
             'medialibrary/medialibrary.h',
             'medialibrary/track_rules.hpp',
             'medialibrary/track_rule_store.hpp',
+            'medialibrary/library_storage.hpp',
             'medialibrary/track_rule_store.cpp',
             'medialibrary/fs/device.h',
             'medialibrary/fs/device.cpp',

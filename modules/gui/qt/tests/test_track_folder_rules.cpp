@@ -11,6 +11,7 @@
 #include <vlc_media_library.h>
 #include "../../../misc/medialibrary/track_rules.hpp"
 #include "../../../misc/medialibrary/track_rule_store.hpp"
+#include "../../../misc/medialibrary/library_storage.hpp"
 #ifdef _WIN32
 # include <windows.h>
 #endif
@@ -20,6 +21,22 @@ class TestTrackFolderRules : public QObject
 {
     Q_OBJECT
 private slots:
+    void windowsLibraryStorage()
+    {
+        namespace Storage = vlc::medialibrary;
+        QVERIFY(Storage::isWslStorage("\\\\wsl.localhost\\Ubuntu\\home\\user\\vlc\\portable"));
+        QVERIFY(Storage::isWslStorage("//WSL$/Ubuntu/home/user/vlc/portable"));
+        QVERIFY(Storage::isWslStorage("\\\\?\\UNC\\wsl.localhost\\Ubuntu\\home\\user"));
+        QVERIFY(!Storage::isWslStorage("//nas/media/vlc/portable"));
+        QVERIFY(!Storage::isWslStorage("C:/vlc/portable"));
+        QVERIFY(!Storage::isWslStorage("//wsl.localhost"));
+        const auto first = Storage::localLibraryStorage("//wsl.localhost/Ubuntu/home/user/vlc/portable", "C:/Local");
+        QVERIFY(first.find("C:/Local/vlc/wsl-libraries/") == 0);
+        QCOMPARE(first, Storage::localLibraryStorage("\\\\wsl.localhost\\Ubuntu\\home\\user\\vlc\\portable\\", "C:\\Local\\"));
+        QCOMPARE(first, Storage::localLibraryStorage("//WSL$/UBUNTU/home/user/vlc/portable", "C:/Local"));
+        QVERIFY(first != Storage::localLibraryStorage("//wsl.localhost/Ubuntu/home/user/other/portable", "C:/Local"));
+        QVERIFY(Storage::localLibraryStorage("//wsl.localhost/Ubuntu/home/user", "//wsl.localhost/Ubuntu/cache").empty());
+    }
     void futureNames_data()
     {
         QTest::addColumn<QString>("sample"); QTest::addColumn<QString>("track");

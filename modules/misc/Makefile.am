@@ -135,6 +135,7 @@ libmedialibrary_plugin_la_SOURCES = \
 	misc/medialibrary/medialibrary.h \
 	misc/medialibrary/track_rules.hpp \
 	misc/medialibrary/track_rule_store.hpp \
+	misc/medialibrary/library_storage.hpp \
 	misc/medialibrary/track_rule_store.cpp \
 	misc/medialibrary/fs/device.h \
 	misc/medialibrary/fs/device.cpp \

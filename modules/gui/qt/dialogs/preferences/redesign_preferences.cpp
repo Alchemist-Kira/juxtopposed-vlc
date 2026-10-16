@@ -30,6 +30,29 @@
 namespace {
 const QString presetOption = QStringLiteral("qt-player-presets");
 
+struct ResamplingQuality {
+    const char* module;
+    const char* option;
+    int low, balanced, high;
+};
+
+const ResamplingQuality resamplingQualities[] = {
+    {"soxr", "soxr-resampler-quality", 0, 2, 4},
+    {"samplerate", "src-converter-type", 4, 2, 0},
+    {"speex_resampler", "speex-resampler-quality", 0, 4, 10},
+};
+
+const ResamplingQuality* resamplingQuality(const QString& module)
+{
+    const bool automatic = module.isEmpty() || module == QLatin1String("any");
+    for (const auto& quality : resamplingQualities) {
+        if ((automatic || module == QLatin1String(quality.module)
+             || (module == QLatin1String("speex") && !strcmp(quality.module, "speex_resampler")))
+            && config_FindConfig(quality.option)) return &quality;
+    }
+    return nullptr;
+}
+
 QString audioFilterHelp(const QString& name)
 {
     if (name == QLatin1String("equalizer")) return qtr("Change the level of each frequency band.");
@@ -686,6 +709,14 @@ bool RedesignPreferences::deletePlayerPreset(const QString& id)
 
 QVariant RedesignPreferences::value(const QString& name) const
 {
+    if (name == QLatin1String("redesign-resampling-quality")) {
+        const auto* quality = resamplingQuality(value(QStringLiteral("audio-resampler")).toString());
+        if (!quality) return QStringLiteral("custom");
+        const int current = value(qfu(quality->option)).toInt();
+        return current == quality->low ? QStringLiteral("low")
+            : current == quality->balanced ? QStringLiteral("balanced")
+            : current == quality->high ? QStringLiteral("high") : QStringLiteral("custom");
+    }
     if (name == QLatin1String("redesign-subtitle-relative-size"))
         return value(QStringLiteral("sub-text-scale"));
     if (name == QLatin1String("redesign-subtitle-duration"))
@@ -766,6 +797,12 @@ QVariant RedesignPreferences::videoValue(const QString& name) const
 
 bool RedesignPreferences::isStaged(const QString& name) const
 {
+    if (name == QLatin1String("redesign-resampling-quality")) {
+        if (m_edits.contains(QStringLiteral("audio-resampler"))) return true;
+        for (const auto& quality : resamplingQualities)
+            if (m_edits.contains(qfu(quality.option))) return true;
+        return false;
+    }
     if (name == QLatin1String("redesign-subtitle-relative-size"))
         return m_edits.contains(QStringLiteral("sub-text-scale")) || m_edits.contains(QStringLiteral("sub-text-size-mode"));
     if (name == QLatin1String("redesign-subtitle-delay"))
@@ -775,6 +812,19 @@ bool RedesignPreferences::isStaged(const QString& name) const
 
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
+    if (name == QLatin1String("redesign-resampling-quality")) {
+        QVariantList choices{
+            QVariantMap{{QStringLiteral("label"), qtr("Low")}, {QStringLiteral("value"), QStringLiteral("low")}},
+            QVariantMap{{QStringLiteral("label"), qtr("Balanced")}, {QStringLiteral("value"), QStringLiteral("balanced")}},
+            QVariantMap{{QStringLiteral("label"), qtr("High")}, {QStringLiteral("value"), QStringLiteral("high")}}
+        };
+        if (value(name) == QStringLiteral("custom"))
+            choices.append(QVariantMap{{QStringLiteral("label"), qtr("Custom")}, {QStringLiteral("value"), QStringLiteral("custom")}});
+        return {{QStringLiteral("kind"), QStringLiteral("string")}, {QStringLiteral("choices"), choices},
+            {QStringLiteral("value"), value(name)}, {QStringLiteral("defaultValue"), QStringLiteral("balanced")},
+            {QStringLiteral("supported"), resamplingQuality(value(QStringLiteral("audio-resampler")).toString()) != nullptr},
+            {QStringLiteral("help"), qtr("Set the quality for audio sample rate conversion. Higher quality uses more processing power. Some resamplers do not have a quality control.")}};
+    }
     if (name == QLatin1String("redesign-subtitle-relative-size")) {
         auto description = describe(QStringLiteral("sub-text-scale"));
         description.insert(QStringLiteral("value"), value(name));
@@ -944,6 +994,19 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
 
 bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
 {
+    if (name == QLatin1String("redesign-resampling-quality")) {
+        const auto* quality = resamplingQuality(value(QStringLiteral("audio-resampler")).toString());
+        if (!quality) return false;
+        const auto level = proposed.toString();
+        if (level == QLatin1String("custom")) return value(name) == proposed;
+        if (level != QLatin1String("low") && level != QLatin1String("balanced") && level != QLatin1String("high")) return false;
+        const int setting = level == QLatin1String("low") ? quality->low
+            : level == QLatin1String("high") ? quality->high : quality->balanced;
+        if (!stage(qfu(quality->option), setting)) return false;
+        // Select the matching converter when Automatic would otherwise fall
+        // back to a resampler that has no quality control.
+        return stage(QStringLiteral("audio-resampler"), qfu(quality->module));
+    }
     if (name == QLatin1String("redesign-subtitle-relative-size")) {
         if (!stage(QStringLiteral("sub-text-scale"), proposed)) return false;
         return stage(QStringLiteral("sub-text-size-mode"), 0);
@@ -1390,6 +1453,23 @@ bool RedesignPreferences::save()
                 if (var_Type(output, bytes.constData()) == 0) var_Create(output, bytes.constData(), VLC_VAR_FLOAT);
                 var_SetFloat(output, bytes.constData(), value(name).toFloat());
             }
+            aout_Release(output);
+        }
+    }
+    if (previous.contains(QStringLiteral("audio-resampler"))
+        || std::any_of(std::begin(resamplingQualities), std::end(resamplingQualities), [&](const auto& quality) {
+            return previous.contains(qfu(quality.option));
+        })) {
+        audio_output_t* output = vlc_player_aout_Hold(player);
+        if (output) {
+            if (var_Type(output, "audio-resampler") == 0) var_Create(output, "audio-resampler", VLC_VAR_STRING);
+            var_SetString(output, "audio-resampler", value(QStringLiteral("audio-resampler")).toString().toUtf8().constData());
+            for (const auto& quality : resamplingQualities) {
+                if (!previous.contains(qfu(quality.option))) continue;
+                if (var_Type(output, quality.option) == 0) var_Create(output, quality.option, VLC_VAR_INTEGER);
+                var_SetInteger(output, quality.option, value(qfu(quality.option)).toLongLong());
+            }
+            aout_RestartRequest(output, false);
             aout_Release(output);
         }
     }

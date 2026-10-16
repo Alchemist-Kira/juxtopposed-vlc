@@ -289,6 +289,20 @@ TestCase {
         resizeRow.presentation = previous
         store.providedHelp = ""; verify(!icon.visible)
     }
+    function test_advancedAudioSeparatesQualityFromResampler() {
+        const section = catalog.advancedSections.audio[0]
+        compare(section.title, "")
+        compare(section.rows.slice(0, 4).map(row => row[1]).join("|"),
+            "Pass compressed audio to the receiver|Detect Dolby Surround|Resampling quality|Media role")
+        compare(section.rows[1][2].choiceLabels[0], "Automatic")
+        const quality = catalog.find("Resampling quality")
+        compare(quality.length, 1)
+        compare(quality[0].name, "redesign-resampling-quality")
+        verify(quality[0].presentation.dynamicChoices)
+        const resampler = catalog.find("Resampler").find(row => row.name === "audio-resampler")
+        verify(resampler)
+        compare(resampler.title, "Resampler")
+    }
     function test_volumeStepUsesPercentagePoints() {
         volumeStepRow.visible = true
         const field = findChild(volumeStepRow, "preferenceTextEditor")

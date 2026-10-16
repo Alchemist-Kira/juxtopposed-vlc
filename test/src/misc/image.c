@@ -48,6 +48,49 @@ const char vlc_module_name[] = MODULE_STRING;
 
 static atomic_bool encoder_opened = false;
 
+static void CheckPictureExport(vlc_object_t *root)
+{
+    static const struct {
+        unsigned coded_width, coded_height, width, height;
+        unsigned sar_num, sar_den;
+        int override_width, override_height;
+        unsigned expected_width, expected_height;
+    } cases[] = {
+        /* A valid near-square pixel ratio used to overflow the height to 6. */
+        {864, 418, 854, 388, 46560, 46543, 252, 0, 252, 114},
+        {864, 418, 854, 388, 1, 1, 252, 0, 252, 114},
+        /* The corresponding portrait case scales from the requested height. */
+        {418, 864, 388, 854, 46543, 46560, 0, 252, 114, 252},
+        {418, 864, 388, 854, 1, 1, 0, 252, 114, 252},
+        {720, 576, 720, 576, 16, 15, 252, 0, 252, 189},
+        {576, 720, 576, 720, 15, 16, 0, 252, 189, 252},
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(cases); ++i)
+    {
+        video_format_t source;
+        video_format_Init(&source, VLC_CODEC_RGBA);
+        video_format_Setup(&source, VLC_CODEC_RGBA,
+                           cases[i].coded_width, cases[i].coded_height,
+                           cases[i].width, cases[i].height,
+                           cases[i].sar_num, cases[i].sar_den);
+        picture_t *picture = picture_NewFromFormat(&source);
+        assert(picture != NULL);
+        block_t *block = NULL;
+        video_format_t exported = {0};
+        assert(picture_Export(root, &block, &exported, picture, VLC_CODEC_PNG,
+                              cases[i].override_width, cases[i].override_height,
+                              false) == VLC_SUCCESS);
+        assert(block != NULL);
+        assert(exported.i_width == cases[i].expected_width);
+        assert(exported.i_height == cases[i].expected_height);
+        assert(exported.i_visible_width == exported.i_width);
+        assert(exported.i_visible_height == exported.i_height);
+        block_Release(block);
+        picture_Release(picture);
+        video_format_Clean(&source);
+    }
+}
+
 static int OpenIntf(vlc_object_t *root)
 {
     image_handler_t *ih = image_HandlerCreate(root);
@@ -85,6 +128,7 @@ static int OpenIntf(vlc_object_t *root)
     assert(atomic_load(&encoder_opened));
 
     image_HandlerDelete(ih);
+    CheckPictureExport(root);
 
     return VLC_SUCCESS;
 }

@@ -11,8 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: registry.videolan.org/vlc-debian-win64-posix:20260611225331
+      options: --user root
 
     steps:
+      - name: Fix runner file permissions
+        shell: bash
+        run: |
+          chmod -R 777 /__w/_temp || true
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -21,7 +27,7 @@ jobs:
       - name: Mark workspace directory as safe in git
         shell: bash
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory '*'
 
       - name: Compile and package VLC Win64
         shell: bash

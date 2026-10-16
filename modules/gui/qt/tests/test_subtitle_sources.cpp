@@ -59,7 +59,9 @@ private slots:
         QVERIFY(!client.setApiKey("bad\r\nkey"));QVERIFY(!client.setApiKey(QString::fromUtf8("秘密")));
         QVERIFY(client.setApiKey("unit-secret"));QVERIFY(client.configured());
         SubtitleSourceService next(options(server));next.setStorageDirectory(directory.path());QVERIFY(next.configured());
+#ifndef Q_OS_WIN
         QVERIFY(!(QFile::permissions(directory.filePath("source-settings.ini"))&QFile::WriteOther));
+#endif
     }
     void searchParsesFilesAndQuery() {
         QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,results());};

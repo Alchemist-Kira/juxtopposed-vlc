@@ -14,6 +14,7 @@ TestCase {
         property bool hasMediaLibrary: true
         property string errorMessage: ""
         property bool saveFails: false
+        property int skipCount: 0
         property var saved: ({})
         property var shortcuts: [{title: "Play / Pause", keys: ["Space"]}, {title: "Seek Backward / Forward", keys: ["Alt+Left", "Alt+Right"]}]
         function validateFolder(folder) { errorMessage = folder === "missing" ? "Select an existing folder." : ""; return !errorMessage.length }
@@ -22,6 +23,7 @@ TestCase {
             if (saveFails) { errorMessage = "VLC cannot save these settings."; return false }
             saved = {folder: folder, scheme: scheme, accent: accent, network: network}; return true
         }
+        function skip() { skipCount++; return !saveFails }
     }
     RedesignOnboardingView { id: onboarding; anchors.fill: parent; backend: setup }
     SignalSpy { id: finished; target: onboarding; signalName: "finished" }
@@ -31,6 +33,7 @@ TestCase {
         onboarding.page = 0; onboarding.folder = "~/Videos"; onboarding.scheme = 2
         onboarding.accentColor = "#d37918"; onboarding.onlineMetadata = true
         setup.hasMediaLibrary = true; setup.errorMessage = ""; setup.saveFails = false; setup.saved = ({})
+        setup.skipCount = 0
         finished.clear(); dismissed.clear(); onboarding.width = 1090; onboarding.height = 759
     }
     function test_navigationUsesThreePagesAndRetainsEdits() {
@@ -75,6 +78,15 @@ TestCase {
     function test_noMediaLibraryDisablesFolderControls() {
         setup.hasMediaLibrary = false; compare(item("onboardingFolder").enabled, false)
         compare(item("onboardingBrowse").enabled, false)
+    }
+    function test_closeAndEscapeStillDismissAfterSaveFailure() {
+        setup.saveFails = true; onboarding.page = 2; onboarding.next()
+        compare(finished.count, 0); verify(item("onboardingError").visible)
+        mouseClick(item("onboardingClose"))
+        compare(setup.skipCount, 1); compare(dismissed.count, 1)
+        onboarding.forceActiveFocus(); keyClick(Qt.Key_Escape)
+        compare(setup.skipCount, 2); compare(dismissed.count, 2)
+        compare(finished.count, 0)
     }
     function test_privacyExplanationCanOpenAndClose() {
         mouseClick(item("onboardingPrivacyInfo")); verify(item("onboardingPrivacyPolicy").opened)

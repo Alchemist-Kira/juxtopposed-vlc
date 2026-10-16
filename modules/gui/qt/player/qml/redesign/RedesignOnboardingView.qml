@@ -29,7 +29,11 @@ FocusScope {
         if (page < 2) { page++; nextButton.forceActiveFocus() }
         else if (backend.finish(folder, scheme, accentColor.toString(), onlineMetadata)) finished()
     }
-    Keys.onEscapePressed: dismissRequested()
+    function dismiss() {
+        backend.skip()
+        dismissRequested()
+    }
+    Keys.onEscapePressed: dismiss()
     Rectangle { anchors.fill: parent; radius: 14 * root.contentScale; color: "#0e0e0e" }
     Item {
         id: scene
@@ -45,6 +49,13 @@ FocusScope {
                 radius: 6; color: parent.accent ? root.accentColor : parent.hovered ? "#292929" : "#191919"
                 border.color: parent.visualFocus ? "#e5e5e5" : "transparent"
             }
+        }
+        RedesignButton {
+            objectName: "onboardingClose"
+            x: 1038; y: 12; width: 32; height: 32; z: 1
+            iconName: "close"; text: qsTr("Close setup")
+            accentColor: root.accentColor
+            onClicked: root.dismiss()
         }
         Item {
             objectName: "onboardingWelcome"

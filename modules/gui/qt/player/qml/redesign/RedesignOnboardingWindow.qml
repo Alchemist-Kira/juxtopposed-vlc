@@ -19,7 +19,7 @@ Window {
     visible: DialogsProvider.firstRunDialogVisible
     RedesignFirstRunSetup { id: setup; ctx: MainCtx }
     onVisibleChanged: if (visible) { raise(); requestActivate(); view.forceActiveFocus() }
-    onClosing: event => { event.accepted = false; if (setup.skip()) DialogsProvider.dismissFirstRunDialog() }
+    onClosing: event => { event.accepted = false; view.dismiss() }
     MouseArea { anchors.top: parent.top; width: parent.width; height: 40 * VLCStyle.scale; onPressed: root.startSystemMove() }
     RedesignOnboardingView {
         id: view
@@ -28,6 +28,6 @@ Window {
         backend: setup
         systemLight: !VLCStyle.palette.isDark
         onFinished: DialogsProvider.dismissFirstRunDialog()
-        onDismissRequested: root.close()
+        onDismissRequested: DialogsProvider.dismissFirstRunDialog()
     }
 }

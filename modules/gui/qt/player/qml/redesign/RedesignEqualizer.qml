@@ -22,7 +22,7 @@ ColumnLayout {
         if (!Number.isFinite(gain) || gain < -20 || gain > 20) return false
         if (index !== 0) return backend.setEqualizerBand(index - 1, gain)
         if (!backend.stage("equalizer-preamp", gain)) return false
-        return !compact || backend.stage("filter:audio-filter:equalizer", true)
+        return backend.stage("filter:audio-filter:equalizer", true)
     }
     RedesignButton {
         objectName: "equalizerExpander"
@@ -51,11 +51,26 @@ ColumnLayout {
         color: theme.background
         C.ScrollView {
             id: scroll
+            objectName: "equalizerScroll"
+            wheelEnabled: false
             anchors.fill: parent
             contentWidth: Math.max(availableWidth, root.theme.dp(640))
             contentHeight: root.theme.dp(root.compact ? 300 : 448)
             clip: true
             C.ScrollBar.vertical.policy: C.ScrollBar.AlwaysOff
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                onWheel: event => {
+                    const pixels = event.pixelDelta.x !== 0 || event.pixelDelta.y !== 0
+                    const delta = pixels ? event.pixelDelta.x : event.angleDelta.x / 120 * root.theme.dp(48)
+                    const vertical = pixels ? event.pixelDelta.y : event.angleDelta.y / 120 * root.theme.dp(48)
+                    if (Math.abs(delta) <= Math.abs(vertical) || scroll.contentWidth <= scroll.availableWidth) { event.accepted = false; return }
+                    const view = scroll.contentItem
+                    view.contentX = Math.max(0, Math.min(scroll.contentWidth - scroll.availableWidth, view.contentX - delta))
+                    event.accepted = true
+                }
+            }
             Row {
                 width: scroll.contentWidth - root.theme.dp(32)
                 x: root.theme.dp(16)

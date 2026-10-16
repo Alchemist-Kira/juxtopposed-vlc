@@ -1069,6 +1069,8 @@ qml_tests = {
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
     'tst_RedesignSubtitleTimeline': files('tests/tst_RedesignSubtitleTimeline.qml'),
     'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
+    'tst_RedesignGlobalEqualizer': files('tests/tst_RedesignGlobalEqualizer.qml'),
+    'tst_RedesignEqualizerScroll': files('tests/tst_RedesignEqualizerScroll.qml'),
     'tst_RedesignSpatializer': files('tests/tst_RedesignSpatializer.qml'),
     'tst_RedesignVideo': files('tests/tst_RedesignVideo.qml'),
     'tst_RedesignOnboarding': files('tests/tst_RedesignOnboarding.qml'),

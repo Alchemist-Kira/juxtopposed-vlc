@@ -53,7 +53,7 @@ TestCase {
         property real preamp: 12
         function equalizerBands() { return gains }
         function value(name) { return name === "equalizer-preamp" ? preamp : true }
-        function stage(name, gain) { preamp = gain; revision++; return true }
+        function stage(name, gain) { if (name === "equalizer-preamp") preamp = gain; revision++; return true }
         function setEqualizerBand(index, gain) { const next = gains.slice(); next[index] = gain; gains = next; revision++; return true }
     }
     RedesignEqualizer {

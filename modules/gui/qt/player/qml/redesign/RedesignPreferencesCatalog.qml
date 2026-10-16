@@ -104,7 +104,7 @@ QtObject {
                 ["filter:audio-filter:compressor", qsTr("Night mode")], ["audio-replay-gain-mode", qsTr("Replay gain"), {choiceLabels: {none: qsTr("Off")}}],
                 ["audio-replay-gain-preamp", qsTr("Replay gain preamp"), {decimals: 1}] ] },
             { title: qsTr("Effects"), rows: [ ["filter:audio-filter:equalizer", qsTr("Equalizer")],
-                ["equalizer-preset", qsTr("Equalizer preset"), {equalizer: true}],
+                ["redesign-equalizer-preset", qsTr("Equalizer preset"), {equalizer: true, dynamicChoices: true}],
                 ["equalizer-2pass", qsTr("Two-pass")],
                 ["audio-spatial", qsTr("Spatial audio")],
                 ["audio-spatial-mode", qsTr("Spatial audio mode"), {enabledWhen: "audio-spatial"}],

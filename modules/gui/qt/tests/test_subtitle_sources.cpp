@@ -8,10 +8,15 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QSslSocket>
+#include <QtPlugin>
 #include <QFile>
 #include <QDir>
 #include <QUrlQuery>
 #include "util/subtitle_source_service.hpp"
+
+#if defined(Q_OS_WIN) && defined(QT_STATIC)
+Q_IMPORT_PLUGIN(QSchannelBackend)
+#endif
 
 struct HttpRequest { QByteArray method; QUrl url; QMap<QByteArray,QByteArray> headers; QByteArray body; };
 class Server : public QTcpServer {

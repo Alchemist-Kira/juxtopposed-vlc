@@ -58,6 +58,7 @@
     Q_IMPORT_QML_PLUGIN(QtQmlWorkerScriptPlugin)
 
 #ifdef _WIN32
+    Q_IMPORT_PLUGIN(QSchannelBackend)
     Q_IMPORT_PLUGIN(QModernWindowsStylePlugin)
     Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin)
     // Q_IMPORT_PLUGIN(QWindowsDirect2DIntegrationPlugin)

@@ -57,6 +57,7 @@
 #include <vlc_stream_extractor.h>
 #include <vlc_renderer_discovery.h>
 #include <vlc_hash.h>
+#include <vlc_media_library.h>
 
 /*****************************************************************************
  * Local prototypes
@@ -959,10 +960,14 @@ static int SlaveCompare(const void *a, const void *b)
         return p_slave0 == NULL ? 1 : p_slave1 == NULL ? -1 : 0;
     }
 
-    if( p_slave0->i_priority > p_slave1->i_priority )
+    const unsigned rank0 = p_slave0->i_priority == SLAVE_PRIORITY_FOLDER_RULE ? SLAVE_PRIORITY_MATCH_ALL
+                         : p_slave0->i_priority == SLAVE_PRIORITY_ML_AUTO ? SLAVE_PRIORITY_USER : p_slave0->i_priority;
+    const unsigned rank1 = p_slave1->i_priority == SLAVE_PRIORITY_FOLDER_RULE ? SLAVE_PRIORITY_MATCH_ALL
+                         : p_slave1->i_priority == SLAVE_PRIORITY_ML_AUTO ? SLAVE_PRIORITY_USER : p_slave1->i_priority;
+    if( rank0 > rank1 )
         return -1;
 
-    if( p_slave0->i_priority < p_slave1->i_priority )
+    if( rank0 < rank1 )
         return 1;
 
     return 0;
@@ -1071,6 +1076,7 @@ static void GetVarSlaves( input_thread_t *p_input,
 
 static void LoadSlaves( input_thread_t *p_input )
 {
+    input_item_t *p_item = input_priv(p_input)->p_item;
     input_item_slave_t **pp_slaves;
     int i_slaves;
     TAB_INIT( i_slaves, pp_slaves );
@@ -1098,7 +1104,44 @@ static void LoadSlaves( input_thread_t *p_input )
         }
     }
 
-    if( var_GetBool( p_input, "sub-autodetect-file" ) )
+    const bool auto_subtitles = var_GetBool(p_input, "sub-autodetect-file");
+    bool folder_rule[2] = { false, false };
+    /* Cached rule matches belong to the previous input. Recheck the rule and
+     * current files on this input thread, without holding the player lock. */
+    vlc_mutex_lock(&p_item->lock);
+    for (int i = 0; i < p_item->i_slaves;)
+    {
+        if (p_item->pp_slaves[i]->i_priority == SLAVE_PRIORITY_FOLDER_RULE)
+        {
+            input_item_slave_Delete(p_item->pp_slaves[i]);
+            TAB_ERASE(p_item->i_slaves, p_item->pp_slaves, i);
+        }
+        else ++i;
+    }
+    vlc_mutex_unlock(&p_item->lock);
+    vlc_medialibrary_t *ml = vlc_ml_instance_get(p_input);
+    if (ml)
+        for (unsigned kind = 0; kind < ARRAY_SIZE(folder_rule); ++kind)
+        {
+            if (kind == SLAVE_TYPE_SPU && !auto_subtitles) continue;
+            vlc_ml_file_list_t *files = NULL;
+            const vlc_ml_file_type_t type = kind == SLAVE_TYPE_SPU
+                ? VLC_ML_FILE_TYPE_SUBTITLE : VLC_ML_FILE_TYPE_SOUNDTRACK;
+            if (vlc_ml_media_get_folder_tracks(ml, p_item->psz_uri, type, &folder_rule[kind], &files) != VLC_SUCCESS)
+                folder_rule[kind] = false;
+            if (files)
+            {
+                for (size_t i = 0; i < files->i_nb_items; ++i)
+                {
+                    input_item_slave_t *slave = input_item_slave_New(files->p_items[i].psz_mrl,
+                        (enum slave_type)kind, SLAVE_PRIORITY_FOLDER_RULE);
+                    if (slave) TAB_APPEND(i_slaves, pp_slaves, slave);
+                }
+                vlc_ml_file_list_release(files);
+            }
+        }
+
+    if( auto_subtitles && !folder_rule[SLAVE_TYPE_SPU] )
     {
         /* Add local subtitles */
         char *psz_autopath = var_GetNonEmptyString( p_input, "sub-autodetect-path" );
@@ -1129,14 +1172,16 @@ static void LoadSlaves( input_thread_t *p_input )
     GetVarSlaves( p_input, &pp_slaves, &i_slaves );
 
     /* Add slaves found by the directory demuxer or via libvlc */
-    input_item_t *p_item = input_priv(p_input)->p_item;
     vlc_mutex_lock( &p_item->lock );
 
     /* Move item slaves to local pp_slaves */
     for( int i = 0; i < p_item->i_slaves; i++ )
     {
         input_item_slave_t *p_slave = p_item->pp_slaves[i];
-        if( !SlaveExists( pp_slaves, i_slaves, p_slave->psz_uri ) )
+        if ((unsigned)p_slave->i_type < ARRAY_SIZE(folder_rule)
+            && folder_rule[p_slave->i_type] && p_slave->i_priority != SLAVE_PRIORITY_USER)
+            input_item_slave_Delete(p_slave);
+        else if( !SlaveExists( pp_slaves, i_slaves, p_slave->psz_uri ) )
             TAB_APPEND(i_slaves, pp_slaves, p_slave);
         else
             input_item_slave_Delete( p_slave );
@@ -1156,7 +1201,7 @@ static void LoadSlaves( input_thread_t *p_input )
     {
         input_item_slave_t *p_slave = pp_slaves[i];
         /* Slaves added via options should not fail */
-        unsigned i_flags = p_slave->i_priority != SLAVE_PRIORITY_USER
+        unsigned i_flags = p_slave->i_priority != SLAVE_PRIORITY_USER && p_slave->i_priority != SLAVE_PRIORITY_ML_AUTO
                            ? SLAVE_ADD_CANFAIL : SLAVE_ADD_NOFLAG;
 
         /* Force the first subtitle with the highest priority or with the

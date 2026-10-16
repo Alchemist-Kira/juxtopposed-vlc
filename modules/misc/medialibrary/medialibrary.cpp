@@ -29,6 +29,7 @@
 #include <vlc_media_library.h>
 #include <vlc_dialog.h>
 #include "medialibrary.h"
+#include "track_rules.hpp"
 #include "fs/fs.h"
 #include "fs/devicelister.h"
 
@@ -430,13 +431,14 @@ MediaLibrary* MediaLibrary::create( vlc_medialibrary_module_t* vlc_ml )
     if ( !ml )
         return nullptr;
 
-    return new MediaLibrary( vlc_ml, ml );
+    return new MediaLibrary( vlc_ml, ml, mlDir + "track-folders" );
 }
 
 MediaLibrary::MediaLibrary( vlc_medialibrary_module_t* vlc_ml,
-                            medialibrary::IMediaLibrary* ml )
+                            medialibrary::IMediaLibrary* ml, std::string ruleDirectory )
     : m_vlc_ml( vlc_ml )
     , m_ml( ml )
+    , m_trackRules( std::move(ruleDirectory) )
 {
 }
 
@@ -518,6 +520,67 @@ int MediaLibrary::Control( int query, va_list args )
 
     switch ( query )
     {
+        case VLC_ML_FOLDER_GET_TRACK_RULE:
+        case VLC_ML_FOLDER_SET_TRACK_RULE:
+        {
+            const auto folder = va_arg(args, const char*);
+            const auto type = va_arg(args, int);
+            if (!folder) return VLC_EGENERIC;
+            if (query == VLC_ML_FOLDER_SET_TRACK_RULE) {
+                const auto definition = va_arg(args, const char*);
+                return m_trackRules.write(folder, type, definition ? definition : "") ? VLC_SUCCESS : VLC_EGENERIC;
+            }
+            const auto result = va_arg(args, char**);
+            if (!result) return VLC_EGENERIC;
+            *result = nullptr; std::string definition;
+            if (!m_trackRules.read(folder, type, definition)) return VLC_EGENERIC;
+            if (definition.empty()) return VLC_SUCCESS;
+            *result = strdup(definition.c_str()); return *result ? VLC_SUCCESS : VLC_ENOMEM;
+        }
+        case VLC_ML_MEDIA_GET_FOLDER_TRACKS:
+        {
+            const auto uri = va_arg(args, const char*);
+            const auto type = va_arg(args, int);
+            const auto applies = va_arg(args, bool*);
+            const auto result = va_arg(args, vlc_ml_file_list_t**);
+            if (!applies || !result || !uri || (type != VLC_ML_FILE_TYPE_SUBTITLE && type != VLC_ML_FILE_TYPE_SOUNDTRACK)) return VLC_EGENERIC;
+            *applies = false; *result = nullptr;
+            auto path = vlc::wrap_cptr(vlc_uri2path(uri));
+            if (!path) return VLC_SUCCESS;
+            const std::string mediaPath = vlc::medialibrary::trackrules::path(path.get());
+            auto folder = vlc::wrap_cptr(vlc_path2uri(vlc::medialibrary::trackrules::parent(mediaPath).c_str(), nullptr));
+            if (!folder) return VLC_EGENERIC;
+            std::string definition;
+            if (!m_trackRules.read(folder.get(), type, definition)) return VLC_EGENERIC;
+            if (definition.empty()) return VLC_SUCCESS;
+#ifdef MEDIALIBRARY_HAS_TRACK_SELECTIONS
+            if (!Init()) return VLC_EGENERIC;
+            {
+                auto access = m_ml->acquirePriorityAccess();
+                const auto media = m_ml->media(uri);
+                const auto trackType = type == VLC_ML_FILE_TYPE_SUBTITLE ? medialibrary::IFile::Type::Subtitles : medialibrary::IFile::Type::Soundtrack;
+                std::vector<std::string> selected;
+                if (media && medialibrary::getTrackSelection(*media, trackType, selected)) return VLC_SUCCESS;
+                if (media) for (const auto& file : media->files())
+                    if (file->isExternal() && file->type() == trackType) return VLC_SUCCESS;
+            }
+#else
+            return VLC_ENOTSUP;
+#endif
+            std::vector<std::string> paths;
+            if (!m_trackRules.resolve(definition, vlc::medialibrary::trackrules::fileName(mediaPath), *applies, paths)) return VLC_EGENERIC;
+            if (paths.empty()) return VLC_SUCCESS;
+            auto files = static_cast<vlc_ml_file_list_t*>(calloc(1, sizeof(vlc_ml_file_list_t) + paths.size() * sizeof(vlc_ml_file_t)));
+            if (!files) return VLC_ENOMEM;
+            files->i_nb_items = paths.size();
+            for (size_t i = 0; i < paths.size(); ++i) {
+                auto& file = files->p_items[i];
+                file.psz_mrl = vlc_path2uri(paths[i].c_str(), nullptr);
+                if (!file.psz_mrl) { vlc_ml_file_list_release(files); return VLC_ENOMEM; }
+                file.i_type = static_cast<vlc_ml_file_type_t>(type); file.b_external = file.b_present = true;
+            }
+            *result = files; return VLC_SUCCESS;
+        }
         case VLC_ML_ADD_FOLDER:
         case VLC_ML_REMOVE_FOLDER:
         case VLC_ML_BAN_FOLDER:

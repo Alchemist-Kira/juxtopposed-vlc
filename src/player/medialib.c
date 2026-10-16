@@ -103,13 +103,23 @@ vlc_player_input_RestoreMlStates(struct vlc_player_input* input, bool force_pos)
                                   file->i_type != VLC_ML_FILE_TYPE_SOUNDTRACK))
                 continue;
             bool exists = false;
+            const bool saved_choice = file->i_type == VLC_ML_FILE_TYPE_SUBTITLE
+                ? media->b_subtitle_track_selection : media->b_soundtrack_track_selection;
             for (int j = 0; j < item->i_slaves; ++j)
                 if (!strcmp(item->pp_slaves[j]->psz_uri, file->psz_mrl))
+                {
                     exists = true;
+                    input_item_slave_t *slave = item->pp_slaves[j];
+                    if (saved_choice || file->b_external)
+                        slave->i_priority = SLAVE_PRIORITY_USER;
+                    else if (slave->i_priority == SLAVE_PRIORITY_FOLDER_RULE ||
+                             slave->i_priority == SLAVE_PRIORITY_ML_AUTO)
+                        slave->i_priority = SLAVE_PRIORITY_ML_AUTO;
+                }
             if (exists) continue;
             input_item_slave_t *slave = input_item_slave_New(file->psz_mrl,
                 file->i_type == VLC_ML_FILE_TYPE_SUBTITLE ? SLAVE_TYPE_SPU : SLAVE_TYPE_GENERIC,
-                SLAVE_PRIORITY_USER);
+                saved_choice || file->b_external ? SLAVE_PRIORITY_USER : SLAVE_PRIORITY_ML_AUTO);
             if (slave) TAB_APPEND(item->i_slaves, item->pp_slaves, slave);
         }
     }

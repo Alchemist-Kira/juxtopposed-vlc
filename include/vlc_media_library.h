@@ -674,6 +674,20 @@ enum vlc_ml_control
      * External associations and the selected list change atomically.
      */
     VLC_ML_MEDIA_SET_EXTERNAL_MRLS,
+
+    /** Saved matching templates for newly opened files in one folder.
+     * GET: folder MRL, file type, char** definition (NULL if not set).
+     * SET: folder MRL, file type, const char* definition (NULL removes it).
+     * Definitions are opaque, versioned UTF-8 records.
+     */
+    VLC_ML_FOLDER_GET_TRACK_RULE,
+    VLC_ML_FOLDER_SET_TRACK_RULE,
+    /** Resolve a saved folder rule without changing per-media choices.
+     * media MRL, file type, bool* applies, vlc_ml_file_list_t** files.
+     * Runs filesystem checks; callers must use a worker or input thread.
+     * An explicit per-media choice, including an empty one, takes priority.
+     */
+    VLC_ML_MEDIA_GET_FOLDER_TRACKS,
 };
 
 /**
@@ -1206,6 +1220,24 @@ static inline int vlc_ml_media_set_external_mrls( vlc_medialibrary_t* ml,
 {
     return vlc_ml_control( ml, VLC_ML_MEDIA_SET_EXTERNAL_MRLS, media_id,
                            (int)type, mrls, count );
+}
+
+static inline int vlc_ml_folder_get_track_rule(vlc_medialibrary_t* ml,
+    const char* folder, vlc_ml_file_type_t type, char** definition)
+{
+    return vlc_ml_control(ml, VLC_ML_FOLDER_GET_TRACK_RULE, folder, (int)type, definition);
+}
+
+static inline int vlc_ml_folder_set_track_rule(vlc_medialibrary_t* ml,
+    const char* folder, vlc_ml_file_type_t type, const char* definition)
+{
+    return vlc_ml_control(ml, VLC_ML_FOLDER_SET_TRACK_RULE, folder, (int)type, definition);
+}
+
+static inline int vlc_ml_media_get_folder_tracks(vlc_medialibrary_t* ml,
+    const char* media, vlc_ml_file_type_t type, bool* applies, vlc_ml_file_list_t** files)
+{
+    return vlc_ml_control(ml, VLC_ML_MEDIA_GET_FOLDER_TRACKS, media, (int)type, applies, files);
 }
 
 static inline int vlc_ml_media_set_type( vlc_medialibrary_t* p_ml, int64_t i_media_id,

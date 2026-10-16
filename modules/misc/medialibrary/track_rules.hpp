@@ -14,6 +14,7 @@ namespace vlc::medialibrary::trackrules {
 struct Pair {
     std::string media;
     std::string track;
+    std::string source = {};
 };
 
 inline constexpr size_t MaxBytes = 1024 * 1024;
@@ -36,6 +37,12 @@ inline std::string stem(const std::string& value)
     auto name = fileName(value);
     const auto at = name.find_last_of('.');
     return at == std::string::npos ? name : name.substr(0, at);
+}
+
+inline std::string parent(const std::string& value)
+{
+    const auto normal = path(value); const auto at = normal.find_last_of('/');
+    return at == std::string::npos ? std::string() : normal.substr(0, at == 0 ? 1 : at);
 }
 
 inline std::string compact(const std::string& value)
@@ -77,16 +84,43 @@ inline std::string digits(unsigned value, size_t width)
     return std::string(width > text.size() ? width - text.size() : 0, '0') + text;
 }
 
+inline std::string family(const std::string& media)
+{
+    const auto name = stem(media); const auto markers = episodes(name);
+    return markers.empty() ? "*" : "e|" + compact(name.substr(0, markers.front().start));
+}
+
+inline std::vector<Episode> trackEpisodes(const Pair& pair, const Episode& sample)
+{
+    const auto track = path(pair.track);
+    const auto root = pair.source.empty() ? parent(track) : path(pair.source);
+    size_t begin = track.size() - fileName(track).size();
+    if (!root.empty() && track.compare(0, root.size(), root) == 0
+        && (root.back() == '/' || (track.size() > root.size() && track[root.size()] == '/'))) {
+        begin = root.size() + (root.back() == '/' ? 0 : 1);
+        for (const auto& marker : episodes(fileName(root)))
+            if (marker.season == sample.season && marker.number == sample.number) {
+                const auto outer = parent(root); begin = outer.empty() ? 0 : outer.size() + (outer.back() == '/' ? 0 : 1); break;
+            }
+    }
+    auto matches = episodes(track.substr(begin));
+    for (auto& marker : matches) {
+        marker.start += begin; marker.end += begin; marker.seasonAt += begin; marker.numberAt += begin;
+    }
+    return matches;
+}
+
 inline std::optional<std::string> expected(const Pair& pair, const std::string& media)
 {
     const auto sampleStem = stem(pair.media), mediaStem = stem(media);
-    const auto sample = episodes(sampleStem), current = episodes(mediaStem), tracks = episodes(pair.track);
+    const auto sample = episodes(sampleStem), current = episodes(mediaStem);
     if (!sample.empty()) {
+        const auto tracks = trackEpisodes(pair, sample.front());
         if (current.empty() || tracks.empty()) return {};
         const auto& a = sample.front(); const auto& b = current.front(); const auto& last = tracks.back();
         if (compact(sampleStem.substr(0, a.start)) != compact(mediaStem.substr(0, b.start))
             || last.season != a.season || last.number != a.number) return {};
-        auto result = pair.track;
+        auto result = path(pair.track);
         for (auto it = tracks.rbegin(); it != tracks.rend(); ++it) {
             if (it->season != a.season || it->number != a.number) continue;
             result.replace(it->numberAt, it->numberWidth, digits(b.number, it->numberWidth));
@@ -111,7 +145,7 @@ inline std::string signature(const Pair& pair)
         const auto sample = expected(pair, pair.media);
         if (!sample) return {};
         auto pattern = pair.track;
-        const auto matches = episodes(pattern);
+        const auto matches = trackEpisodes(pair, marker);
         for (auto it = matches.rbegin(); it != matches.rend(); ++it) {
             if (it->season != marker.season || it->number != marker.number) continue;
             pattern.replace(it->numberAt, it->numberWidth, std::string(it->numberWidth, '#'));
@@ -130,6 +164,7 @@ inline std::vector<Pair> distinct(const std::vector<Pair>& pairs)
     std::set<std::string> seen; std::vector<Pair> result;
     for (auto pair : pairs) {
         pair.media = fileName(pair.media); pair.track = path(pair.track);
+        pair.source = pair.source.empty() ? parent(pair.track) : path(pair.source);
         const auto key = signature(pair);
         if (!key.empty() && seen.insert(key).second) result.push_back(std::move(pair));
     }
@@ -139,7 +174,7 @@ inline std::vector<Pair> distinct(const std::vector<Pair>& pairs)
 inline std::string encode(const std::vector<Pair>& pairs)
 {
     std::string result = "1|";
-    for (const auto& pair : pairs) for (const auto& field : {pair.media, pair.track})
+    for (const auto& pair : pairs) for (const auto& field : {pair.media, pair.track, pair.source.empty() ? parent(pair.track) : pair.source})
         result += std::to_string(field.size()) + ":" + field;
     return result;
 }
@@ -161,7 +196,7 @@ inline bool decode(const std::string& text, std::vector<Pair>& pairs)
     };
     while (at < text.size()) {
         Pair pair;
-        if (pairs.size() == MaxPairs || !field(pair.media) || !field(pair.track)
+        if (pairs.size() == MaxPairs || !field(pair.media) || !field(pair.track) || !field(pair.source)
             || pair.media != fileName(pair.media) || signature(pair).empty()) { pairs.clear(); return false; }
         pairs.push_back(std::move(pair));
     }

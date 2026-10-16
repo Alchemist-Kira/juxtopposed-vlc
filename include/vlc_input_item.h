@@ -157,7 +157,10 @@ enum slave_priority
     SLAVE_PRIORITY_MATCH_RIGHT,
     SLAVE_PRIORITY_MATCH_LEFT,
     SLAVE_PRIORITY_MATCH_ALL,
-    SLAVE_PRIORITY_USER
+    SLAVE_PRIORITY_USER,
+    /* A folder match sorts as MATCH_ALL; an ML source keeps its association rank. */
+    SLAVE_PRIORITY_FOLDER_RULE,
+    SLAVE_PRIORITY_ML_AUTO,
 };
 
 /* Extensions must be in alphabetical order */

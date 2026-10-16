@@ -2048,7 +2048,7 @@ check_PROGRAMS += test_vlc_dialog_model
 TESTS += test_vlc_dialog_model
 
 
-test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.cpp
+test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.cpp ../../misc/medialibrary/track_rule_store.cpp
 nodist_test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.moc
 BUILT_SOURCES += tests/test_track_folder_rules.moc
 CLEANFILES += tests/test_track_folder_rules.moc

@@ -41,6 +41,7 @@
 #include <type_traits>
 
 #include "LazyPreparser.h"
+#include "track_rule_store.hpp"
 
 struct vlc_event_t;
 struct vlc_object_t;
@@ -179,10 +180,12 @@ private:
     static medialibrary::SortingCriteria sortingCriteria( int sort );
 
 private:
-    MediaLibrary( vlc_medialibrary_module_t* vlc_ml, medialibrary::IMediaLibrary* ml );
+    MediaLibrary( vlc_medialibrary_module_t* vlc_ml, medialibrary::IMediaLibrary* ml,
+                  std::string ruleDirectory );
 
     vlc_medialibrary_module_t* m_vlc_ml;
     std::unique_ptr<medialibrary::IMediaLibrary> m_ml;
+    vlc::medialibrary::TrackRuleStore m_trackRules;
 
     vlc::threads::mutex m_mutex;
     bool m_initialized = false; /* protected by m_mutex */

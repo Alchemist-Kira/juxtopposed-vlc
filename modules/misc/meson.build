@@ -60,6 +60,8 @@ if medialibrary_dep.found()
             'medialibrary/Thumbnailer.cpp',
             'medialibrary/medialibrary.h',
             'medialibrary/track_rules.hpp',
+            'medialibrary/track_rule_store.hpp',
+            'medialibrary/track_rule_store.cpp',
             'medialibrary/fs/device.h',
             'medialibrary/fs/device.cpp',
             'medialibrary/fs/directory.h',

@@ -232,6 +232,16 @@ int main(int argc, char **argv)
     assert(asprintf(&directory, "%s/media-tracks-%"PRId64,
                     base, vlc_tick_now()) >= 0);
     assert(vlc_mkdir(directory, 0700) == 0);
+    char *nested;
+    assert(asprintf(&nested, "%s/nested/track folders", directory) >= 0);
+#ifdef _WIN32
+    for (char *p = nested; *p; ++p) if (*p == '/') *p = '\\';
+#endif
+    assert(vlc_mkdir_parent(nested, 0700) == 0);
+    assert(vlc_mkdir_parent(nested, 0700) == 0);
+    struct stat nested_stat;
+    assert(vlc_stat(nested, &nested_stat) == 0 && S_ISDIR(nested_stat.st_mode));
+    free(nested);
     assert(setenv("VLC_USERDATA_PATH", directory, 1) == 0);
     fprintf(stderr, "Using owned media library: %s\n", directory);
 

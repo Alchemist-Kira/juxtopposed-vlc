@@ -553,7 +553,8 @@ int InitVideoEnc( vlc_object_t *p_this )
         p_context->lumi_masking = p_sys->f_lumi_masking;
         p_context->dark_masking = p_sys->f_dark_masking;
         p_context->p_masking = p_sys->f_p_masking;
-        add_av_option_float( p_enc, &options, "border_mask", p_sys->f_border_masking );
+        if( p_sys->f_border_masking != 0.f )
+            add_av_option_float( p_enc, &options, "border_mask", p_sys->f_border_masking );
 
         if( p_sys->i_key_int > 0 )
             p_context->gop_size = p_sys->i_key_int;
@@ -624,7 +625,8 @@ int InitVideoEnc( vlc_object_t *p_this )
             p_context->i_quant_factor = p_sys->f_i_quant_factor;
 
         int nr = var_GetInteger( p_enc, ENC_CFG_PREFIX "noise-reduction" );
-        add_av_option_int( p_enc, &options, "noise_reduction", nr );
+        if( nr != 0 )
+            add_av_option_int( p_enc, &options, "noise_reduction", nr );
 
         if ( p_sys->b_mpeg4_matrix )
         {

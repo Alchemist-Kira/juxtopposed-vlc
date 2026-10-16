@@ -757,7 +757,7 @@ int avformat_OpenDemux( vlc_object_t *p_this )
     {
         seekpoint_t *s = vlc_seekpoint_New();
 
-        AVDictionaryEntry *title = av_dict_get( p_sys->ic->metadata, "title", NULL, 0);
+        AVDictionaryEntry *title = av_dict_get( p_sys->ic->chapters[i]->metadata, "title", NULL, 0);
         if( title && title->value )
         {
             s->psz_name = strdup( title->value );

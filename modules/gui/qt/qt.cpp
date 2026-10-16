@@ -116,6 +116,7 @@ extern "C" char **environ;
 #include "playlist/playlist_item.hpp"
 
 #include <vlc_interface.h>
+#include <vlc_modules.h>
 #include <vlc_plugin.h>
 #include <vlc_window.h>
 #include <vlc_player.h>
@@ -825,7 +826,7 @@ static void *Thread( void *obj )
     auto vlcQtMessageHandler = VlcQtMessageHandlerRegisterer{VLC_OBJECT(p_intf)};
 
     char vlc_name[] = "vlc"; /* for WM_CLASS */
-    char *argv[3] = { nullptr };
+    char *argv[5] = { nullptr };
     int argc = 0;
 
 #if !defined(__APPLE__)
@@ -924,6 +925,26 @@ static void *Thread( void *obj )
 #endif
 
     auto compositor = var_InheritString(p_intf, "qt-compositor");
+#ifdef QT_HAS_X11_COMPOSITOR
+    // Qt can select Wayland even when this VLC build cannot embed video there.
+    // Pick X11 before QApplication starts; a running QPA cannot be replaced.
+    bool waylandIntegration = false;
+#ifdef QT_HAS_WAYLAND_COMPOSITOR
+    waylandIntegration = module_exists("qt_wayland");
+#endif
+    if (!waylandIntegration && compositor && !strcmp(compositor, "auto")
+        && var_InheritBool(p_intf, "embedded-video")
+        && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")
+        && !qEnvironmentVariableIsEmpty("DISPLAY")
+        && (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+            || qEnvironmentVariable("XDG_SESSION_TYPE") == QLatin1String("wayland")))
+    {
+        msg_Warn(p_intf, "Wayland video integration is unavailable; using X11 for embedded video");
+        argv[argc++] = strdup("-platform");
+        argv[argc++] = strdup("xcb");
+        argv[argc] = nullptr;
+    }
+#endif
     vlc::CompositorFactory compositorFactory(p_intf, compositor);
     free(compositor);
 

@@ -22,6 +22,7 @@ TestCase {
     SignalSpy { id: rename; target: view; signalName: "renameRequested" }
     function item(name) { return findChild(view, name) }
     function init() {
+        failOnWarning(/Binding loop detected/)
         bookmarks.clear()
         bookmarks.append({name: "DON’T BLINK 1", timeMS: 42023})
         bookmarks.append({name: "DON’T BLINK 2", timeMS: 44125})

@@ -23,7 +23,7 @@ TestCase {
     function slider() { return findChild(player, "volumeSlider") }
     function init() {
         slider().focus = false
-        player.forceActiveFocus()
+        testCase.forceActiveFocus()
         player.presentationOnly = false
         player.volume = 0.75
         player.muted = false

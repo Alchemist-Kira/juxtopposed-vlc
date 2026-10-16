@@ -27,6 +27,9 @@ FocusScope {
         return pad(Math.floor(total / 3600000), 2) + ":" + pad(Math.floor(total / 60000) % 60, 2)
             + ":" + pad(Math.floor(total / 1000) % 60, 2) + ":" + pad(total % 1000, 3)
     }
+    function clearInvalidSelection() {
+        if (selectedIndex >= count) selectedIndex = -1
+    }
     function removeSelection() {
         if (selectedIndex >= 0 && selectedIndex < count) removeRequested(selectedIndex)
     }
@@ -87,7 +90,8 @@ FocusScope {
             Layout.fillWidth: true; Layout.fillHeight: true
             Layout.leftMargin: theme.dp(20); Layout.rightMargin: theme.dp(24); Layout.bottomMargin: theme.dp(16)
             clip: true; model: root.bookmarkModel; currentIndex: root.selectedIndex
-            onCountChanged: if (root.selectedIndex >= count) root.selectedIndex = -1
+            // Model changes can update count while currentIndex is evaluated.
+            onCountChanged: Qt.callLater(root.clearInvalidSelection)
             C.ScrollBar.vertical: C.ScrollBar {}
             delegate: RedesignButton {
                 id: row

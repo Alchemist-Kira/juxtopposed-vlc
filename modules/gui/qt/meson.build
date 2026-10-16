@@ -131,6 +131,7 @@ moc_headers = files(
     'playlist/playlist_controller.hpp',
     'playlist/playlist_item.hpp',
     'playlist/playlist_model.hpp',
+    'util/subtitle_source_service.hpp',
     'util/asynctask.hpp',
     'util/accessible_compat_attached.hpp',
     'util/audio_device_model.hpp',
@@ -433,6 +434,8 @@ qt_plugin_sources = files(
     'player/subtitle_timeline_scanner.hpp',
     'util/seek_preview_cache.hpp',
     'util/seek_preview_image_provider.hpp',
+    'util/subtitle_source_service.hpp',
+    'util/subtitle_source_service.cpp',
     'player/player_controlbar_model.cpp',
     'player/player_controlbar_model.hpp',
     'player/control_list_model.cpp',
@@ -1421,6 +1424,15 @@ if qt6_dep.found()
 
     qtest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['Test'], required: false)
     if qtest_qt6_dep.found()
+        vlc_tests += {
+            'name': 'test_qt_subtitle_sources',
+            'sources': files('tests/test_subtitle_sources.cpp', 'util/subtitle_source_service.cpp'),
+            'moc_sources': files('tests/test_subtitle_sources.cpp'),
+            'moc_headers': files('util/subtitle_source_service.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
         vlc_tests += {
             'name': 'test_qt_track_list_model',
             'sources': files('tests/test_track_list_model.cpp', 'player/input_models.cpp', 'util/vlctick.cpp'),

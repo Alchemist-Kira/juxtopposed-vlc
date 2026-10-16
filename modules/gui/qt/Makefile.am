@@ -299,6 +299,7 @@ libqt_plugin_la_SOURCES = \
 	player/delay_estimator.hpp \
 	player/player_controller.cpp player/player_controller.hpp player/player_controller_p.hpp \
 	util/seek_preview_cache.hpp util/seek_preview_image_provider.hpp \
+	util/subtitle_source_service.hpp util/subtitle_source_service.cpp \
 	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
 	player/control_list_model.cpp player/control_list_model.hpp \
@@ -509,6 +510,7 @@ nodist_libqt_plugin_la_SOURCES = \
 	style/vlcicons.moc.cpp \
 	player/delay_estimator.moc.cpp \
 	player/input_models.moc.cpp \
+	util/subtitle_source_service.moc.cpp \
 	player/player_controller.moc.cpp \
 	player/player_controlbar_model.moc.cpp \
 	player/control_list_model.moc.cpp \
@@ -2045,6 +2047,19 @@ test_vlc_dialog_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_vlc_dialog_model
 TESTS += test_vlc_dialog_model
 
+
+test_qt_subtitle_sources_SOURCES = \
+	tests/test_subtitle_sources.cpp util/subtitle_source_service.cpp util/subtitle_source_service.hpp
+nodist_test_qt_subtitle_sources_SOURCES = \
+	tests/test_subtitle_sources.moc util/subtitle_source_service.moc.cpp
+BUILT_SOURCES += tests/test_subtitle_sources.moc
+CLEANFILES += tests/test_subtitle_sources.moc
+test_qt_subtitle_sources_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_subtitle_sources_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_subtitle_sources_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_subtitle_sources_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_subtitle_sources
+TESTS += test_qt_subtitle_sources
 
 test_qt_track_list_model_SOURCES = \
 	tests/test_track_list_model.cpp player/input_models.cpp player/input_models.hpp util/vlctick.cpp util/vlctick.hpp

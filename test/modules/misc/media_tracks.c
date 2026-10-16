@@ -107,6 +107,67 @@ static void play_tracks(vlc_player_t *player, input_item_t *item, size_t subtitl
     wait_stopped(player);
 }
 
+static void check_folder_rules(libvlc_instance_t *instance,
+                               vlc_medialibrary_t *ml, const char *directory,
+                               const char *wave_path)
+{
+    char *source, *sample, *caption, *future, *definition;
+    assert(asprintf(&source, "%s/captions", directory) >= 0);
+    assert(vlc_mkdir(source, 0700) == 0);
+    assert(asprintf(&sample, "%s/show_s01e01.en.srt", source) >= 0);
+    assert(asprintf(&caption, "%s/show_s01e02.en.srt", source) >= 0);
+    assert(asprintf(&future, "%s/show_s01e02.wav", directory) >= 0);
+    const char *name = "show_s01e01.wav";
+    assert(asprintf(&definition, "1|%zu:%s%zu:%s%zu:%s",
+                    strlen(name), name, strlen(sample), sample, strlen(source), source) >= 0);
+    char *folder = vlc_path2uri(directory, NULL);
+    char *uri = vlc_path2uri(future, NULL);
+    char *caption_uri = vlc_path2uri(caption, NULL);
+    assert(folder && uri && caption_uri);
+    assert(vlc_ml_folder_set_track_rule(ml, folder, VLC_ML_FILE_TYPE_SUBTITLE, definition) == VLC_SUCCESS);
+    char *saved = NULL;
+    assert(vlc_ml_folder_get_track_rule(ml, folder, VLC_ML_FILE_TYPE_SUBTITLE, &saved) == VLC_SUCCESS);
+    assert(saved && !strcmp(saved, definition)); free(saved);
+
+    /* The episode and its subtitle appear after the rule is saved. */
+    FILE *from = vlc_fopen(wave_path, "rb"), *to = vlc_fopen(future, "wb");
+    assert(from && to);
+    char bytes[4096]; size_t count;
+    while ((count = fread(bytes, 1, sizeof(bytes), from)) > 0)
+        assert(fwrite(bytes, 1, count, to) == count);
+    assert(!ferror(from)); assert(fclose(from) == 0); assert(fclose(to) == 0);
+    to = vlc_fopen(caption, "wb"); assert(to);
+    assert(fputs("1\n00:00:00,000 --> 00:00:04,000\nFolder subtitle\n", to) >= 0);
+    assert(fclose(to) == 0);
+
+    bool applies = false; vlc_ml_file_list_t *matches = NULL;
+    assert(vlc_ml_media_get_folder_tracks(ml, uri, VLC_ML_FILE_TYPE_SUBTITLE, &applies, &matches) == VLC_SUCCESS);
+    assert(applies && matches && matches->i_nb_items == 1);
+    assert(!strcmp(matches->p_items[0].psz_mrl, caption_uri)); vlc_ml_file_list_release(matches);
+    vlc_player_t *player = vlc_player_New(VLC_OBJECT(instance->p_libvlc_int), VLC_PLAYER_LOCK_NORMAL);
+    input_item_t *item = input_item_New(uri, "Future episode test");
+    assert(player && item);
+    play_tracks(player, item, 1);
+    assert(vlc_ml_folder_set_track_rule(ml, folder, VLC_ML_FILE_TYPE_SUBTITLE, NULL) == VLC_SUCCESS);
+    play_tracks(player, item, 0); // A cached inherited source must be discarded.
+    assert(vlc_ml_folder_set_track_rule(ml, folder, VLC_ML_FILE_TYPE_SUBTITLE, definition) == VLC_SUCCESS);
+    play_tracks(player, item, 1);
+    vlc_ml_media_t *media = vlc_ml_get_media_by_mrl(ml, uri);
+    if (!media) media = vlc_ml_new_external_media(ml, uri);
+    assert(media && !media->b_subtitle_track_selection);
+    const int64_t id = media->i_id; vlc_ml_media_release(media);
+    assert(vlc_ml_media_set_external_mrls(ml, id, VLC_ML_FILE_TYPE_SUBTITLE, NULL, 0) == VLC_SUCCESS);
+    play_tracks(player, item, 0); // An explicit empty choice overrides the rule.
+    assert(vlc_ml_media_set_external_mrls(ml, id, VLC_ML_FILE_TYPE_SUBTITLE,
+                                         (const char* const[]){caption_uri}, 1) == VLC_SUCCESS);
+    assert(vlc_ml_folder_set_track_rule(ml, folder, VLC_ML_FILE_TYPE_SUBTITLE, NULL) == VLC_SUCCESS);
+    play_tracks(player, item, 1); // A pinned choice survives rule removal.
+    vlc_player_Delete(player); input_item_Release(item);
+    free(source); free(sample); free(caption); free(future); free(definition);
+    free(folder); free(uri); free(caption_uri);
+    fprintf(stderr, "Folder rules, future episodes, cached replay and explicit overrides passed\n");
+}
+
 static void check_subtitle_discovery(libvlc_instance_t *instance,
                                      vlc_medialibrary_t *ml, const char *directory)
 {
@@ -149,6 +210,7 @@ static void check_subtitle_discovery(libvlc_instance_t *instance,
     vlc_player_Delete(player);
     input_item_Release(item);
     assert(vlc_stat(subtitle_path, &(struct stat){0}) == 0);
+    check_folder_rules(instance, ml, directory, audio_path);
     free(audio); free(subtitle); free(audio_path); free(subtitle_path);
     fprintf(stderr, "Automatic subtitles, empty saved choice and cached-item replay passed\n");
 }

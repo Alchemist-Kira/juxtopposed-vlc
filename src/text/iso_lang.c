@@ -62,9 +62,21 @@ static const iso639_lang_t *LanguageFromLocale(const char *locale)
 }
 #endif
 
+#ifdef _WIN32
+static const iso639_lang_t *LanguageFromWindowsLocale(const wchar_t *name)
+{
+    wchar_t code[4];
+    if (!GetLocaleInfoEx(name, LOCALE_SISO639LANGNAME, code, ARRAY_SIZE(code))) return NULL;
+    char ascii[4] = {0};
+    for (size_t i = 0; i < 3 && code[i]; ++i) ascii[i] = (char)code[i];
+    return vlc_find_iso639(ascii, false);
+}
+#endif
+
 const iso639_lang_t *vlc_get_system_language(void)
 {
 #ifdef _WIN32
+# if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     ULONG count = 0, length = 0;
     const iso639_lang_t *language = NULL;
     if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, NULL, &length) && length)
@@ -72,17 +84,16 @@ const iso639_lang_t *vlc_get_system_language(void)
         wchar_t *names = vlc_alloc(length, sizeof(*names));
         if (names && GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, names, &length))
         {
-            wchar_t code[4];
-            if (GetLocaleInfoEx(names, LOCALE_SISO639LANGNAME, code, ARRAY_SIZE(code)))
-            {
-                char ascii[4] = {0};
-                for (size_t i = 0; i < 3 && code[i]; ++i) ascii[i] = (char)code[i];
-                language = vlc_find_iso639(ascii, false);
-            }
+            language = LanguageFromWindowsLocale(names);
         }
         free(names);
     }
-    return language;
+    if (language) return language;
+# endif
+    wchar_t name[LOCALE_NAME_MAX_LENGTH];
+    if (LCIDToLocaleName(MAKELCID(GetUserDefaultUILanguage(), SORT_DEFAULT), name, ARRAY_SIZE(name), 0))
+        return LanguageFromWindowsLocale(name);
+    return NULL;
 #elif defined(__APPLE__)
     const iso639_lang_t *language = NULL;
     CFArrayRef languages = CFLocaleCopyPreferredLanguages();

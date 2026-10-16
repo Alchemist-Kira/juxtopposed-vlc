@@ -2048,6 +2048,17 @@ check_PROGRAMS += test_vlc_dialog_model
 TESTS += test_vlc_dialog_model
 
 
+test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.cpp
+nodist_test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.moc
+BUILT_SOURCES += tests/test_track_folder_rules.moc
+CLEANFILES += tests/test_track_folder_rules.moc
+test_qt_track_folder_rules_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_track_folder_rules_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_track_folder_rules_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_track_folder_rules_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_track_folder_rules
+TESTS += test_qt_track_folder_rules
+
 test_qt_subtitle_sources_SOURCES = \
 	tests/test_subtitle_sources.cpp util/subtitle_source_service.cpp util/subtitle_source_service.hpp
 nodist_test_qt_subtitle_sources_SOURCES = \

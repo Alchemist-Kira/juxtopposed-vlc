@@ -35,6 +35,7 @@ public:
     Q_INVOKABLE quint64 search(const QString& query, const QString& language);
     Q_INVOKABLE void cancelSearch();
     Q_INVOKABLE void resetSession();
+    Q_INVOKABLE QVariantMap addLinks(const QStringList& links);
     Q_INVOKABLE quint64 prepareRows(const QVariantList& rows);
     Q_INVOKABLE void cancelPreparation();
 signals:
@@ -45,16 +46,21 @@ signals:
     void preparationFinished(quint64 request, const QVariantMap& result);
 private:
     struct Record { qint64 id; QString name; };
+    struct Link { QUrl url; QString name; QString key; };
     using ReplyCallback = std::function<void(const QByteArray&, const QString&)>;
     QNetworkReply* request(const QUrl& url, const QByteArray& body, bool api,
                            qint64 limit, ReplyCallback callback);
-    QString networkError(int status, QNetworkReply::NetworkError error) const;
+    QString networkError(int status, QNetworkReply::NetworkError error, bool api) const;
     QVariantList parseSources(const QByteArray& data, QString& error);
     QString cachePath(const Record& record) const;
     QByteArray subtitleText(const QByteArray& bytes) const;
     void downloadNext(quint64 request);
     void finishPreparation(quint64 request, const QString& error = {});
     bool downloadUrlAllowed(const QUrl& url) const;
+    QString linkFormat(const QByteArray& bytes) const;
+    QString linkCachePath(const Link& link, const QString& format) const;
+    void downloadLink(quint64 request, const QString& source, const Link& link);
+    bool writeSubtitle(const QString& path, const QByteArray& bytes);
     Options m_options;
     QNetworkAccessManager m_network;
     QString m_storageDirectory;
@@ -69,6 +75,7 @@ private:
     quint64 m_prepareGeneration = 0;
     bool m_preparing = false;
     QHash<QString, Record> m_records;
+    QHash<QString, Link> m_links;
     QVariantList m_rows;
     QStringList m_pending;
     QHash<QString, QString> m_ready;

@@ -175,6 +175,95 @@ private slots:
         SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
         QSignalSpy spy(&client,&SubtitleSourceService::searchFinished);client.search("Film","en");QVERIFY(!result(spy).value("success").toBool());QCOMPARE(server.requests.size(),1);
     }
+    void linksStayInTheDraftUntilSave() {
+        QTemporaryDir directory;Server server;SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());
+        const auto url=server.base().resolved(QUrl("../Episode.en.srt?token=private-value")).toString();
+        const auto answer=client.addLinks({url,url+"#duplicate","file:///etc/passwd","https://user:password@example.com/a.srt","javascript:alert(1)","ftp://example.com/a.srt"});
+        QVERIFY(answer.value("success").toBool());const auto sources=answer.value("sources").toList();QCOMPARE(sources.size(),1);
+        QVERIFY(!answer.value("error").toString().isEmpty());const auto item=sources.first().toMap();
+        QCOMPARE(item.value("name").toString(),"Episode.en.srt");QVERIFY(item.value("url").toString().startsWith("subtitlelink:"));
+        QVERIFY(!item.value("url").toString().contains("private-value"));QCOMPARE(item.value("kind").toString(),"link");
+        QVERIFY(server.requests.isEmpty());QVERIFY(!QFileInfo::exists(directory.filePath("links")));
+        client.resetSession();QVERIFY(server.requests.isEmpty());
+    }
+    void directLinkFormats_data() {
+        QTest::addColumn<QByteArray>("bytes");QTest::addColumn<QString>("format");
+        QTest::newRow("srt")<<captions()<<QString("srt");
+        QTest::newRow("vtt")<<QByteArray("WEBVTT\n\n00:01.000 --> 00:03.000\nCaption\n")<<QString("vtt");
+        QTest::newRow("ass")<<QByteArray("[Script Info]\nScriptType: v4.00+\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Caption\n")<<QString("ass");
+        QTest::newRow("ssa")<<QByteArray("[Script Info]\n[V4 Styles]\n[Events]\nDialogue: Marked=0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Caption\n")<<QString("ssa");
+        QTest::newRow("microdvd")<<QByteArray("{25}{75}Caption\n")<<QString("sub");
+        QTest::newRow("subviewer")<<QByteArray("[SUBTITLE]\n00:00:01.00,00:00:03.00\nCaption\n")<<QString("sub");
+        QTest::newRow("sami")<<QByteArray("<SAMI><BODY><SYNC Start=1000><P>Caption<SYNC Start=3000><P>&nbsp;</BODY></SAMI>")<<QString("smi");
+        QTest::newRow("ttml")<<QByteArray("<tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"1s\" end=\"3s\">Caption</p></div></body></tt>")<<QString("ttml");
+        QTest::newRow("usf")<<QByteArray("<USFSubtitles version=\"1.0\"><subtitles><subtitle start=\"00:00:01.000\" stop=\"00:00:03.000\"><text>Caption</text></subtitle></subtitles></USFSubtitles>")<<QString("usf");
+        QTest::newRow("legacy")<<QByteArray("1\n00:00:01,000 --> 00:00:03,000\nCaf\xe9\n")<<QString("srt");
+        QByteArray utf16("\xff\xfe",2);for(const auto ch:QString::fromUtf8(captions())) {utf16.append(char(ch.unicode()&255));utf16.append(char(ch.unicode()>>8));}
+        QTest::newRow("utf16")<<utf16<<QString("srt");
+    }
+    void directLinkFormats() {
+        QFETCH(QByteArray,bytes);QFETCH(QString,format);QTemporaryDir directory;Server server;
+        server.respond=[&](const HttpRequest&,QTcpSocket* socket){Server::send(socket,bytes);};
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());
+        const auto url=server.base().resolved(QUrl("../caption.download?token=private-value")).toString();
+        const auto source=client.addLinks({url}).value("sources").toList().first().toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({source}));const auto answer=result(spy);
+        QVERIFY2(answer.value("success").toBool(),qPrintable(answer.value("error").toString()));QCOMPARE(server.requests.size(),1);
+        QVERIFY(!server.requests.first().headers.contains("api-key"));QVERIFY(!server.requests.first().headers.contains("authorization"));
+        const auto local=answer.value("rows").toList().first().toMap().value("tracks").toStringList().first();
+        QCOMPARE(QFileInfo(QUrl(local).toLocalFile()).suffix(),format);QFile file(QUrl(local).toLocalFile());QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),bytes);
+        spy.clear();client.prepareRows(row({source}));QVERIFY(result(spy).value("success").toBool());QCOMPARE(server.requests.size(),1);
+        QCOMPARE(client.addLinks({url}).value("sources").toList().first().toMap().value("url").toString(),local);
+    }
+    void linkRejectsOtherContent_data() {
+        QTest::addColumn<QByteArray>("bytes");
+        QTest::newRow("page")<<QByteArray("<!DOCTYPE html><html><body>Download</body></html>");
+        QTest::newRow("html-with-cues")<<(QByteArray("<?xml version=\"1.0\"?><html><body>\n")+captions()+"</body></html>");
+        QTest::newRow("archive")<<QByteArray("PK\003\004archive");
+        QTest::newRow("binary")<<QByteArray("binary\0data",11);
+        QTest::newRow("invalid")<<QByteArray("not a subtitle file");
+    }
+    void linkRejectsOtherContent() {
+        QFETCH(QByteArray,bytes);QTemporaryDir directory;Server server;
+        server.respond=[&](const HttpRequest&,QTcpSocket* socket){Server::send(socket,bytes);};
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());
+        const auto source=client.addLinks({server.base().toString()}).value("sources").toList().first().toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({source}));const auto answer=result(spy);
+        QVERIFY(!answer.value("success").toBool());QVERIFY(!answer.value("error").toString().isEmpty());QVERIFY(answer.value("rows").toList().isEmpty());
+        QVERIFY(!QFileInfo::exists(directory.filePath("links")));
+    }
+    void linkRedirectKeepsCredentialsOffTheRequest() {
+        QTemporaryDir directory;Server server;
+        server.respond=[](const HttpRequest& request,QTcpSocket* socket){
+            if(request.url.path()=="/api/")Server::send(socket,{},302,"Location: /caption.srt\r\n");else Server::send(socket,captions());
+        };
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
+        const auto source=client.addLinks({server.base().toString()}).value("sources").toList().first().toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({source}));QVERIFY(result(spy).value("success").toBool());
+        QCOMPARE(server.requests.size(),2);for(const auto& request:server.requests) {QVERIFY(!request.headers.contains("api-key"));QVERIFY(!request.headers.contains("authorization"));}
+    }
+    void linkCancellationAndTimeout() {
+        QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket*){};
+        auto o=options(server);o.timeoutMs=80;SubtitleSourceService client(o);client.setStorageDirectory(directory.path());
+        const auto source=client.addLinks({server.base().toString()}).value("sources").toList().first().toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({source}));QVERIFY(!result(spy).value("success").toBool());
+        spy.clear();client.prepareRows(row({source}));QTRY_COMPARE(server.requests.size(),2);client.cancelPreparation();QTest::qWait(100);QCOMPARE(spy.count(),0);QVERIFY(!client.preparing());
+        QVERIFY(!QFileInfo::exists(directory.filePath("links")));
+    }
+    void linkHttpErrorsDoNotAskForAnApiKey() {
+        QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,"{}",403);};
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());
+        const auto source=client.addLinks({server.base().toString()}).value("sources").toList().first().toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({source}));const auto answer=result(spy);
+        QVERIFY(!answer.value("success").toBool());QVERIFY(!answer.value("error").toString().contains("OpenSubtitles"));QVERIFY(!answer.value("error").toString().contains("API"));
+    }
+    void linkDownloadSizeIsBounded() {
+        QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,captions()+QByteArray(2048,'x'));};
+        auto o=options(server);o.maxFileBytes=1024;SubtitleSourceService client(o);client.setStorageDirectory(directory.path());
+        const auto source=client.addLinks({server.base().toString()}).value("sources").toList().first().toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({source}));const auto answer=result(spy);
+        QVERIFY(!answer.value("success").toBool());QVERIFY(!QFileInfo::exists(directory.filePath("links")));
+    }
 };
 QTEST_GUILESS_MAIN(TestSubtitleSources)
 #include "test_subtitle_sources.moc"

@@ -36,6 +36,7 @@
 #include <vlc_vout.h>              /* vout_*Picture, aout_filter_..tVout */
 #include <vlc_filter.h>
 #include <vlc_picture_pool.h>
+#include "size.h"
 
 #ifndef WORDS_BIGENDIAN
 #define WORDS_BIGENDIAN 0
@@ -107,6 +108,8 @@ typedef struct
     int           i_blocks;
 
     date_t        date;
+    vlc_tick_t    resize_retry;
+    bool          display_ready;
 
 } goom_thread_t;
 
@@ -121,6 +124,22 @@ static const struct vlc_filter_operations filter_ops = {
     .close = Close,
 };
 
+static bool GetSize(filter_t *filter, unsigned *width, unsigned *height)
+{
+    if (!visualization_GetSize(VLC_OBJECT(filter), width, height))
+    {
+        const int64_t w = var_InheritInteger(filter, "goom-width");
+        const int64_t h = var_InheritInteger(filter, "goom-height");
+        if (w > INT_MAX / 4 || h > INT_MAX)
+            return false;
+        *width = __MAX(64, w);
+        *height = __MAX(64, h);
+    }
+    *width = __MAX(64, *width) & ~1u;
+    *height = __MAX(64, *height) & ~1u;
+    return *width <= INT_MAX / 4 && *height <= INT_MAX;
+}
+
 /*****************************************************************************
  * Open: open a scope effect plugin
  *****************************************************************************/
@@ -130,10 +149,13 @@ static int Open( vlc_object_t *p_this )
     goom_thread_t  *p_thread;
 
     /* Create goom thread */
+    unsigned width, height;
+    if (!GetSize(p_filter, &width, &height))
+        return VLC_EGENERIC;
     p_filter->p_sys = p_thread = calloc( 1, sizeof(*p_thread) );
-
-    const int width  = var_InheritInteger( p_filter, "goom-width" );
-    const int height = var_InheritInteger( p_filter, "goom-height" );
+    if (!p_thread)
+        return VLC_ENOMEM;
+    p_thread->display_ready = true;
 
     vlc_fourcc_t chroma = VLC_CODEC_XRGB;
     video_format_Init(&p_thread->fmt, chroma);
@@ -173,7 +195,7 @@ static int Open( vlc_object_t *p_this )
     date_Set( &p_thread->date, VLC_TICK_0 );
     p_thread->i_channels = aout_FormatNbChannels( &p_filter->fmt_in.audio );
 
-    if( vlc_clone( &p_thread->thread, Thread, p_thread ) )
+    if( vlc_clone( &p_thread->thread, Thread, p_filter ) )
     {
         msg_Err( p_filter, "cannot launch goom thread" );
         vout_Close( p_thread->p_vout );
@@ -307,7 +329,8 @@ static void *Thread( void *p_thread_data )
 {
     vlc_thread_set_name("vlc-goom");
 
-    goom_thread_t *p_thread = (goom_thread_t*)p_thread_data;
+    filter_t *filter = p_thread_data;
+    goom_thread_t *p_thread = filter->p_sys;
     date_t i_pts;
     int16_t p_data[2][512];
     int i_data = 0, i_count = 0;
@@ -316,27 +339,14 @@ static void *Thread( void *p_thread_data )
 
     p_plugin_info = goom_init( p_thread->fmt.i_width, p_thread->fmt.i_height );
 
-    plane_t src;
-    src.i_lines = p_thread->fmt.i_height;
-    src.i_pitch = p_thread->fmt.i_width * 4;
-    src.i_visible_lines = p_thread->fmt.i_height;
-    src.i_visible_pitch = p_thread->fmt.i_width * 4;
-
     for( ;; )
     {
         uint32_t  *plane;
         picture_t *p_pic;
 
-        /* FIXME the way the update is done is not really good.
-         *  Supurious wake up from p_thread->wait will make it generates a frame
-         * without using new samples (probably rare as we should not be waiting
-         * samples).
-         *  The frame rate at which the video is generated is not well controlled
-         * nor the time at which each frame is displayed (not smooth)
-         */
         /* goom_update is damn slow, so just copy data and release the lock */
         vlc_mutex_lock( &p_thread->lock );
-        if( !p_thread->b_exit &&
+        while( !p_thread->b_exit &&
             FillBuffer( (int16_t *)p_data, &i_data,
                         &i_pts, &p_thread->date, p_thread ) != VLC_SUCCESS )
             vlc_cond_wait( &p_thread->wait, &p_thread->lock );
@@ -349,8 +359,40 @@ static void *Thread( void *p_thread_data )
         /* Speed selection */
         if( p_thread->i_speed && (++i_count % (p_thread->i_speed+1)) ) continue;
 
-        /* Frame dropping if necessary */
-        if( date_Get( &i_pts ) + GOOM_DELAY <= vlc_tick_now() ) continue;
+        /* Input timestamps are not system time. The vout clock schedules and
+         * drops visualization frames, as it does for other video frames. */
+
+        unsigned width, height;
+        if (GetSize(filter, &width, &height)
+            && (!p_thread->display_ready || width != p_thread->fmt.i_width
+                || height != p_thread->fmt.i_height)
+            && vlc_tick_now() >= p_thread->resize_retry)
+        {
+            video_format_t fmt = p_thread->fmt;
+            fmt.i_width = fmt.i_visible_width = width;
+            fmt.i_height = fmt.i_visible_height = height;
+            picture_pool_t *pool = picture_pool_NewFromFormat(&fmt, 3);
+            if (pool && aout_filter_UpdateVoutFormat(filter, &fmt) == VLC_SUCCESS)
+            {
+                goom_set_resolution(p_plugin_info, width, height);
+                picture_pool_Release(p_thread->pool);
+                p_thread->pool = pool;
+                p_thread->fmt = fmt;
+                p_thread->display_ready = true;
+                msg_Dbg(filter, "visualization canvas resized to %ux%u", width, height);
+            }
+            else
+            {
+                if (pool)
+                {
+                    picture_pool_Release(pool);
+                    p_thread->display_ready = aout_filter_UpdateVoutFormat(filter, &p_thread->fmt) == VLC_SUCCESS;
+                }
+                p_thread->resize_retry = vlc_tick_now() + VLC_TICK_FROM_SEC(1);
+            }
+        }
+        if (!p_thread->display_ready)
+            continue;
 
         plane = goom_update( p_plugin_info, p_data, 0, 0.0,
                              NULL, NULL );
@@ -359,7 +401,13 @@ static void *Thread( void *p_thread_data )
         if( unlikely(p_pic == NULL) )
             continue;
 
-        src.p_pixels = (uint8_t*)plane;
+        const plane_t src = {
+            .i_lines = p_thread->fmt.i_height,
+            .i_pitch = p_thread->fmt.i_width * 4,
+            .i_visible_lines = p_thread->fmt.i_height,
+            .i_visible_pitch = p_thread->fmt.i_width * 4,
+            .p_pixels = (uint8_t*)plane,
+        };
         plane_CopyPixels(&p_pic->p[0], &src);
 
         p_pic->date = date_Get( &i_pts ) + GOOM_DELAY;

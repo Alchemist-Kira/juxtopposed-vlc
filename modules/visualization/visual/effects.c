@@ -894,50 +894,29 @@ static int scope_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
 {
     VLC_UNUSED(p_aout);
 
-    int i_index;
-    float *p_sample ;
-    uint8_t *ppp_area[2][3];
+    if (p_buffer->i_nb_samples == 0)
+        return 0;
 
-    for( i_index = 0 ; i_index < 2 ; i_index++ )
+    const float *samples = (const float *)p_buffer->p_buffer;
+    const int channels[] = { p_effect->i_idx_left, p_effect->i_idx_right };
+    /* Use visible dimensions, not the padded picture stride and line count.
+     * Spread the audio block across the canvas even when it has fewer samples. */
+    for (int x = 0; x < p_effect->i_width; ++x)
     {
-        for( int j = 0 ; j < 3 ; j++ )
+        const size_t index = (uint64_t)x * p_buffer->i_nb_samples / p_effect->i_width;
+        const float *sample = samples + index * p_effect->i_nb_chans;
+        for (int channel = 0; channel < 2; ++channel)
         {
-            ppp_area[i_index][j] =
-                p_picture->p[j].p_pixels + (i_index * 2 + 1) * p_picture->p[j].i_lines
-                / 4 * p_picture->p[j].i_pitch;
+            const float level = sample[channels[channel]];
+            const int value = isfinite(level) ? (int)(VLC_CLIP(level, -1.f, 1.f) * 127) : 0;
+            const int y = (channel * 2 + 1) * p_effect->i_height / 4
+                        + (int64_t)p_effect->i_height * value / 512;
+            p_picture->p[0].p_pixels[y * p_picture->p[0].i_pitch + x] =
+                channel == 0 ? 0xbf : 0x9f;
+            plane_t *chroma = &p_picture->p[channel + 1];
+            chroma->p_pixels[(y / 2) * chroma->i_pitch + x / 2] =
+                channel == 0 ? 0xff : 0xdd;
         }
-    }
-
-    for( i_index = 0, p_sample = (float *)p_buffer->p_buffer;
-            i_index < __MIN( p_effect->i_width, (int)p_buffer->i_nb_samples );
-            i_index++ )
-    {
-        int8_t i_value;
-
-        /* Left channel */
-        i_value =  p_sample[p_effect->i_idx_left] * 127;
-        *(ppp_area[0][0]
-                + p_picture->p[0].i_pitch * i_index / p_effect->i_width
-                + p_picture->p[0].i_lines * i_value / 512
-                * p_picture->p[0].i_pitch) = 0xbf;
-        *(ppp_area[0][1]
-                + p_picture->p[1].i_pitch * i_index / p_effect->i_width
-                + p_picture->p[1].i_lines * i_value / 512
-                * p_picture->p[1].i_pitch) = 0xff;
-
-
-        /* Right channel */
-        i_value = p_sample[p_effect->i_idx_right] * 127;
-        *(ppp_area[1][0]
-                + p_picture->p[0].i_pitch * i_index / p_effect->i_width
-                + p_picture->p[0].i_lines * i_value / 512
-                * p_picture->p[0].i_pitch) = 0x9f;
-        *(ppp_area[1][2]
-                + p_picture->p[2].i_pitch * i_index / p_effect->i_width
-                + p_picture->p[2].i_lines * i_value / 512
-                * p_picture->p[2].i_pitch) = 0xdd;
-
-        p_sample += p_effect->i_nb_chans;
     }
     return 0;
 }
@@ -1010,6 +989,7 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
     float teta;
     float teta_grad;
 
+    const int baseline_y = p_effect->i_height / 2 + 75;
     int start_x = p_effect->i_width / 2 - 120; /* i_width.min = 532 (visual.c) */
 
     for ( int j = 0; j < 2; j++ )
@@ -1021,7 +1001,7 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
         {
             for ( unsigned i = 140; i <= 150; i++ )
             {
-                y = i * cos(teta) + 20;
+                y = baseline_y - i * cos(teta);
                 x = i * sin(teta) + start_x + 240 * j;
                 /* Compute the last color for the gradation */
                 if (teta >= teta_grad + GRAD_INCR && teta_grad <= GRAD_ANGLE_MAX)
@@ -1030,13 +1010,13 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
                     k = k + 5;
                 }
                 *(p_picture->p[0].p_pixels +
-                        (p_picture->p[0].i_lines - y - 1 ) * p_picture->p[0].i_pitch
+                        y * p_picture->p[0].i_pitch
                         + x ) = 0x45;
                 *(p_picture->p[1].p_pixels +
-                        (p_picture->p[1].i_lines - y / 2 - 1 ) * p_picture->p[1].i_pitch
+                        (y / 2) * p_picture->p[1].i_pitch
                         + x / 2 ) = 0x0;
                 *(p_picture->p[2].p_pixels +
-                        (p_picture->p[2].i_lines - y / 2 - 1 ) * p_picture->p[2].i_pitch
+                        (y / 2) * p_picture->p[2].i_pitch
                         + x / 2 ) = 0x4D + k;
             }
         }
@@ -1045,16 +1025,16 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
         teta = (float)i_value[j] / 200 - M_PI_4;
         for ( int i = 0; i <= 150; i++ )
         {
-            y = i * cos(teta) + 20;
+            y = baseline_y - i * cos(teta);
             x = i * sin(teta) + start_x + 240 * j;
             *(p_picture->p[0].p_pixels +
-                    (p_picture->p[0].i_lines - y - 1 ) * p_picture->p[0].i_pitch
+                    y * p_picture->p[0].i_pitch
                     + x ) = 0xAD;
             *(p_picture->p[1].p_pixels +
-                    (p_picture->p[1].i_lines - y / 2 - 1 ) * p_picture->p[1].i_pitch
+                    (y / 2) * p_picture->p[1].i_pitch
                     + x / 2 ) = 0xFC;
             *(p_picture->p[2].p_pixels +
-                    (p_picture->p[2].i_lines - y / 2 - 1 ) * p_picture->p[2].i_pitch
+                    (y / 2) * p_picture->p[2].i_pitch
                     + x / 2 ) = 0xAC;
         }
 
@@ -1063,16 +1043,16 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
         {
             for ( int i = 0; i < 10; i++ )
             {
-                y = i * cos(teta) + 20;
+                y = baseline_y - i * cos(teta);
                 x = i * sin(teta) + start_x + 240 * j;
                 *(p_picture->p[0].p_pixels +
-                        (p_picture->p[0].i_lines - y - 1 ) * p_picture->p[0].i_pitch
+                        y * p_picture->p[0].i_pitch
                         + x ) = 0xFF;
                 *(p_picture->p[1].p_pixels +
-                        (p_picture->p[1].i_lines - y / 2 - 1 ) * p_picture->p[1].i_pitch
+                        (y / 2) * p_picture->p[1].i_pitch
                         + x / 2 ) = 0x80;
                 *(p_picture->p[2].p_pixels +
-                        (p_picture->p[2].i_lines - y / 2 - 1 ) * p_picture->p[2].i_pitch
+                        (y / 2) * p_picture->p[2].i_pitch
                         + x / 2 ) = 0x80;
             }
         }

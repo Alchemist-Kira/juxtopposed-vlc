@@ -433,6 +433,7 @@ protected:
     bool m_hasEmbededVideo = false;
     VideoSurfaceProvider* m_videoSurfaceProvider = nullptr;
     QMetaObject::Connection m_releaseVideoMouseConnection;
+    QMetaObject::Connection m_visualizationSizeConnection;
     bool m_showRemainingTime = false;
 
     /* */

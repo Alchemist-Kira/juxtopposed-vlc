@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  *****************************************************************************/
 #include "compositor_win7.hpp"
+#include "video_window_handler.hpp"
 
 #include <QApplication>
 #include <QLibrary>
@@ -127,6 +128,8 @@ void CompositorWin7::destroyMainInterface()
 
 void CompositorWin7::unloadGUI()
 {
+    if (m_videoWindowHandler)
+        m_videoWindowHandler->setWindow(nullptr);
     m_interfaceWindowHandler.reset();
     m_qmlView.reset();
     commonGUIDestroy();

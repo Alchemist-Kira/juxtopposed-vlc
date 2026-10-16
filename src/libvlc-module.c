@@ -148,6 +148,11 @@ static const char *const subtitle_size_mode_names[] = {N_("Relative"), N_("Pixel
 #define AUDIO_LONGTEXT N_( \
     "You can completely disable the audio output. The audio " \
     "decoding stage will not take place, thus saving some processing power.")
+static const int visualization_size_values[] = {0, 1, 2, 3, -1};
+static const char *const visualization_size_labels[] = {
+    N_("Match window"), "800 × 500", "1280 × 720", "1920 × 1080", N_("Custom")
+};
+
 static const char *ppsz_roles[] = {
      "video", "music", "communication", "game",
      "notification", "animation", "production",
@@ -1696,6 +1701,9 @@ vlc_module_begin ()
     set_subcategory( SUBCAT_AUDIO_VISUAL )
     add_module("audio-visual", "visualization", "none",
                AUDIO_VISUAL_TEXT, AUDIO_VISUAL_LONGTEXT)
+    add_integer("visualization-size", 0, N_("Visualization size"),
+        N_("Set the size of visualization frames. Match window uses the video area. Custom keeps the visualizer's width and height settings."))
+        change_integer_list(visualization_size_values, visualization_size_labels)
 
     set_subcategory( SUBCAT_AUDIO_RESAMPLER )
     add_module("audio-resampler", "audio resampler", "any",

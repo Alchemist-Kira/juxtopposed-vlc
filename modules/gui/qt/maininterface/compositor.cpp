@@ -108,6 +108,7 @@ namespace {
 struct CompositorWindow {
     /* The CompositorVideo instance that created the window */
     vlc::CompositorVideo *compositor;
+    bool visualization = false;
 
     /* Callback setup from commonSetupVoutWindow. It usually comes from the main qt.cpp
      * file so as to handle the reference counting of Qt's resources. */
@@ -141,7 +142,10 @@ static void windowDisableCb(vlc_window_t* p_wnd)
 static void windowResizeCb(vlc_window_t* p_wnd, unsigned width, unsigned height)
 {
     assert(p_wnd->sys);
+    /* The canvas size is a rendering preference, not an interface window size. */
     auto that = static_cast<CompositorWindow*>(p_wnd->sys);
+    if (that->visualization)
+        return;
     that->compositor->windowResize(width, height);
 }
 
@@ -217,6 +221,16 @@ void CompositorVideo::commonSetupVoutWindow(vlc_window_t* p_wnd, VoutDestroyCb d
     auto *compositor_window = new CompositorWindow;
     compositor_window->compositor = this;
     compositor_window->destroy_cb = destroyCb;
+    /* This is a runtime marker, with no configuration-file fallback. */
+    for (vlc_object_t *obj = VLC_OBJECT(p_wnd); obj; obj = vlc_object_parent(obj))
+    {
+        vlc_value_t value;
+        if (var_GetChecked(obj, "video-is-visualization", VLC_VAR_BOOL, &value) == VLC_SUCCESS)
+        {
+            compositor_window->visualization = value.b_bool;
+            break;
+        }
+    }
 
     /* We currently support only a single window in the compositor. */
     assert(m_wnd == nullptr);

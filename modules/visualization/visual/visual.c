@@ -42,6 +42,7 @@
 #include "visual.h"
 
 #include "window_presets.h"
+#include "../size.h"
 
 /*****************************************************************************
  * Module descriptor
@@ -200,6 +201,12 @@ static const struct vlc_filter_operations filter_ops = {
  *****************************************************************************/
 static bool GetSize(filter_t *filter, unsigned *width, unsigned *height)
 {
+    if (visualization_GetSize(VLC_OBJECT(filter), width, height))
+    {
+        *width = __MAX(532, *width) & ~1u;
+        *height = __MAX(400, *height) & ~1u;
+        return true;
+    }
     const int64_t requested_width = var_InheritInteger(filter, "effect-width");
     const int64_t requested_height = var_InheritInteger(filter, "effect-height");
     if (requested_width > INT_MAX || requested_height > INT_MAX)

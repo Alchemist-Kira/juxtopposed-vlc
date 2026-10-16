@@ -511,6 +511,10 @@ TestCase {
         verify(effects.indexOf("filter:audio-filter:stereo_widen") < effects.indexOf("filter:audio-filter:compressor"))
         verify(catalog.advancedSections.audio.some(section => section.rows.some(row => row[0] === "filter:audio-filter:spatializer" && row[2].spatializer)))
         verify(catalog.advancedSections.audio.some(section => section.rows.some(row => row[0] === "aout")))
+        const advancedAudio = catalog.advancedSections.audio.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])
+        verify(!audio.includes("visualization-size"))
+        verify(advancedAudio.indexOf("role") < advancedAudio.indexOf("visualization-size"))
+        verify(advancedAudio.indexOf("visualization-size") < advancedAudio.indexOf("aout"))
         verify(catalog.advancedSections.playback[0].rows.some(row => row[0] === "input-timeshift-path"))
     }
     function test_shortcutEditorRecordsKeys() {

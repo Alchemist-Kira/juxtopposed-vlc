@@ -1430,6 +1430,13 @@ bool RedesignPreferences::save()
         for (const auto& filter : after)
             if (!before.contains(filter)) vlc_player_aout_EnableFilter(player, filter.toUtf8().constData(), true);
     }
+    if (previous.contains(QStringLiteral("audio-visual"))) {
+        audio_output_t* output = vlc_player_aout_Hold(player);
+        if (output) {
+            var_SetString(output, "visual", value(QStringLiteral("audio-visual")).toString().toUtf8().constData());
+            aout_Release(output);
+        }
+    }
     const QStringList equalizerOptions{QStringLiteral("equalizer-preset"), QStringLiteral("equalizer-bands"), QStringLiteral("equalizer-preamp"), QStringLiteral("equalizer-2pass")};
     if (std::any_of(equalizerOptions.cbegin(), equalizerOptions.cend(), [&](const auto& name) { return previous.contains(name); })) {
         audio_output_t* output = vlc_player_aout_Hold(player);

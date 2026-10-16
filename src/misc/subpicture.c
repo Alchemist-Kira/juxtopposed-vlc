@@ -37,7 +37,7 @@
 #include <limits.h>
 #include <stdatomic.h>
 
-static atomic_uint_fast64_t text_style_revision = ATOMIC_VAR_INIT(0);
+static atomic_uint_fast64_t text_style_revision = 0;
 
 void vlc_subpicture_InvalidateTextStyle(void)
 {

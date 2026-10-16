@@ -56,6 +56,7 @@ public:
     Q_INVOKABLE QVariant videoValue(const QString& name) const;
     Q_INVOKABLE bool isStaged(const QString& name) const;
     Q_INVOKABLE bool stage(const QString& name, const QVariant& value);
+    Q_INVOKABLE void cancelLanguageEdit(const QString& name);
     Q_INVOKABLE void reset(const QString& name);
     Q_INVOKABLE void discard();
     Q_INVOKABLE bool save();

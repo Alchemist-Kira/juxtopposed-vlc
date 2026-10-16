@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import QtQuick
+import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as C
 
@@ -20,6 +21,15 @@ Item {
     property string contextName
     property string nameAction
     property bool retryNameSave: false
+    readonly property var shortcutContext: root.backend.ctx === undefined ? null : root.backend.ctx
+    readonly property var controlWindow: root.Window.window
+    readonly property var hostWindow: controlWindow && controlWindow.renderWindow !== undefined ? controlWindow.renderWindow : controlWindow
+    Binding {
+        target: root.shortcutContext; property: "useGlobalShortcuts"; value: false
+        when: !!root.shortcutContext && root.visible && root.hostWindow && root.hostWindow.visible
+            && (dropdown.visible || actions.visible || nameDialog.visible || deleteDialog.visible)
+        restoreMode: Binding.RestoreBindingOrValue
+    }
     implicitHeight: theme.dp(42)
 
     function namePreset(action, id, name) {
@@ -63,7 +73,7 @@ Item {
         objectName: "playerPresetMenu"
         y: -height - root.theme.dp(8)
         width: root.width
-        height: Math.min(list.contentHeight + padding * 2, root.theme.dp(340), root.mapToItem(C.Overlay.overlay, 0, 0).y - root.theme.dp(12))
+        height: Math.min(list.count * root.theme.dp(48) + padding * 2, root.theme.dp(340), root.mapToItem(C.Overlay.overlay, 0, 0).y - root.theme.dp(12))
         padding: root.theme.dp(4)
         focus: true
         background: Rectangle { color: root.theme.background; radius: root.theme.dp(6); border.color: root.theme.border }

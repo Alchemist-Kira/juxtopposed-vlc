@@ -18,6 +18,7 @@
 #include <QScreen>
 #include <QKeyEvent>
 #include <QRegularExpression>
+#include <QCollator>
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
@@ -179,9 +180,57 @@ QString languageNames(const QString& codes)
         const auto bytes = code.trimmed().toUtf8();
         const auto* language = vlc_find_iso639(bytes.constData(), true);
         // Keep unrecognized codes and native fallback tokens editable.
-        names.append(language ? qfu(language->psz_eng_name) : code.trimmed());
+        names.append(code == QLatin1String("system") ? qtr("System language")
+            : language ? qtr(language->psz_eng_name) : code.trimmed());
     }
     return names.join(QStringLiteral(", "));
+}
+
+const iso639_lang_t* languageFromText(const QString& text)
+{
+    const auto bytes=text.toUtf8();
+    if (const auto* language=vlc_find_iso639(bytes.constData(),true)) return language;
+    size_t count;const auto* languages=vlc_iso639_languages(&count);
+    for (size_t i=0;i<count;++i)
+        if (text.compare(qtr(languages[i].psz_eng_name),Qt::CaseInsensitive)==0) return &languages[i];
+    return nullptr;
+}
+
+QString languageCodes(const QString& input)
+{
+    QStringList result;
+    for (const auto& token : input.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+        const auto bytes = token.trimmed().toUtf8();
+        const auto* language = vlc_find_iso639(bytes.constData(), true);
+        result.append(language ? qfu(*language->psz_iso639_1 ? language->psz_iso639_1 : language->psz_iso639_2T) : token.trimmed());
+    }
+    return result.join(QLatin1Char(','));
+}
+
+QVariantList languageChoices(const QString& current)
+{
+    static const QVariantList languages = [] {
+        QVariantList result;size_t count;
+        const auto* records = vlc_iso639_languages(&count);
+        for (size_t i = 0; i < count; ++i) {
+            const auto& record = records[i];
+            const auto code = qfu(*record.psz_iso639_1 ? record.psz_iso639_1 : record.psz_iso639_2T);
+            result.append(QVariantMap{{"label", qtr(record.psz_eng_name)}, {"value", code}});
+        }
+        QCollator collator;collator.setCaseSensitivity(Qt::CaseInsensitive);
+        std::sort(result.begin(),result.end(),[&](const auto& a,const auto& b) {
+            return collator.compare(a.toMap().value("label").toString(),b.toMap().value("label").toString()) < 0;
+        });
+        return result;
+    }();
+    QVariantList result{QVariantMap{{"label",qtr("System language")},{"value",QStringLiteral("system")}},
+        QVariantMap{{"label",qtr("Automatic")},{"value",QString()}}};
+    result.append(languages);
+    if (!current.isEmpty() && current != QLatin1String("system")
+        && std::none_of(languages.cbegin(),languages.cend(),[&](const auto& row){return row.toMap().value("value").toString()==current;}))
+        result.append(QVariantMap{{"label",languageNames(current)},{"value",current}});
+    result.append(QVariantMap{{"label",qtr("Custom…")},{"value",QStringLiteral("__custom__")}});
+    return result;
 }
 
 bool supportsWebRemote()
@@ -611,7 +660,7 @@ QVariant RedesignPreferences::value(const QString& name) const
     if (const auto option = trackOption(name); !option.isEmpty())
         return value(option).toLongLong() + 1;
     if (const auto option = languageOption(name); !option.isEmpty())
-        return languageNames(value(option).toString());
+        return languageCodes(value(option).toString());
     if (name == QLatin1String("redesign-audio-device")) {
         const QString module = audioOutputModule();
         const QString configured = value(QStringLiteral("audio-device-default")).toString();
@@ -725,9 +774,11 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
             {QStringLiteral("defaultValue"), 0}, {QStringLiteral("value"), value(name)},
             {QStringLiteral("help"), qtr("Choose a track for the next video. Track numbers start at 1. Automatic uses the language setting.")}};
     if (!languageOption(name).isEmpty())
-        return {{QStringLiteral("kind"), QStringLiteral("string")}, {QStringLiteral("defaultValue"), QString()},
+        return {{QStringLiteral("kind"), QStringLiteral("string")}, {QStringLiteral("editor"), QStringLiteral("language")},
+            {QStringLiteral("choices"), languageChoices(value(name).toString())},
+            {QStringLiteral("defaultValue"), QStringLiteral("system")},
             {QStringLiteral("value"), value(name)},
-            {QStringLiteral("help"), qtr("Enter a language name or code. Separate languages with commas. This sets the track to Automatic for the next video.")}};
+            {QStringLiteral("help"), qtr("Choose a language. System language uses your system's language. Choose Custom to enter a language order. Separate names or codes with commas. This sets the track to Automatic for the next file.")}};
     if (name == QLatin1String("redesign-reset-all"))
         return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
             {QStringLiteral("buttonLabel"), qtr("Reset")}, {QStringLiteral("destructive"), true},
@@ -882,15 +933,19 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
         const QString input = proposed.toString().trimmed();
         if (input == value(name).toString()) {
             m_invalid.remove(name);
-            return stage(option, value(option));
+            if (!stage(option, value(option))) return false;
+            const QString track = option == QLatin1String("audio-language") ? QStringLiteral("audio-track") : QStringLiteral("sub-track");
+            stage(track, -1);
+            return stage(track + QStringLiteral("-id"), QString());
         }
         QStringList codes;
         bool valid = true;
         if (!input.isEmpty() && input.compare(qtr("Automatic"), Qt::CaseInsensitive) != 0) {
             for (const auto& token : input.split(QLatin1Char(','))) {
                 const auto code = token.trimmed().toLower().toUtf8();
-                const auto* language = code.isEmpty() ? nullptr : vlc_find_iso639(code.constData(), true);
-                if (language) codes.append(qfu(*language->psz_iso639_1 ? language->psz_iso639_1 : language->psz_iso639_2T));
+                const auto* language = code.isEmpty() ? nullptr : languageFromText(token.trimmed());
+                if (token.trimmed().compare(qtr("System language"),Qt::CaseInsensitive)==0 || code=="system") codes.append(QStringLiteral("system"));
+                else if (language) codes.append(qfu(*language->psz_iso639_1 ? language->psz_iso639_1 : language->psz_iso639_2T));
                 else if (code == "any" || code == "none") codes.append(qfu(code.constData()));
                 else { valid = false; break; }
             }
@@ -1069,6 +1124,14 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     emit changed();
     if (m_autoSave) m_saveTimer.start();
     return true;
+}
+
+void RedesignPreferences::cancelLanguageEdit(const QString& name)
+{
+    if (languageOption(name).isEmpty() || !m_invalid.remove(name)) return;
+    if (m_invalid.isEmpty()) m_error.clear();
+    ++m_revision;emit changed();
+    if (m_autoSave && !m_edits.isEmpty()) m_saveTimer.start();
 }
 
 void RedesignPreferences::reset(const QString& name)

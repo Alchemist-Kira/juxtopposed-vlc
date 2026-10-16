@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import QtQuick
+import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as C
 import QtQuick.Templates as T
@@ -15,7 +16,7 @@ ColumnLayout {
     property bool lightTheme: false
     signal actionRequested(string action)
     signal editorResetRequested()
-    readonly property var description: { if (presentation.dynamicChoices) backend.revision; return backend.describe(optionName) }
+    readonly property var description: { if (presentation.dynamicChoices || optionName.endsWith("-language")) backend.revision; return backend.describe(optionName) }
     readonly property var currentValue: { backend.revision; return backend.value(optionName) }
     readonly property var choices: {
         const options = presentation.choices || description.choices || []
@@ -37,8 +38,13 @@ ColumnLayout {
         return backend.stage(optionName, value)
     }
     readonly property var displayedValue: presentation.inverted ? !currentValue : currentValue
+    TextMetrics {
+        id: languageMetrics
+        font.family: Qt.application.font.family; font.pixelSize: root.theme.dp(14)
+        text: root.editor === "language" ? (root.choices.find(row => row.value === root.currentValue)?.label || "") : ""
+    }
     readonly property Component editorComponent: editor === "action" ? actionEditor : editor === "startup-volume" ? startupVolumeEditor : editor === "slider" ? sliderEditor
-        : editor === "track" ? trackEditor
+        : editor === "track" ? trackEditor : editor === "language" ? languageEditor
         : description.kind === "bool" && !choices.length ? toggleEditor
         : editor === "color" ? colorEditor
         : choices.length ? choiceEditor : textEditor
@@ -82,7 +88,9 @@ ColumnLayout {
             visible: !root.fullWidth
             active: visible
             enabled: root.editorEnabled
-            Layout.preferredWidth: root.compact ? theme.dp(138) : Math.min(theme.dp(320), Math.max(theme.dp(150), root.width * 0.43))
+            Layout.preferredWidth: root.compact ? root.editor === "language"
+                ? Math.min(theme.dp(184),Math.max(theme.dp(138),languageMetrics.advanceWidth+theme.dp(56))) : theme.dp(138)
+                : Math.min(theme.dp(320), Math.max(theme.dp(150), root.width * 0.43))
             Layout.preferredHeight: item ? item.implicitHeight || theme.dp(34) : theme.dp(34)
             sourceComponent: root.editorComponent
         }
@@ -155,6 +163,146 @@ ColumnLayout {
                         text: parent.parent.checked ? qsTr("ON") : qsTr("OFF")
                         font.pixelSize: theme.dp(12); color: parent.parent.checked ? theme.accent : theme.foreground
                     }
+                }
+            }
+        }
+    }
+    Component {
+        id: languageEditor
+        Item {
+            id: languageControl
+            implicitHeight: theme.dp(34)
+            property bool custom: false
+            function cancelCustom() {
+                if (languageOrder.invalid) root.backend.cancelLanguageEdit(root.optionName)
+                languageOrder.invalid=false;custom=false
+            }
+            readonly property var shortcutContext: root.backend.ctx === undefined ? null : root.backend.ctx
+            readonly property var controlWindow: languageControl.Window.window
+            readonly property var hostWindow: controlWindow && controlWindow.renderWindow !== undefined ? controlWindow.renderWindow : controlWindow
+            Binding {
+                target: languageControl.shortcutContext
+                property: "useGlobalShortcuts"; value: false
+                when: !!languageControl.shortcutContext && languageControl.visible
+                    && languageControl.hostWindow && languageControl.hostWindow.visible
+                    && (languageMenu.visible || languageControl.custom)
+                restoreMode: Binding.RestoreBindingOrValue
+            }
+            RedesignComboBox {
+                id: languageCombo
+                objectName: "preferenceChoiceEditor"
+                anchors.fill: parent; visible: !languageControl.custom
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                model: root.choices; textRole: "label"; valueRole: "value"
+                currentIndex: { languageControl.custom; return model.findIndex(row => row.value === root.currentValue) }
+                onActivated: index => {
+                    const selected = model[index].value
+                    if (selected === "__custom__") {
+                        languageOrder.text = root.currentValue
+                        languageOrder.invalid = false; languageControl.custom = true
+                        languageOrder.forceActiveFocus(); languageOrder.selectAll()
+                    } else root.commit(selected)
+                }
+                popup: C.Popup {
+                    id: languageMenu
+                    objectName: "languageChoicePopup"
+                    x: languageCombo.width - width; y: languageCombo.height + root.theme.dp(4)
+                    width: Math.max(languageCombo.width, root.theme.dp(260)); padding: root.theme.dp(4)
+                    implicitHeight: Math.min(root.theme.dp((Math.max(entries.length,1)+1)*34+12), root.theme.dp(320))
+                    margins: root.theme.dp(8); focus: true
+                    readonly property var entries: root.choices.map((row,index) => ({label:row.label,value:row.value,index:index})).filter(row =>
+                        row.label.toLocaleLowerCase().includes(languageSearch.text.trim().toLocaleLowerCase()) || String(row.value).toLowerCase().includes(languageSearch.text.trim().toLowerCase()))
+                        .sort((a,b) => matchRank(a)-matchRank(b))
+                    function matchRank(row) {
+                        const query=languageSearch.text.trim().toLocaleLowerCase()
+                        const label=row.label.toLocaleLowerCase(),code=String(row.value).toLowerCase()
+                        return label===query || code===query ? 0 : label.startsWith(query) || code.startsWith(query) ? 1 : 2
+                    }
+                    function choose(index) {
+                        const row=entries[index]
+                        if (!row) return
+                        languageCombo.activated(row.index); close()
+                    }
+                    onOpened: {
+                        languageSearch.text="";languageSearch.forceActiveFocus()
+                        languageList.currentIndex=Math.max(0, entries.findIndex(row => row.value===root.currentValue))
+                        languageList.positionViewAtIndex(languageList.currentIndex,ListView.Contain)
+                    }
+                    onClosed: if (languageControl.custom) Qt.callLater(() => { languageOrder.forceActiveFocus(); languageOrder.selectAll() })
+                    background: Rectangle { color: root.theme.panel; radius: root.theme.dp(6); border.color: root.theme.border }
+                    contentItem: ColumnLayout {
+                        spacing: root.theme.dp(4)
+                        C.TextField {
+                            id: languageSearch
+                            objectName: "languageChoiceSearch"
+                            Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
+                            placeholderText: qsTr("Search languages"); Accessible.name: placeholderText
+                            color: root.theme.foreground; font.pixelSize: root.theme.dp(14); selectByMouse: true
+                            background: Rectangle { color: root.theme.background; radius: root.theme.dp(4); border.color: languageSearch.activeFocus ? root.theme.accent : root.theme.border }
+                            onTextChanged: languageList.currentIndex=0
+                            onAccepted: languageMenu.choose(languageList.currentIndex)
+                            Keys.onDownPressed: { languageList.forceActiveFocus();languageList.currentIndex=0 }
+                        }
+                        ListView {
+                            id: languageList
+                            objectName: "languageChoiceList"
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            visible: languageMenu.entries.length>0
+                            clip: true; keyNavigationEnabled: true
+                            model: languageMenu.entries
+                            Keys.onReturnPressed: languageMenu.choose(currentIndex)
+                            Keys.onEnterPressed: languageMenu.choose(currentIndex)
+                            delegate: C.ItemDelegate {
+                                required property var modelData
+                                required property int index
+                                width: ListView.view.width; height: root.theme.dp(34)
+                                text: modelData.label; highlighted: languageList.currentIndex===index
+                                font.pixelSize: root.theme.dp(14)
+                                onClicked: languageMenu.choose(index)
+                                contentItem: Text { text: parent.text; font: parent.font; color: root.theme.foreground; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                background: Rectangle { color: parent.highlighted || parent.hovered ? root.theme.hover : "transparent"; radius: root.theme.dp(4) }
+                            }
+                            C.ScrollIndicator.vertical: C.ScrollIndicator {}
+                        }
+                        Text {
+                            visible: languageMenu.entries.length===0
+                            Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
+                            text: qsTr("No languages found"); color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                anchors.fill: parent; visible: languageControl.custom; spacing: root.theme.dp(4)
+                RedesignButton {
+                    objectName: "languageOrderCancel"
+                    Layout.preferredWidth: root.theme.dp(26); Layout.fillHeight: true
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    iconName: "back"; text: qsTr("Cancel language order")
+                    onClicked: languageControl.cancelCustom()
+                }
+                C.TextField {
+                    id: languageOrder
+                    objectName: "preferenceLanguageOrderEditor"
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    property bool invalid: false
+                    placeholderText: "en, ja"
+                    Accessible.name: qsTr("Language names or codes, separated by commas")
+                    color: root.theme.foreground; font.pixelSize: root.theme.dp(14); selectByMouse: true
+                    background: Rectangle { color: root.theme.background; radius: root.theme.dp(4); border.color: languageOrder.invalid ? root.theme.danger : languageOrder.activeFocus ? root.theme.accent : root.theme.field }
+                    function save() {
+                        invalid = !root.commit(text)
+                        if (!invalid) languageControl.custom = false
+                    }
+                    onAccepted: save()
+                    Keys.onEscapePressed: event => { languageControl.cancelCustom(); event.accepted = true }
+                }
+                RedesignButton {
+                    objectName: "languageOrderSave"
+                    Layout.preferredWidth: root.theme.dp(26); Layout.fillHeight: true
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    iconName: "check"; text: qsTr("Use this language order")
+                    onClicked: languageOrder.save()
                 }
             }
         }

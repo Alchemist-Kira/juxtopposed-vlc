@@ -9,16 +9,22 @@ TestCase {
     width: 900; height: 600
     when: windowShown
     visible: true
+    QtObject { id: shortcuts; property bool useGlobalShortcuts: true }
     QtObject {
         id: store
         property int revision: 0
         property int refreshCount: 0
         property var values: ({resize: true, fastSeek: false, timeout: 1800})
+        property QtObject ctx: shortcuts
+        property bool invalidLanguage: false
+        function cancelLanguageEdit(name) { invalidLanguage=false;revision++ }
         function value(name) { return values[name] }
         function refresh() { refreshCount++; revision++ }
         function describe(name) {
             if (name.endsWith("-track")) return {kind: "integer", editor: "track", maximum: 2147483647}
-            if (name.endsWith("-language")) return {kind: "string"}
+            if (name.endsWith("-language")) return {kind: "string", editor: "language", choices: [
+                {label:"System language",value:"system"},{label:"Automatic",value:""},
+                {label:"English",value:"en"},{label:"French",value:"fr"},{label:"Creoles, English based",value:"cpe"},{label:"Custom…",value:"__custom__"}]}
             if (name === "folderAction") return {kind: "action", editor: "action", buttonLabel: "Open"}
             if (name === "audio-spatial-mode") return {kind: "integer", title: "Spatial audio mode", choices: [{label: "Headphone virtualization", value: 2}, {label: "Surround speakers", value: 0}]}
             if (name === "volumeStep") return {kind: "float", title: "Volume step", choices: []}
@@ -26,6 +32,7 @@ TestCase {
             return {kind: name === "timeout" ? "integer" : name === "clickPolicy" ? "string" : "bool", title: name, help: "", choices: []}
         }
         function stage(name, value) {
+            if (name.endsWith("-language") && value==="invalid") { invalidLanguage=true;return false }
             if (name === "redesign-startup-volume") {
                 const number = Number(value)
                 if (!String(value).trim().length || !Number.isInteger(number) || number < 0 || number > 300) return false
@@ -193,16 +200,47 @@ TestCase {
     function test_subtitleDefaultsUseTheirOwnPreferences() {
         store.stage("redesign-audio-track", 1)
         store.stage("redesign-sub-track", 2)
-        store.stage("redesign-sub-language", "French")
+        store.stage("redesign-sub-language", "fr")
         defaults.subtitles = true; defaults.visible = true
         compare(findChild(defaults, "preferenceTrackEditor").displayText, "2")
-        const language = findChild(defaults, "preferenceTextEditor")
-        compare(language.text, "French")
+        const language = findChild(defaults, "preferenceChoiceEditor")
+        compare(language.currentText, "French")
         editTrack("3")
         compare(store.value("redesign-sub-track"), 3)
         compare(store.value("redesign-audio-track"), 1)
-        language.text = "English"; language.editingFinished()
-        compare(store.value("redesign-sub-language"), "English")
+        language.activated(2)
+        compare(store.value("redesign-sub-language"), "en")
+    }
+    function test_languageOrderCanBeEditedAndCanceled() {
+        defaults.subtitles=true;defaults.visible=true;store.stage("redesign-sub-language","system")
+        const choice=findChild(defaults,"preferenceChoiceEditor")
+        compare(choice.currentText,"System language")
+        tryVerify(() => !choice.contentItem.truncated)
+        choice.activated(choice.model.findIndex(row=>row.value==="__custom__"))
+        const field=findChild(defaults,"preferenceLanguageOrderEditor");verify(field.visible)
+        field.text="ja,en";mouseClick(findChild(defaults,"languageOrderCancel"))
+        compare(store.value("redesign-sub-language"),"system");verify(choice.visible);compare(choice.currentText,"System language")
+        choice.activated(choice.model.findIndex(row=>row.value==="__custom__"));field.text="en,ja";field.accepted()
+        compare(store.value("redesign-sub-language"),"en,ja");verify(choice.visible)
+        choice.activated(choice.model.findIndex(row=>row.value==="__custom__"));field.text="invalid";field.accepted()
+        verify(field.invalid);verify(store.invalidLanguage)
+        mouseClick(findChild(defaults,"languageOrderCancel"));verify(!store.invalidLanguage)
+        compare(store.value("redesign-sub-language"),"en,ja")
+    }
+    function test_languageSearchSelectsTheOriginalValue() {
+        defaults.subtitles=true;defaults.visible=true;store.stage("redesign-sub-language","system")
+        const choice=findChild(defaults,"preferenceChoiceEditor")
+        mouseClick(choice)
+        const popup=findChild(defaults,"languageChoicePopup");tryCompare(popup,"opened",true)
+        verify(!shortcuts.useGlobalShortcuts)
+        const search=findChild(defaults,"languageChoiceSearch");search.text="French"
+        compare(popup.entries.length,1);compare(popup.entries[0].value,"fr")
+        search.text="English";compare(popup.entries.length,2);compare(popup.entries[0].value,"en")
+        search.text="French"
+        search.accepted();compare(store.value("redesign-sub-language"),"fr");tryCompare(popup,"visible",false);verify(shortcuts.useGlobalShortcuts)
+        mouseClick(choice);tryCompare(popup,"opened",true);search.text="not a language"
+        compare(popup.entries.length,0);search.accepted();verify(popup.visible)
+        popup.close()
     }
     function test_volumeStepUsesPercentagePoints() {
         volumeStepRow.visible = true

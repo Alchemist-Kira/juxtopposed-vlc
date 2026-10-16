@@ -8,8 +8,10 @@ TestCase {
     name: "JuxtopposedPlayerPreset"
     width: 800; height: 800
     visible: true; when: windowShown
+    QtObject { id: shortcuts; property bool useGlobalShortcuts: true }
     QtObject {
         id: store
+        property QtObject ctx: shortcuts
         property int revision: 0
         property var playerPresets: []
         property string selectedPlayerPreset
@@ -43,6 +45,13 @@ TestCase {
         store.selectedPlayerPreset = ""; store.pendingPlayerPreset = false
         store.errorMessage = ""; store.lastAction = ""; store.failSave = false; store.revision++
         wait(10)
+    }
+    function test_presetPopupKeepsKeysAwayFromPlayback() {
+        mouseClick(item("playerPresetSelector"));tryCompare(item("playerPresetMenu"),"opened",true)
+        verify(!shortcuts.useGlobalShortcuts)
+        keyClick(Qt.Key_Home);keyClick(Qt.Key_Return);tryCompare(item("playerPresetNameDialog"),"opened",true)
+        verify(!shortcuts.useGlobalShortcuts)
+        item("playerPresetNameDialog").close();tryVerify(() => shortcuts.useGlobalShortcuts)
     }
     function test_selectionUsesSavedNamesAndKeyboard() {
         compare(selector.selectedName, "Default Preset")

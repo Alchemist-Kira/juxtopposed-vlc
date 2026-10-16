@@ -16,9 +16,17 @@ QtObject {
     readonly property color selected: lightTheme ? "#b8b8b8" : "#333333"
     readonly property color accent: accentColor
     readonly property color menuAccent: accentColor.toString() === "#d37918" ? "#ab6314" : Qt.darker(accentColor, 1.23)
-    readonly property color progress: lightTheme ? "#d8ba9a" : "#371f06"
+    // Keep the original orange palette; other accents use the Figma fill opacity.
+    readonly property bool originalAccent: accentColor.toString() === "#d37918"
+    readonly property real accentFillOpacity: lightTheme ? 0.35 : accentColor.toString() === "#185dd3" ? 0.30 : 0.24
+    readonly property color progress: originalAccent ? lightTheme ? "#d8ba9a" : "#371f06" : tintAccent(field, accentFillOpacity)
+    readonly property color subtitleCue: lightTheme ? "#a3a3a3" : "#202020"
+    readonly property color subtitleCueProgress: originalAccent ? lightTheme ? "#a27b53" : "#4e3823" : tintAccent(subtitleCue, accentFillOpacity)
     readonly property color danger: "#d33718"
     readonly property color dangerBackground: lightTheme ? "#f8e2d9" : "#1a1111"
 
     function dp(value: real): real { return value * scaleFactor }
+    function tintAccent(background: color, opacity: real): color {
+        return Qt.tint(background, Qt.rgba(accentColor.r, accentColor.g, accentColor.b, opacity))
+    }
 }

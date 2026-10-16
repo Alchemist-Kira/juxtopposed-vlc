@@ -134,11 +134,11 @@ T.Slider {
                 required property var modelData
                 x: modelData.start; width: modelData.stop - modelData.start
                 height: cueTrack.height; radius: root.theme.dp(2)
-                color: root.lightTheme ? "#a3a3a3" : "#202020"
+                color: root.theme.subtitleCue
                 Rectangle {
                     width: Math.max(0, Math.min(parent.width, root.visualPosition * cueTrack.width - parent.x))
                     height: parent.height; radius: parent.radius
-                    color: root.lightTheme ? "#a27b53" : "#4e3823"
+                    color: root.theme.subtitleCueProgress
                 }
             }
         }

@@ -1003,6 +1003,45 @@ void MediaLib::requestMediaState(const QUrl& url, MediaStateAction action, bool 
         }, "redesign-media-state");
 }
 
+void MediaLib::addLibraryFiles(const QList<QUrl>& urls, QJSValue callback)
+{
+    if (!callback.isCallable() || urls.isEmpty()) return;
+    runOnMLThread<QVariantMap>(this,
+        [urls](vlc_medialibrary_t* ml, QVariantMap& result) {
+            result = {{"success", false}, {"folders", QStringList{}}, {"error", QString()}};
+            QList<QUrl> folders;
+            QSet<QString> seen;
+            // Validate the entire selection before scheduling discovery. Files
+            // stay in place; the library watches their source locations.
+            for (const auto& url : urls) {
+                QFile file(url.toLocalFile());
+                const QFileInfo info(file);
+                if (!url.isLocalFile() || !info.isFile() || !file.open(QIODevice::ReadOnly)) {
+                    result["error"] = qtr("VLC cannot read this file: %1").arg(url.toDisplayString()); return;
+                }
+                const auto folder = QUrl::fromLocalFile(info.absolutePath());
+                auto key = folder.toString(QUrl::FullyEncoded);
+#ifdef Q_OS_WIN
+                key = key.toCaseFolded();
+#endif
+                if (!seen.contains(key)) { seen.insert(key); folders.append(folder); }
+            }
+            QStringList completed;
+            for (const auto& folder : folders) {
+                const auto uri = folder.toEncoded();
+                if (vlc_ml_add_folder(ml, uri.constData()) != VLC_SUCCESS) {
+                    result["folders"] = completed;
+                    result["error"] = qtr("VLC could not add this folder: %1").arg(folder.toDisplayString(QUrl::PreferLocalFile)); return;
+                }
+                completed.append(folder.toString(QUrl::FullyEncoded));
+            }
+            result["success"] = true; result["folders"] = completed;
+        },
+        [this, callback](quint64, const QVariantMap& result) mutable {
+            if (auto engine = qjsEngine(this)) callback.call({engine->toScriptValue(result)});
+        }, "redesign-library-import");
+}
+
 void MediaLib::mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback)
 {
     if (!callback.isCallable()) // invalid argument

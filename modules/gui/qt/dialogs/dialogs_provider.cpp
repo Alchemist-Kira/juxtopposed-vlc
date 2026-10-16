@@ -837,10 +837,17 @@ QStringList DialogsProvider::mediaNameFilters(bool audio) const
                   : QStringLiteral(EXTENSIONS_VIDEO)).split(QLatin1Char(';'));
 }
 
-QUrl DialogsProvider::selectLibraryFolder()
+QUrl DialogsProvider::selectLibraryFolder(const QUrl& initial)
 {
+    const QPointer<MainCtx> context = p_intf->p_mi;
+    if (!context) return {};
+    const bool shortcuts = context->getUseGlobalShortcuts();
+    context->setUseGlobalShortcuts(false);
+    const auto restoreShortcuts = qScopeGuard([context, shortcuts] {
+        if (context) context->setUseGlobalShortcuts(shortcuts);
+    });
     const QUrl folder = QFileDialog::getExistingDirectoryUrl(nullptr,
-        qtr("Add folder to media library"), p_intf->p_mi->getDialogFilePath(),
+        qtr("Add folder to media library"), initial.isEmpty() ? context->getDialogFilePath() : initial,
         QFileDialog::ShowDirsOnly, {QStringLiteral("file")});
     if (!folder.isEmpty())
         p_intf->p_mi->setDialogFilePath(folder);
@@ -850,6 +857,11 @@ QUrl DialogsProvider::selectLibraryFolder()
 QStringList DialogsProvider::selectPlaylistFiles()
 {
     return showSimpleOpen(qtr("Select files for playlist"));
+}
+
+QStringList DialogsProvider::selectLibraryFiles(const QUrl& initial)
+{
+    return showSimpleOpen(qtr("Add files to media library"), EXT_FILTER_MEDIA, initial);
 }
 
 QUrl DialogsProvider::selectPlaylistCover()

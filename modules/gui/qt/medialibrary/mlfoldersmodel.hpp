@@ -50,6 +50,7 @@ public:
         DisplayUrl,
         MRL
     };
+    Q_ENUM(Roles)
 
     enum Operation
     {
@@ -58,6 +59,7 @@ public:
         Ban,
         Unban
     };
+    Q_ENUM(Operation)
 
     MLFoldersBaseModel( QObject *parent = nullptr );
     virtual ~MLFoldersBaseModel() = default;

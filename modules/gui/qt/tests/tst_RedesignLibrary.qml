@@ -51,6 +51,8 @@ TestCase {
     SignalSpy { id: homeQueueSpy; target: library; signalName: "homeEnqueueRequested" }
     SignalSpy { id: sectionSpy; target: library; signalName: "homeSectionRequested" }
     SignalSpy { id: addSpy; target: library; signalName: "addRequested" }
+    SignalSpy { id: filesSpy; target: library; signalName: "filesRequested" }
+    SignalSpy { id: folderSpy; target: library; signalName: "folderRequested" }
     SignalSpy { id: playlistSpy; target: library; signalName: "newPlaylistRequested" }
     SignalSpy { id: settingsSpy; target: library; signalName: "preferencesRequested" }
     SignalSpy { id: activateSpy; target: library; signalName: "activated" }
@@ -101,7 +103,7 @@ TestCase {
         library.sortState.saved = ({})
         library.sortFields = ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
         library.canGoBack = false
-        addSpy.clear(); playlistSpy.clear(); settingsSpy.clear()
+        addSpy.clear(); filesSpy.clear(); folderSpy.clear(); playlistSpy.clear(); settingsSpy.clear()
         activateSpy.clear(); categorySpy.clear()
         wait(20)
     }
@@ -286,7 +288,7 @@ TestCase {
         compare(folderPath.parentFolder("file:///"), "file:///")
     }
     function test_currentLocationCanBePinnedFromMoreMenu() {
-        library.locationPinTarget = {kind: "folder", key: "shows", name: "Shows"}
+        library.locationPinTarget = {kind: "playlist", key: "shows", name: "Shows"}
         const button = findChild(library, "libraryMoreButton")
         mouseClick(button)
         const menu = findChild(library, "libraryMoreMenu")
@@ -311,6 +313,29 @@ TestCase {
             compare(itemActionSpy.signalArguments[itemActionSpy.count-1][0].key,"file:///Movies%20%26%20Shows")
             compare(itemActionSpy.signalArguments[itemActionSpy.count-1][1],action)
         }
+    }
+    function test_folderMenuMatchesTheReferenceAndSeparatesImports() {
+        library.locationPinTarget={kind:"folder",key:"file:///Movies",name:"Movies"}
+        const button=findChild(library,"libraryMoreButton"),menu=findChild(library,"libraryMoreMenu")
+        mouseClick(button);tryCompare(menu,"opened",true)
+        compare(menu.count,6);compare(menu.width,265)
+        compare(menu.entries.map(entry => entry.action).join(","),"add-files,add-folder,subtitle-tracks,audio-tracks,resync,folder-info")
+        const fileEntry=findChild(menu,"libraryAction_add-files");verify(waitForRendering(fileEntry))
+        mouseClick(fileEntry);compare(filesSpy.count,1);compare(folderSpy.count,0);compare(addSpy.count,0)
+        mouseClick(button);tryCompare(menu,"opened",true)
+        const folderEntry=findChild(menu,"libraryAction_add-folder");verify(waitForRendering(folderEntry))
+        mouseClick(folderEntry);compare(folderSpy.count,1);compare(filesSpy.count,1)
+        compare(itemActionSpy.count,0)
+    }
+    function test_emptyLibraryOffersBothImports() {
+        const button=findChild(library,"libraryMoreButton"),menu=findChild(library,"libraryMoreMenu")
+        for(const category of [1,2]) {
+            library.category=category
+            mouseClick(button);tryCompare(menu,"opened",true)
+            compare(menu.entries.slice(0,2).map(entry => entry.action).join(","),"add-files,add-folder")
+            const entry=findChild(menu,"libraryAction_add-files");verify(waitForRendering(entry));mouseClick(entry)
+        }
+        compare(filesSpy.count,2);compare(folderSpy.count,0)
     }
     function test_sortMenuRestrictsChoicesToFolderData() {
         library.sortFields = ["title", "insertion", "uri"]

@@ -202,6 +202,35 @@ private slots:
         QCOMPARE(requests.size(),2);
     }
 
+    void testLibraryFileImportKeepsFilesAndDeduplicatesSourceFolders()
+    {
+        QTemporaryDir directory;
+        QVERIFY(QDir(directory.path()).mkdir("other"));
+        const auto a=directory.filePath("one & accents.mp4"),b=directory.filePath("two.mkv"),c=directory.filePath("other/three.wav");
+        for (const auto& path : {a,b,c}) { QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));QCOMPARE(file.write("original"),qint64(8)); }
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(),QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(),engine.rootContext());engine.newQObject(m_medialib.get());
+        QList<QByteArray> requests;int failAt=-1;
+        m_env->mediaControl=[&](int query,va_list args) {
+            if(query!=VLC_ML_ADD_FOLDER) return VLC_EGENERIC;
+            requests.append(va_arg(args,const char*));return requests.size()==failAt ? VLC_EGENERIC : VLC_SUCCESS;
+        };
+        auto request=[&](const QList<QUrl>& urls) {
+            engine.globalObject().setProperty("answer",QJSValue(QJSValue::NullValue));
+            m_medialib->addLibraryFiles(urls,engine.evaluate("(function(value){answer=value;})"));
+            if(!QTest::qWaitFor([&]{return !engine.globalObject().property("answer").isNull();}))qFatal("Library import callback did not finish");
+            return engine.globalObject().property("answer");
+        };
+        const QList<QUrl> files{QUrl::fromLocalFile(a),QUrl::fromLocalFile(b),QUrl::fromLocalFile(a),QUrl::fromLocalFile(c)};
+        auto result=request(files);QVERIFY(result.property("success").toBool());
+        QCOMPARE(requests,(QList<QByteArray>{QUrl::fromLocalFile(directory.path()).toEncoded(),QUrl::fromLocalFile(directory.filePath("other")).toEncoded()}));
+        requests.clear();QVERIFY(!request({files[0],QUrl("https://example.test/video.mp4")}).property("success").toBool());QVERIFY(requests.empty());
+        QVERIFY(!request({files[0],QUrl::fromLocalFile(directory.filePath("missing.mp4"))}).property("success").toBool());QVERIFY(requests.empty());
+        failAt=2;result=request(files);QVERIFY(!result.property("success").toBool());QCOMPARE(result.property("folders").property("length").toInt(),1);
+        for(const auto& path:{a,b,c}) { QFile file(path);QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),QByteArray("original")); }
+    }
+
     void testPlaylistFavoriteAndState()
     {
         vlc_ml_event_t event{};

@@ -56,6 +56,8 @@ Item {
     signal activated(int index)
     signal enqueueRequested(int index)
     signal addRequested()
+    signal filesRequested()
+    signal folderRequested()
     signal fullLibraryRequested()
     signal backRequested()
     signal forwardRequested()
@@ -141,23 +143,29 @@ Item {
         id: moreMenu
         objectName: "libraryMoreMenu"
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-        entries: [
-            { action: "add", label: root.addLabel, icon: "add", enabled: !root.playlistOpen || !root.playlistBusy },
-            { action: "settings", label: qsTr("Library settings"), icon: "settings" }
-        ].concat(root.playlistOpen ? [{action: "edit-playlist", label: root.playlistEditing ? qsTr("Done") : qsTr("Edit playlist"), icon: root.playlistEditing ? "check" : "drag", enabled: !root.playlistBusy}] : [])
+        entries: root.locationPinTarget && root.locationPinTarget.kind === "folder" ? [
+            {action: "add-files", label: qsTr("Add File"), icon: "add"},
+            {action: "add-folder", label: qsTr("Add Folder"), icon: "new-folder-two-tone", accent: true},
+            {action: "subtitle-tracks", label: qsTr("Edit Subtitle Tracks"), icon: "subtitles-two-tone", accent: true},
+            {action: "audio-tracks", label: qsTr("Edit Audio Tracks"), icon: "audio-two-tone", accent: true},
+            {action: "resync", label: qsTr("Resync"), icon: "refresh-two-tone", accent: true},
+            {action: "folder-info", label: qsTr("Info"), icon: "info-two-tone", accent: true}
+        ] : ([1,2].includes(root.category) && !root.playlistOpen ? [
+            {action: "add-files", label: qsTr("Add File"), icon: "add"},
+            {action: "add-folder", label: qsTr("Add Folder"), icon: "new-folder-two-tone", accent: true}
+        ] : [{action: "add", label: root.addLabel, icon: "add", enabled: !root.playlistOpen || !root.playlistBusy}])
+            .concat([{action: "settings", label: qsTr("Library settings"), icon: "settings"}])
+            .concat(root.playlistOpen ? [{action: "edit-playlist", label: root.playlistEditing ? qsTr("Done") : qsTr("Edit playlist"), icon: root.playlistEditing ? "check" : "drag", enabled: !root.playlistBusy}] : [])
             .concat(root.playlistOpen && root.locationPinTarget ? [
                 {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true},
                 {action: "properties", label: qsTr("Properties & Metadata"), icon: "info-two-tone", accent: true}] : [])
-            .concat(root.locationPinTarget && root.locationPinTarget.kind === "folder" ? [
-                {action: "subtitle-tracks", label: qsTr("Edit Subtitle Tracks"), icon: "subtitles", accent: true},
-                {action: "audio-tracks", label: qsTr("Edit Audio Tracks"), icon: "audio", accent: true},
-                {action: "resync", label: qsTr("Resync"), icon: "refresh-two-tone", accent: true},
-                {action: "folder-info", label: qsTr("Info"), icon: "info-two-tone", accent: true}] : [])
             .concat(root.locationPinTarget ? [{action: "pin", label: root.locationPinned ? qsTr("Remove from sidebar") : qsTr("Add to sidebar"), icon: root.locationPinned ? "favorite-active" : "favorite", accent: true}] : [])
             .concat(root.expanded ? [{action: "compact", label: qsTr("Open compact library"), icon: "sidebar"}] : [])
         onActionRequested: action => {
             moreMenu.close()
             if (action === "add") root.addMedia()
+            else if (action === "add-files") root.filesRequested()
+            else if (action === "add-folder") root.folderRequested()
             else if (action === "edit-playlist") root.playlistEditRequested()
             else if (action === "pin") root.pinLocationRequested()
             else if (["add-playlist", "properties", "resync", "folder-info", "subtitle-tracks", "audio-tracks"].includes(action)) root.itemActionRequested(root.locationPinTarget, action)

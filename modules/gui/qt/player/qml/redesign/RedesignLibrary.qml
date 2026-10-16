@@ -362,6 +362,21 @@ RedesignLibraryView {
         else if (category === 3) DialogsProvider.openNetDialog()
         else { const folder = DialogsProvider.selectLibraryFolder(); if (folder.toString().length > 0) libraryFolders.add(folder) }
     }
+    onFilesRequested: {
+        const files = currentFolder ? DialogsProvider.selectLibraryFiles(Qt.resolvedUrl(currentFolder)) : DialogsProvider.selectLibraryFiles()
+        if (!files.length) return
+        const selectedCategory = category
+        MediaLib.addLibraryFiles(files, result => {
+            if (result.folders.length) openFolder(result.folders[0], selectedCategory)
+            if (!result.success) DialogsProvider.messageDialog(result.error, qsTr("VLC Media Player"))
+        })
+    }
+    onFolderRequested: {
+        const folder = currentFolder ? DialogsProvider.selectLibraryFolder(Qt.resolvedUrl(currentFolder)) : DialogsProvider.selectLibraryFolder()
+        if (!folder.toString().length) return
+        libraryFolders.add(folder)
+        openFolder(folder, category)
+    }
     onPreferencesRequested: DialogsProvider.prefsPageDialog("library")
     onNewPlaylistRequested: createPlaylist.begin()
 
@@ -523,7 +538,14 @@ RedesignLibraryView {
     MLUrlModel { id: streams; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLFolderModel { id: libraryFolders; ctx: MainCtx }
     ListModel { id: folderEntries }
-    Connections { target: libraryFolders; function onModelReset() { root.refreshFolders() } }
+    Connections {
+        target: libraryFolders
+        function onModelReset() { root.refreshFolders() }
+        function onOperationFailed(operation, url) {
+            if (operation === MLFolderModel.Add)
+                DialogsProvider.messageDialog(qsTr("VLC could not add this folder: %1").arg(url.toString()), qsTr("VLC Media Player"))
+        }
+    }
     RedesignPlaylistDialog {
         id: createPlaylist
         parent: C.Overlay.overlay

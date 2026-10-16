@@ -15,7 +15,7 @@ vlc_modules += {
 goom2_dep = dependency('libgoom2', required: get_option('goom2'))
 vlc_modules += {
     'name' : 'goom',
-    'sources' : files('goom.c'),
+    'sources' : files('goom.c', 'size.h'),
     'dependencies' : [goom2_dep, m_lib],
     'plugin_dir' : 'visualization',
     'enabled' : goom2_dep.found(),
@@ -50,6 +50,7 @@ vlc_modules += {
     'name' : 'visual',
     'sources' : files(
         'visual/visual.c', 'visual/visual.h',
+        'size.h',
         'visual/fft.c', 'visual/fft.h',
         'visual/window.c', 'visual/window.h',
         'visual/effects.c', 'visual/window_presets.h'),

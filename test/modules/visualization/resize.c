@@ -113,6 +113,8 @@ static void resize(libvlc_int_t *root, int64_t width, int64_t height,
     fprintf(stderr, "request canvas %" PRId64 "x%" PRId64 "\n", width, height);
     assert(var_SetInteger(root, "effect-width", width) == VLC_SUCCESS);
     assert(var_SetInteger(root, "effect-height", height) == VLC_SUCCESS);
+    assert(var_SetInteger(root, "goom-width", width) == VLC_SUCCESS);
+    assert(var_SetInteger(root, "goom-height", height) == VLC_SUCCESS);
     wait_picture(expected_width, expected_height, previous);
     assert(atomic_load(&window_opens) == 1);
     assert(atomic_load(&window_closes) == 0);
@@ -120,6 +122,7 @@ static void resize(libvlc_int_t *root, int64_t width, int64_t height,
 
 static void test_resize(const char *effect)
 {
+    const bool goom = !strcmp(effect, "goom");
     atomic_store(&picture_size, 0);
     atomic_store(&picture_count, 0);
     atomic_store(&window_opens, 0);
@@ -130,7 +133,7 @@ static void test_resize(const char *effect)
     const char *args[] = {
         "--ignore-config", "--no-plugins-cache", "--no-media-library", "--no-auto-preparse",
         "--no-spu", "--no-osd", "--aout=dummy", "--clock-master=monotonic",
-        "--audio-visual=visual", "--vout=resize-test,none",
+        goom ? "--audio-visual=goom" : "--audio-visual=visual", "--vout=resize-test,none",
     };
     libvlc_instance_t *instance = libvlc_new(ARRAY_SIZE(args), args);
     assert(instance);
@@ -143,6 +146,13 @@ static void test_resize(const char *effect)
     var_SetInteger(root, "effect-width", 800);
     var_SetInteger(root, "effect-height", 500);
     var_SetString(root, "effect-list", effect);
+    var_Create(root, "goom-width", VLC_VAR_INTEGER);
+    var_Create(root, "goom-height", VLC_VAR_INTEGER);
+    var_SetInteger(root, "goom-width", 800);
+    var_SetInteger(root, "goom-height", 500);
+    var_Create(root, "visualization-size", VLC_VAR_INTEGER);
+    var_Create(root, "visualization-window-size", VLC_VAR_INTEGER);
+    var_SetInteger(root, "visualization-size", -1);
 
     vlc_player_t *player = vlc_player_New(VLC_OBJECT(root), VLC_PLAYER_LOCK_NORMAL);
     assert(player);
@@ -158,13 +168,14 @@ static void test_resize(const char *effect)
 
     resize(root, 1920, 480, 1920, 480);
     resize(root, 975, 549, 974, 548);
-    resize(root, 200, 100, 532, 400);
-    resize(root, -1, -1, 532, 400);
+    resize(root, 200, 100, goom ? 200 : 532, goom ? 100 : 400);
+    resize(root, -1, -1, goom ? 64 : 532, goom ? 64 : 400);
     resize(root, 1280, 720, 1280, 720);
     resize(root, 800, 500, 800, 500);
 
     unsigned previous = atomic_load(&picture_count);
     var_SetInteger(root, "effect-width", INT64_C(4294967297));
+    var_SetInteger(root, "goom-width", INT64_C(4294967297));
     wait_picture(800, 500, previous + 2);
     assert(atomic_load(&window_opens) == 1);
 
@@ -172,6 +183,8 @@ static void test_resize(const char *effect)
     previous = atomic_load(&picture_count);
     var_SetInteger(root, "effect-width", 1200);
     var_SetInteger(root, "effect-height", 600);
+    var_SetInteger(root, "goom-width", 1200);
+    var_SetInteger(root, "goom-height", 600);
     const vlc_tick_t deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(5);
     while (atomic_load(&failed_formats) == 0)
     {
@@ -181,6 +194,27 @@ static void test_resize(const char *effect)
     wait_picture(800, 500, previous);
     atomic_store(&fail_format, false);
     resize(root, 960, 540, 960, 540);
+
+    const unsigned widths[] = {800, 1280, 1920};
+    const unsigned heights[] = {500, 720, 1080};
+    for (unsigned i = 0; i < ARRAY_SIZE(widths); ++i)
+    {
+        previous = atomic_load(&picture_count);
+        var_SetInteger(root, "visualization-size", i + 1);
+        wait_picture(widths[i], heights[i], previous);
+    }
+    previous = atomic_load(&picture_count);
+    var_SetInteger(root, "visualization-window-size", size_key(1901, 791));
+    var_SetInteger(root, "visualization-size", 0);
+    wait_picture(1900, 790, previous);
+    previous = atomic_load(&picture_count);
+    var_SetInteger(root, "visualization-window-size", size_key(1040, 620));
+    wait_picture(1040, 620, previous);
+    previous = atomic_load(&picture_count);
+    var_SetInteger(root, "visualization-size", -1);
+    wait_picture(960, 540, previous);
+    assert(var_GetInteger(root, "effect-width") == 960);
+    assert(var_GetInteger(root, "goom-width") == 960);
 
     vlc_player_Lock(player);
     assert(vlc_player_GetState(player) == VLC_PLAYER_STATE_PLAYING);
@@ -208,13 +242,17 @@ int main(void)
 {
     vlc_timer_t timer;
     assert(vlc_timer_create(&timer, Timeout, NULL) == 0);
-    vlc_timer_schedule(timer, false, VLC_TICK_FROM_SEC(25), 0);
+    vlc_timer_schedule(timer, false, VLC_TICK_FROM_SEC(45), 0);
     const char *effects[] = { "scope", "spectrum", "spectrometer", "vuMeter", "dummy" };
     for (size_t i = 0; i < ARRAY_SIZE(effects); ++i)
     {
         test_resize(effects[i]);
         fprintf(stderr, "%s: live resize and recovery passed\n", effects[i]);
     }
+#ifdef VISUAL_RESIZE_TEST_GOOM
+    test_resize("goom");
+    fprintf(stderr, "goom: live resize and recovery passed\n");
+#endif
     vlc_timer_destroy(timer);
     return 0;
 }

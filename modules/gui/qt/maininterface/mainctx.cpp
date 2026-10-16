@@ -73,6 +73,7 @@
 #include <QScreen>
 
 #include <QOperatingSystemVersion>
+#include <climits>
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
 #include <QStyleHints>
@@ -427,6 +428,12 @@ QVariantMap MainCtx::redesignPlayerPreferences() const
 
 void MainCtx::loadPrefs(const bool callSignals)
 {
+    auto *instance = vlc_object_instance(p_intf);
+    const auto visualizationSize = callSignals ? config_GetInt("visualization-size")
+        : var_InheritInteger(p_intf, "visualization-size");
+    if (var_Type(instance, "visualization-size") == 0)
+        var_Create(instance, "visualization-size", VLC_VAR_INTEGER);
+    var_SetInteger(instance, "visualization-size", visualizationSize);
     if (callSignals) emit redesignPlayerPreferencesChanged();
     char* accent = var_InheritString(p_intf, "qt-accent-color");
     QColor color = accent && strcmp(accent, "default") && strcmp(accent, "system") ? QColor(qfu(accent)) : QColor(QStringLiteral("#d37918"));
@@ -795,6 +802,11 @@ bool MainCtx::hasEmbededVideo() const
 void MainCtx::setVideoSurfaceProvider(VideoSurfaceProvider* videoSurfaceProvider)
 {
     disconnect(m_releaseVideoMouseConnection);
+    disconnect(m_visualizationSizeConnection);
+    auto *instance = vlc_object_instance(p_intf);
+    if (var_Type(instance, "visualization-window-size") == 0)
+        var_Create(instance, "visualization-window-size", VLC_VAR_INTEGER);
+    var_SetInteger(instance, "visualization-window-size", 0);
     if (m_videoSurfaceProvider)
         disconnect(m_videoSurfaceProvider, &VideoSurfaceProvider::hasVideoEmbedChanged, this, &MainCtx::hasEmbededVideoChanged);
     m_videoSurfaceProvider = videoSurfaceProvider;
@@ -805,6 +817,17 @@ void MainCtx::setVideoSurfaceProvider(VideoSurfaceProvider* videoSurfaceProvider
         connect(m_videoSurfaceProvider, &VideoSurfaceProvider::hasVideoEmbedChanged,
                 this, &MainCtx::hasEmbededVideoChanged,
                 Qt::QueuedConnection);
+        m_visualizationSizeConnection = connect(m_videoSurfaceProvider,
+            &VideoSurfaceProvider::surfacePropertiesChanged, this,
+            [instance](const std::optional<QSizeF>& size,
+                       const std::optional<QPointF>&,
+                       const std::optional<qreal>&) {
+                if (!size || !size->isValid() || size->isEmpty()) return;
+                const auto width = qBound(1, qRound(size->width()), INT_MAX);
+                const auto height = qBound(1, qRound(size->height()), INT_MAX);
+                var_SetInteger(instance, "visualization-window-size",
+                    (int64_t(width) << 32) | uint32_t(height));
+            }, Qt::QueuedConnection);
     }
     emit hasEmbededVideoChanged(m_videoSurfaceProvider && m_videoSurfaceProvider->hasVideoEmbed());
 }

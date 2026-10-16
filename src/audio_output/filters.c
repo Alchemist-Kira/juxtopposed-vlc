@@ -37,6 +37,7 @@
 #include <vlc_modules.h>
 #include <vlc_aout.h>
 #include <vlc_filter.h>
+#include <vlc_vout_display.h>
 #include "../libvlc.h"
 #include "aout_internal.h"
 #include "../video_output/vout_internal.h" /* for vout_Request */
@@ -72,6 +73,30 @@ filter_t *aout_filter_Create(vlc_object_t *obj, const filter_owner_t *restrict o
     filter->fmt_in.i_codec = infmt->i_format;
     filter->fmt_out.audio = *outfmt;
     filter->fmt_out.i_codec = outfmt->i_format;
+
+    if (strcmp(type, "visualization") == 0)
+    {
+        /* A visualization uses the available surface. Video framing preferences
+         * must not crop it, move it off-center, or resize the interface window. */
+        var_Create(filter, "video-is-visualization", VLC_VAR_BOOL);
+        var_SetBool(filter, "video-is-visualization", true);
+        const char *dimensions[] = { "width", "height", "align" };
+        for (size_t i = 0; i < ARRAY_SIZE(dimensions); ++i)
+        {
+            var_Create(filter, dimensions[i], VLC_VAR_INTEGER);
+            var_SetInteger(filter, dimensions[i], 0);
+        }
+        var_Create(filter, "autoscale", VLC_VAR_BOOL);
+        var_SetBool(filter, "autoscale", true);
+        var_Create(filter, "zoom", VLC_VAR_FLOAT);
+        var_SetFloat(filter, "zoom", 1.f);
+        var_Create(filter, "fit", VLC_VAR_INTEGER);
+        var_SetInteger(filter, "fit", VLC_VIDEO_FIT_SMALLER);
+        var_Create(filter, "crop", VLC_VAR_STRING);
+        var_SetString(filter, "crop", "");
+        var_Create(filter, "aspect-ratio", VLC_VAR_STRING);
+        var_SetString(filter, "aspect-ratio", "");
+    }
 
 #ifndef NDEBUG
     /* Assure that infmt/oufmt are well prepared and that channels

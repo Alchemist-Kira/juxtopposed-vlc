@@ -23,6 +23,7 @@
 static atomic_uint_fast64_t picture_size;
 static atomic_uint picture_count, window_opens, window_closes, failed_formats;
 static atomic_bool fail_format;
+static bool test_scope;
 static vlc_sem_t frame_event;
 
 static uint64_t size_key(unsigned width, unsigned height)
@@ -32,7 +33,8 @@ static uint64_t size_key(unsigned width, unsigned height)
 
 static int EnableWindow(vlc_window_t *wnd, const vlc_window_cfg_t *cfg)
 {
-    (void) wnd; (void) cfg;
+    assert(var_InheritBool(wnd, "video-is-visualization"));
+    assert(cfg->width == 800 && cfg->height == 500);
     return VLC_SUCCESS;
 }
 
@@ -60,6 +62,25 @@ static int OpenWindow(vlc_window_t *wnd)
 static void Display(vout_display_t *vd, picture_t *picture)
 {
     (void) vd;
+    if (test_scope)
+    {
+        const unsigned width = picture->format.i_visible_width;
+        const unsigned height = picture->format.i_visible_height;
+        /* Silent audio must make two centered traces across the whole canvas,
+         * including sizes whose allocated rows and strides contain padding. */
+        assert(picture->format.i_chroma == VLC_CODEC_I420);
+        for (unsigned channel = 0; channel < 2; ++channel)
+        {
+            const unsigned y = (channel * 2 + 1) * height / 4;
+            const plane_t *luma = &picture->p[0];
+            const plane_t *chroma = &picture->p[channel + 1];
+            const uint8_t value = channel == 0 ? 0xbf : 0x9f;
+            assert(luma->p_pixels[y * luma->i_pitch] == value);
+            assert(luma->p_pixels[y * luma->i_pitch + width - 1] == value);
+            assert(chroma->p_pixels[(y / 2) * chroma->i_pitch + (width - 1) / 2]
+                   == (channel == 0 ? 0xff : 0xdd));
+        }
+    }
     atomic_store(&picture_size, size_key(picture->format.i_visible_width,
                                        picture->format.i_visible_height));
     atomic_fetch_add(&picture_count, 1);
@@ -70,6 +91,14 @@ static int OpenDisplay(vout_display_t *vd, video_format_t *fmt,
                        vlc_video_context *vctx)
 {
     (void) vctx;
+    assert(vd->cfg->display.fitting == VLC_VIDEO_FIT_SMALLER);
+    assert(vd->cfg->display.align.horizontal == VLC_VIDEO_ALIGN_CENTER);
+    assert(vd->cfg->display.align.vertical == VLC_VIDEO_ALIGN_CENTER);
+    assert(vd->cfg->display.zoom.num == vd->cfg->display.zoom.den);
+    assert(fmt->i_sar_num == fmt->i_sar_den);
+    assert(fmt->i_x_offset == 0 && fmt->i_y_offset == 0);
+    assert(fmt->i_width == fmt->i_visible_width);
+    assert(fmt->i_height == fmt->i_visible_height);
     if (fmt->i_visible_width == 1200 && atomic_load(&fail_format))
     {
         atomic_fetch_add(&failed_formats, 1);
@@ -123,6 +152,7 @@ static void resize(libvlc_int_t *root, int64_t width, int64_t height,
 static void test_resize(const char *effect)
 {
     const bool goom = !strcmp(effect, "goom");
+    test_scope = !strcmp(effect, "scope");
     atomic_store(&picture_size, 0);
     atomic_store(&picture_count, 0);
     atomic_store(&window_opens, 0);
@@ -134,6 +164,9 @@ static void test_resize(const char *effect)
         "--ignore-config", "--no-plugins-cache", "--no-media-library", "--no-auto-preparse",
         "--no-spu", "--no-osd", "--aout=dummy", "--clock-master=monotonic",
         goom ? "--audio-visual=goom" : "--audio-visual=visual", "--vout=resize-test,none",
+        /* These preferences apply to video, but must not affect visualizers. */
+        "--no-autoscale", "--zoom=2", "--align=5", "--fit=2",
+        "--aspect-ratio=1:1", "--crop=4:3", "--width=100", "--height=100",
     };
     libvlc_instance_t *instance = libvlc_new(ARRAY_SIZE(args), args);
     assert(instance);
@@ -156,7 +189,7 @@ static void test_resize(const char *effect)
 
     vlc_player_t *player = vlc_player_New(VLC_OBJECT(root), VLC_PLAYER_LOCK_NORMAL);
     assert(player);
-    input_item_t *media = input_item_New("mock://length=20000000;audio_track_count=1", effect);
+    input_item_t *media = input_item_New("mock://length=20000000;audio_track_count=1;audio_sinewave=false", effect);
     assert(media);
     vlc_player_Lock(player);
     assert(vlc_player_SetCurrentMedia(player, media) == VLC_SUCCESS);

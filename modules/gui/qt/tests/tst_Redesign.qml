@@ -562,6 +562,24 @@ TestCase {
         compare(panel.height, 946)
         compare(videoBounds(), before)
     }
+    function test_trackButtonsStayClosedAfterSecondClick_data() {
+        return [
+            {tag: "subtitles-windowed", button: "subtitleButton", fullscreen: false},
+            {tag: "subtitles-fullscreen", button: "subtitleButton", fullscreen: true},
+            {tag: "audio-windowed", button: "audioButton", fullscreen: false},
+            {tag: "audio-fullscreen", button: "audioButton", fullscreen: true}
+        ]
+    }
+    function test_trackButtonsStayClosedAfterSecondClick(data) {
+        player.fullscreen = data.fullscreen; player.revealControls()
+        const button = findChild(player, data.button)
+        mouseClick(button); tryCompare(trackPicker, "opened", true)
+        mousePress(button); wait(50)
+        verify(trackPicker.visible)
+        mouseRelease(button); tryCompare(trackPicker, "visible", false)
+        wait(650); verify(!trackPicker.visible)
+        mouseClick(button); tryCompare(trackPicker, "opened", true)
+    }
     function test_subtitlePopupKeepsFullscreenToolbarAvailable() {
         player.fullscreen = true
         player.controlsHideTimeout = 30

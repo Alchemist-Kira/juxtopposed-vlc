@@ -137,14 +137,17 @@ bool TrackRuleStore::read(const std::string& folderMrl, int type, std::string& d
 {
     definition.clear(); const auto fileName = location(folderMrl, type);
     if (fileName.empty()) return false;
+    struct stat st;
+    if (vlc_stat(fileName.c_str(), &st) != 0) return errno == ENOENT;
+    if (!S_ISREG(st.st_mode)) return false;
     FILE* file = vlc_fopen(fileName.c_str(), "rb");
-    if (!file) return errno == ENOENT;
+    if (!file) return false;
     std::string bytes(trackrules::MaxBytes + 1, '\0');
     const size_t size = fread(bytes.data(), 1, bytes.size(), file);
     const bool failed = ferror(file); fclose(file);
     if (failed || size > trackrules::MaxBytes) return false;
     bytes.resize(size); const auto split = bytes.find('\n');
-    std::unique_ptr<char, decltype(&free)> uri(vlc_path2uri(scope(folderMrl).c_str(), nullptr), free);
+    std::unique_ptr<char, decltype(&free)> uri(vlc_path2uri(trackrules::nativePath(scope(folderMrl)).c_str(), nullptr), free);
     if (!uri || split == std::string::npos || bytes.substr(0, split) != uri.get()) return false;
     definition = bytes.substr(split + 1);
     std::vector<trackrules::Pair> pairs;
@@ -164,7 +167,7 @@ bool TrackRuleStore::write(const std::string& folderMrl, int type, const std::st
     std::replace(nativeDirectory.begin(), nativeDirectory.end(), '/', '\\');
 #endif
     if (vlc_mkdir_parent(nativeDirectory.c_str(), 0700) != 0) return false;
-    std::unique_ptr<char, decltype(&free)> uri(vlc_path2uri(scope(folderMrl).c_str(), nullptr), free);
+    std::unique_ptr<char, decltype(&free)> uri(vlc_path2uri(trackrules::nativePath(scope(folderMrl)).c_str(), nullptr), free);
     if (!uri) return false;
     const auto data = std::string(uri.get()) + '\n' + definition;
     if (data.size() > trackrules::MaxBytes) return false;

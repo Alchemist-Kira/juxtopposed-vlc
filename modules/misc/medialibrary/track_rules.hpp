@@ -11,6 +11,14 @@
 
 namespace vlc::medialibrary::trackrules {
 
+inline std::string nativePath(std::string value)
+{
+#ifdef _WIN32
+    std::replace(value.begin(), value.end(), '/', '\\');
+#endif
+    return value;
+}
+
 struct Pair {
     std::string media;
     std::string track;

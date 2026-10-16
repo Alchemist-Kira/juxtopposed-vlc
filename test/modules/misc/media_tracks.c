@@ -120,9 +120,17 @@ static void check_folder_rules(libvlc_instance_t *instance,
     const char *name = "show_s01e01.wav";
     assert(asprintf(&definition, "1|%zu:%s%zu:%s%zu:%s",
                     strlen(name), name, strlen(sample), sample, strlen(source), source) >= 0);
-    char *folder = vlc_path2uri(directory, NULL);
+    char *native_directory = strdup(directory);
+    assert(native_directory);
+#ifdef _WIN32
+    for (char *p = native_directory; *p; ++p) if (*p == '/') *p = '\\';
+    for (char *p = future; *p; ++p) if (*p == '/') *p = '\\';
+    for (char *p = caption; *p; ++p) if (*p == '/') *p = '\\';
+#endif
+    char *folder = vlc_path2uri(native_directory, NULL);
     char *uri = vlc_path2uri(future, NULL);
     char *caption_uri = vlc_path2uri(caption, NULL);
+    free(native_directory);
     assert(folder && uri && caption_uri);
     assert(vlc_ml_folder_set_track_rule(ml, folder, VLC_ML_FILE_TYPE_SUBTITLE, definition) == VLC_SUCCESS);
     char *saved = NULL;

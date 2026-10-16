@@ -548,7 +548,7 @@ int MediaLibrary::Control( int query, va_list args )
             auto path = vlc::wrap_cptr(vlc_uri2path(uri));
             if (!path) return VLC_SUCCESS;
             const std::string mediaPath = vlc::medialibrary::trackrules::path(path.get());
-            auto folder = vlc::wrap_cptr(vlc_path2uri(vlc::medialibrary::trackrules::parent(mediaPath).c_str(), nullptr));
+            auto folder = vlc::wrap_cptr(vlc_path2uri(vlc::medialibrary::trackrules::nativePath(vlc::medialibrary::trackrules::parent(mediaPath)).c_str(), nullptr));
             if (!folder) return VLC_EGENERIC;
             std::string definition;
             if (!m_trackRules.read(folder.get(), type, definition)) return VLC_EGENERIC;
@@ -575,7 +575,7 @@ int MediaLibrary::Control( int query, va_list args )
             files->i_nb_items = paths.size();
             for (size_t i = 0; i < paths.size(); ++i) {
                 auto& file = files->p_items[i];
-                file.psz_mrl = vlc_path2uri(paths[i].c_str(), nullptr);
+                file.psz_mrl = vlc_path2uri(vlc::medialibrary::trackrules::nativePath(paths[i]).c_str(), nullptr);
                 if (!file.psz_mrl) { vlc_ml_file_list_release(files); return VLC_ENOMEM; }
                 file.i_type = static_cast<vlc_ml_file_type_t>(type); file.b_external = file.b_present = true;
             }

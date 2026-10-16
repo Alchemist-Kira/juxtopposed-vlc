@@ -22,6 +22,7 @@ TestCase {
     SignalSpy { id: dropSpy; target: dialog; signalName: "droppedSourcesRequested" }
     SignalSpy { id: rowSpy; target: dialog; signalName: "rowsRequested" }
     SignalSpy { id: searchSpy; target: dialog; signalName: "searchRequested" }
+    SignalSpy { id: linkSpy; target: dialog; signalName: "linksRequested" }
     function rows() { return [{url:first,name:"Show_S01E01.mkv",baseline:[]},{url:second,name:"Show_S01E02.mkv",baseline:[]}] }
     function load(items) {
         dialog.loadRows(dialog.requestId,{success:true,rows:items})
@@ -31,7 +32,7 @@ TestCase {
         finishMatching=true
         width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
         dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
-        saveSpy.clear(); rowSpy.clear(); dropSpy.clear(); searchSpy.clear(); dialog.providerConfigured=false
+        saveSpy.clear(); rowSpy.clear(); dropSpy.clear(); searchSpy.clear(); linkSpy.clear(); dialog.providerConfigured=false
         verify(dialog.begin({scope:"file",url:first,urls:[first,second]},true))
         tryCompare(dialog,"opened",true); load([rows()[0]])
     }
@@ -231,6 +232,51 @@ TestCase {
         dialog.setTracks(first,["opensubtitles:/42/English.srt"]);dialog.submit();dialog.cancelableSave=true
         keyClick(Qt.Key_Escape);tryCompare(dialog,"visible",false);verify(!dialog.saving)
         dialog.finish(dialog.requestId,{success:true,saved:[]});compare(Object.keys(dialog.drafts).length,0)
+    }
+    function test_linkEntryAddsToDraftAndCancelDoesNotSave() {
+        dialog.selectSource(2);verify(dialog.linkMode);compare(searchSpy.count,0)
+        dialog.linkText="https://example.com/Show_S01E01.en.srt";dialog.addLink();compare(linkSpy.count,1)
+        const remote="subtitlelink:/hash/Show_S01E01.en.srt"
+        dialog.loadLinkedSources({success:true,sources:[{url:remote,name:"Show_S01E01.en.srt",kind:"link"}]})
+        compare(dialog.linkText,"");compare(dialog.tracks(first)[0],remote);compare(dialog.visibleSources[0].url,remote)
+        compare(saveSpy.count,0);dialog.reject();tryCompare(dialog,"visible",false)
+        compare(dialog.linkSources.length,0);compare(dialog.linkText,"");compare(saveSpy.count,0)
+    }
+    function test_linkErrorKeepsTextAndMixedSelectionsSurviveSourceChanges() {
+        dialog.toggle(first,english);dialog.selectSource(2);dialog.linkText="invalid"
+        dialog.loadLinkedSources({success:false,sources:[],error:"Use a direct subtitle file link."})
+        compare(dialog.linkText,"invalid");compare(dialog.tracks(first)[0],english);verify(dialog.errorMessage.length>0)
+        const remote="subtitlelink:/hash/Show_S01E01.en.srt",cached="file:///cache/Show_S01E01.en.srt"
+        dialog.loadLinkedSources({success:true,sources:[{url:remote,name:"English.srt",kind:"link"}]})
+        dialog.resolveSources({[remote]:cached});compare(dialog.tracks(first).length,2)
+        compare(dialog.visibleSources.length,1);compare(dialog.visibleSources[0].url,cached)
+        dialog.selectSource(0);load([rows()[0]])
+        verify(dialog.tracks(first).includes(cached));verify(!dialog.visibleSources.some(item=>item.url===cached))
+        dialog.selectSource(2);dialog.submit();compare(saveSpy.count,1)
+        verify(saveSpy.signalArguments[0][0][0].tracks.includes(cached))
+    }
+    function test_linkDropTargetsOnlyTheChosenBatchRow() {
+        dialog.selectScope(1);load(rows());dialog.setTracks(first,[english])
+        const remote="subtitlelink:/hash/Show_S01E02.es.srt"
+        verify(dialog.dropSources(["https://example.com/Show_S01E02.es.srt"],second));verify(dialog.linkMode)
+        dialog.loadDroppedSources(dialog.dropRequestId,{success:true,sources:[{url:remote,name:"Spanish.srt",kind:"link"}]},second)
+        compare(dialog.tracks(first)[0],english);compare(dialog.tracks(second)[0],remote);compare(saveSpy.count,0)
+    }
+    function test_plainTextLinkDropAndClosedResults() {
+        compare(dialog.dropUrls({hasUrls:false,hasText:true,text:"https://example.com/a.srt\n\nhttps://example.com/b.srt\r\n"}).length,2)
+        verify(dialog.dropSources(["https://example.com/a.srt"]));const request=dialog.dropRequestId
+        dialog.reject();dialog.loadDroppedSources(request,{success:true,sources:[{url:"subtitlelink:/hash/a.srt",kind:"link"}]})
+        compare(dialog.linkSources.length,0);compare(dialog.rows.length,0)
+    }
+    function test_linkLayout_data() {
+        return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]
+    }
+    function test_linkLayout(data) {
+        width=data.w;height=data.h;dialog.scaleFactor=data.scale;dialog.lightTheme=!!data.light;dialog.selectSource(2);wait(50)
+        for(const name of ["trackAssignmentLink","trackAssignmentAddLink","trackAssignmentSave"]) {
+            const item=findChild(dialog,name),point=item.mapToItem(testCase,0,0)
+            verify(point.x>=0 && point.y>=0,name);verify(point.x+item.width<=width && point.y+item.height<=height,name)
+        }
     }
     function test_onlineLayout_data() {
         return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]

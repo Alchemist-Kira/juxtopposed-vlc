@@ -348,19 +348,20 @@ QVariantMap SubtitleSourceService::addLinks(const QStringList& values)
         if (seen.contains(key)) continue;
         seen.insert(key);
         auto suffix = QFileInfo(url.fileName()).suffix().toLower();
-        if (!QStringList{"srt", "vtt", "ass", "ssa", "sub", "smi", "ttml", "usf"}.contains(suffix)) suffix = QStringLiteral("srt");
+        static const QRegularExpression extension(QStringLiteral("^[a-z0-9]{1,16}$"));
+        if (!extension.match(suffix).hasMatch()) suffix = QStringLiteral("srt");
         const auto name = safeName(url.fileName(), suffix);
         QUrl source; source.setScheme(QStringLiteral("subtitlelink")); source.setPath(QLatin1Char('/') + key + QLatin1Char('/') + name);
         const auto id = source.toString(QUrl::FullyEncoded);
         const Link link{url, name, key}; m_links.insert(id, link);
-        QString available = id;
+        QString available = id, availableName = name;
         for (const auto& format : {"srt", "vtt", "ass", "ssa", "sub", "smi", "ttml", "usf"}) {
             const QFileInfo cached(linkCachePath(link, QLatin1String(format)));
             if (!m_storageDirectory.isEmpty() && cached.isFile() && cached.size() > 0 && cached.size() <= m_options.maxFileBytes) {
-                available = QUrl::fromLocalFile(cached.absoluteFilePath()).toString(QUrl::FullyEncoded); break;
+                available = QUrl::fromLocalFile(cached.absoluteFilePath()).toString(QUrl::FullyEncoded); availableName = cached.fileName(); break;
             }
         }
-        sources.append(QVariantMap{{"url", available}, {"name", name}, {"kind", "link"}});
+        sources.append(QVariantMap{{"url", available}, {"name", availableName}, {"kind", "link"}});
     }
     return {{"success", !sources.isEmpty()}, {"sources", sources}, {"error", skipped || sources.isEmpty()
         ? tr("Use direct subtitle file links that start with http:// or https://.") : QString()}};

@@ -24,7 +24,8 @@ RedesignTrackAssignmentDialog {
             if (request !== root.pendingPreparation || !root.visible || root.pendingSaveRequest !== root.requestId) return
             root.cancelableSave = false
             root.resolveSources(result.resolved)
-            if (result.success) MediaLib.saveTrackAssignments(result.rows, root.subtitles, saved => root.finish(root.pendingSaveRequest, saved))
+            const saveRequest = root.pendingSaveRequest
+            if (result.success) MediaLib.saveTrackAssignments(result.rows, root.subtitles, saved => root.finish(saveRequest, saved))
             else root.finish(root.pendingSaveRequest, {success:false,error:result.error,saved:[]})
         }
     }
@@ -45,18 +46,31 @@ RedesignTrackAssignmentDialog {
     onLanguagesRequested: SubtitleSources.fetchLanguages()
     onSetupRequested: key => root.finishSetup(SubtitleSources.setApiKey(key))
     onApiKeyHelpRequested: Qt.openUrlExternally("https://www.opensubtitles.com/consumers")
+    onLinksRequested: urls => root.loadLinkedSources(SubtitleSources.addLinks(urls))
     onRowsRequested: (target, subtitles, request) => MediaLib.trackAssignmentRows(target, subtitles, result => root.loadRows(request, result))
     onSourcesRequested: (folder, subtitles, request) => MediaLib.trackAssignmentSources(folder, subtitles, result => root.loadSources(request, result))
     onMatchRequested: (media, tracks, includeSaved, request) => MediaLib.requestTrackMatches(media, tracks, matches => root.loadMatches(request, matches, includeSaved))
     onMatchingCanceled: MediaLib.cancelTrackMatching()
-    onDroppedSourcesRequested: (urls, subtitles, request, target) => MediaLib.prepareTrackDrop(urls, subtitles, result => root.loadDroppedSources(request, result, target))
+    onDroppedSourcesRequested: (urls, subtitles, request, target) => {
+        const remote = subtitles ? urls.filter(url => /^https?:/i.test(String(url))) : []
+        const local = urls.filter(url => !remote.includes(url))
+        const linked = remote.length ? SubtitleSources.addLinks(remote.map(String)) : {sources:[],error:""}
+        const finish = result => root.loadDroppedSources(request, {
+            success: result.success || linked.success,
+            sources: (result.sources || []).concat(linked.sources || []),
+            folder: result.folder || "",
+            error: [result.error, linked.error].filter(value => value).join("\n")
+        }, target)
+        if (local.length) MediaLib.prepareTrackDrop(local, subtitles, finish)
+        else finish({sources:[]})
+    }
     onFilesRequested: target => root.addFiles(DialogsProvider.selectTrackFiles(root.subtitles, root.sourceFolder), target)
     onFolderRequested: {
         const folder = DialogsProvider.selectTrackFolder(root.sourceFolder)
         if (folder.toString().length) { root.sourceFolder = String(folder); root.requestSources(true) }
     }
     onSaveRequested: (rows, subtitles, request) => {
-        if (rows.some(row => row.tracks.some(url => String(url).startsWith("opensubtitles:")))) {
+        if (rows.some(row => row.tracks.some(url => /^(?:opensubtitles|subtitlelink):/.test(String(url))))) {
             root.cancelableSave = true
             root.pendingSaveRequest = request
             root.pendingPreparation = SubtitleSources.prepareRows(rows)

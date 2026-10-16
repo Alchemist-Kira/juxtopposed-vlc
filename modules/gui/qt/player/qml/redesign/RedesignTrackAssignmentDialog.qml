@@ -25,11 +25,16 @@ C.Dialog {
     property string searchTitle: ""
     property string searchLanguage: "en"
     property var sourceMappings: ({})
+    property var sourceKinds: ({})
     property var onlineSources: []
+    property var linkSources: []
+    property string linkText: ""
     property var onlineLanguages: [{code:"en",text:qsTr("English")},{code:"es",text:qsTr("Spanish")},{code:"ja",text:qsTr("Japanese")},{code:"de",text:qsTr("German")},{code:"nl",text:qsTr("Dutch")},{code:"fr",text:qsTr("French")}]
     property bool cancelableSave: false
     readonly property bool onlineMode: subtitles && sourceIndex === 1
-    readonly property var sourceChoices: subtitles ? [qsTr("From Computer"),qsTr("From OpenSubtitles")] : [qsTr("From Computer")]
+    readonly property bool linkMode: subtitles && sourceIndex === 2
+    readonly property var activeSources: onlineMode ? onlineSources : linkMode ? linkSources : sources
+    readonly property var sourceChoices: subtitles ? [qsTr("From Computer"),qsTr("From OpenSubtitles"),qsTr("From Link")] : [qsTr("From Computer")]
     onSourceIndexChanged: Qt.callLater(() => sourceChoice.currentIndex = root.sourceIndex)
     property int scopeIndex: 0
     onScopeIndexChanged: Qt.callLater(() => scopeChoice.currentIndex = root.scopeIndex)
@@ -52,10 +57,10 @@ C.Dialog {
     ]
     readonly property var changedRows: Object.keys(drafts).map(url => drafts[url]).filter(row => !same(row.initialTracks, row.tracks))
     readonly property var visibleSources: {
-        const result = (onlineMode ? onlineSources : sources).slice()
+        const result = activeSources.slice()
         const seen = result.map(item => item.url)
         for (const row of rows) for (const url of tracks(row.url))
-            if (isOnlineSource(url) === onlineMode && !seen.includes(url)) { seen.push(url); result.push({url: url, name: fileName(url)}) }
+            if (sourceKind(url) === sourceIndex && !seen.includes(url)) { seen.push(url); result.push({url: url, name: fileName(url)}) }
         return result
     }
     signal searchRequested(string query, string language, int request)
@@ -63,6 +68,7 @@ C.Dialog {
     signal languagesRequested()
     signal setupRequested(string key)
     signal apiKeyHelpRequested()
+    signal linksRequested(var urls)
     signal rowsRequested(var target, bool subtitles, int request)
     signal sourcesRequested(url folder, bool subtitles, int request)
     signal matchRequested(var media, var tracks, bool includeSaved, int request)
@@ -85,9 +91,10 @@ C.Dialog {
         const name = String(url).split("/").pop()
         try { return decodeURIComponent(name) } catch (error) { return name }
     }
-    function isOnlineSource(url) {
-        return String(url).startsWith("opensubtitles:") || Object.values(sourceMappings).includes(url)
-            || onlineSources.some(item => item.url === url)
+    function sourceKind(url) {
+        if (String(url).startsWith("subtitlelink:") || linkSources.some(item => item.url === url)) return 2
+        if (String(url).startsWith("opensubtitles:") || onlineSources.some(item => item.url === url)) return 1
+        return sourceKinds[url] || 0
     }
     function parentFolder(url) { return String(url).startsWith("file:") ? String(url).substring(0, String(url).lastIndexOf("/") + 1) : "" }
     function same(a, b) { return [...new Set(a || [])].sort().join("\n") === [...new Set(b || [])].sort().join("\n") }
@@ -95,7 +102,7 @@ C.Dialog {
     function begin(target, subtitleMode) {
         if (visible || saving) return false
         context = target; subtitles = subtitleMode
-        sourceIndex = 0; onlineSources = []; sourceMappings = ({}); searchTitle = ""; searchLanguage = "en"; searching = false; cancelableSave = false
+        sourceIndex = 0; onlineSources = []; linkSources = []; linkText = ""; sourceMappings = ({}); sourceKinds = ({}); searchTitle = ""; searchLanguage = "en"; searching = false; cancelableSave = false
         rows = []; sources = []; drafts = ({}); selectedRows = ({}); errorMessage = ""
         anchorFile = target.scope === "folder" || target.scope === "playlist" ? "" : String(target.url || "")
         targetFolder = target.scope === "folder" ? String(target.folder || target.url || "") : parentFolder(anchorFile)
@@ -134,6 +141,7 @@ C.Dialog {
         if (!sourceFolder && targetFolder) sourceFolder = targetFolder
         if (!searchTitle && anchorFile) searchTitle = fileName(anchorFile).replace(/\.[^.]+$/, "").replace(/[._]/g, " ")
         if (onlineMode) requestSearch()
+        else if (linkMode) performMatching()
         else if (sourceFolder) requestSources()
         else performMatching()
     }
@@ -154,7 +162,7 @@ C.Dialog {
         cancelMatching()
         if (!fileMode && !loading && !loadingSources) {
             matching = true
-            matchRequested(rows.map(row => row.url), (onlineMode ? onlineSources : sources).map(source => source.url), includeSaved, matchRequestId)
+            matchRequested(rows.map(row => row.url), activeSources.map(source => source.url), includeSaved, matchRequestId)
         }
     }
     function loadMatches(request, matches, includeSaved = false) {
@@ -176,6 +184,7 @@ C.Dialog {
         searchDebounce.stop(); ++searchRequestId; searching = false; searchCanceled(); cancelMatching()
         ++sourceRequestId; loadingSources = false; errorMessage = ""; sourceIndex = index
         if (onlineMode) { languagesRequested(); requestSearch() }
+        else if (linkMode) performMatching()
         else if (sourceFolder) requestSources()
     }
     function requestSearch() {
@@ -191,8 +200,13 @@ C.Dialog {
         onlineSources = (result.sources || []).map(item => Object.assign({}, item, {url: sourceMappings[item.url] || item.url})); performMatching(true)
     }
     function resolveSources(mapping) {
+        const kinds = Object.assign({}, sourceKinds)
+        for (const url of Object.keys(mapping || {})) kinds[mapping[url]] = sourceKind(url)
+        sourceKinds = kinds
         sourceMappings = Object.assign({}, sourceMappings, mapping || {})
         onlineSources = onlineSources.map(item => Object.assign({}, item, {url: sourceMappings[item.url] || item.url}))
+        linkSources = linkSources.map(item => sourceMappings[item.url]
+            ? Object.assign({}, item, {url: sourceMappings[item.url], name: fileName(sourceMappings[item.url])}) : item)
         const next = Object.assign({}, drafts)
         for (const url of Object.keys(next)) next[url] = Object.assign({}, next[url], {
             tracks: [...new Set(next[url].tracks.map(track => sourceMappings[track] || track))]
@@ -218,21 +232,38 @@ C.Dialog {
     }
     function addSources(items, target) {
         if (!items.length) return
-        const next = sources.slice()
-        for (const item of items) if (!next.some(source => source.url === item.url)) next.push(item)
-        sources = next
+        const local = sources.slice(), linked = linkSources.slice()
+        for (const item of items) {
+            const next = item.kind === "link" || String(item.url).startsWith("subtitlelink:") ? linked : local
+            if (!next.some(source => source.url === item.url)) next.push(item)
+        }
+        sources = local; linkSources = linked
         const url = target || (fileMode ? anchorFile : "")
         if (url) setTracks(url, tracks(url).concat(items.map(item => item.url)))
         else performMatching(true)
+    }
+    function addLink() {
+        if (saving || loading || loadingDrop || !linkText.trim()) return
+        linksRequested([linkText.trim()])
+    }
+    function loadLinkedSources(result) {
+        if (!visible || !linkMode) return
+        if (result.success) { addSources(result.sources || [], ""); linkText = "" }
+        errorMessage = result.error || ""
+    }
+    function dropUrls(drop) {
+        return drop.hasUrls ? drop.urls : subtitles && drop.hasText ? drop.text.split(/\r?\n/).map(value => value.trim()).filter(value => value.length) : []
     }
     function dropSources(urls, target = "") {
 
         if (!visible || saving || loading || loadingDrop) return false
         if (!urls.length) { errorMessage = qsTr("VLC could not read these files. Try again."); return false }
-        if (onlineMode) selectSource(0)
+        const values = Array.from(urls, value => String(value))
+        if (subtitles && values.every(url => /^https?:/i.test(url))) selectSource(2)
+        else selectSource(0)
         cancelMatching(); ++sourceRequestId; loadingSources = false
         ++dropRequestId; loadingDrop = true; errorMessage = ""
-        droppedSourcesRequested(urls, subtitles, dropRequestId, target)
+        droppedSourcesRequested(values, subtitles, dropRequestId, target)
         return true
     }
     function loadDroppedSources(request, result, target = "") {
@@ -268,7 +299,7 @@ C.Dialog {
         else errorMessage = (result.error || qsTr("VLC cannot save these tracks. Try again."))
             + (completed.length ? "\n" + qsTr("VLC kept the changes that it saved. Try Save again for the other files.") : "")
     }
-    onClosed: { ++searchRequestId; searching = false; searchDebounce.stop(); searchCanceled(); providerSetup.close(); saving = false; cancelableSave = false; ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
+    onClosed: { ++searchRequestId; searching = false; searchDebounce.stop(); searchCanceled(); providerSetup.close(); linkText = ""; linkSources = []; onlineSources = []; sourceMappings = ({}); sourceKinds = ({}); saving = false; cancelableSave = false; ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
     Timer { id: searchDebounce; interval: 600; onTriggered: root.requestSearch() }
     Shortcut { sequence: "Ctrl+O"; enabled: root.visible && !root.saving; onActivated: { root.selectSource(0); root.filesRequested("") } }
     Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: root.visible && !root.saving; onActivated: root.submit() }
@@ -317,7 +348,7 @@ C.Dialog {
             }
             RedesignButton {
                 objectName: "trackAssignmentFolder"
-                visible: !root.onlineMode
+                visible: root.sourceIndex === 0
                 Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; text: root.sourceFolder || qsTr("Select track folder"); leftAligned: true
@@ -365,6 +396,29 @@ C.Dialog {
                 onActivated: index => { root.searchLanguage = root.onlineLanguages[index].code; root.requestSearch() }
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
             }
+            C.TextField {
+                objectName: "trackAssignmentLink"
+                visible: root.linkMode
+                Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
+                text: root.linkText; placeholderText: qsTr("Paste a direct subtitle file link")
+                enabled: !root.saving && !root.loadingDrop
+                leftPadding: root.theme.dp(40); rightPadding: root.theme.dp(10)
+                color: root.theme.foreground; placeholderTextColor: root.theme.foreground
+                font.pixelSize: root.theme.dp(14); selectByMouse: true
+                Accessible.name: placeholderText
+                background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
+                RedesignIcon { anchors.left: parent.left; anchors.leftMargin: root.theme.dp(10); anchors.verticalCenter: parent.verticalCenter; width: root.theme.dp(20); height: width; name: "link"; color: root.theme.foreground }
+                onTextEdited: root.linkText = text
+                onAccepted: root.addLink()
+            }
+            RedesignButton {
+                objectName: "trackAssignmentAddLink"
+                visible: root.linkMode
+                Layout.preferredWidth: root.theme.dp(60); Layout.preferredHeight: root.theme.dp(34)
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                caption: qsTr("Add"); text: caption; enabled: !root.saving && !root.loadingDrop && root.linkText.trim().length > 0
+                onClicked: root.addLink()
+            }
 
         }
     }
@@ -374,10 +428,10 @@ C.Dialog {
             objectName: "trackAssignmentDropArea"
             anchors.fill: parent
             enabled: root.visible && !root.saving && !root.loading && !root.loadingDrop
-            onEntered: drag => drag.accepted = drag.hasUrls
+            onEntered: drag => drag.accepted = drag.hasUrls || (root.subtitles && drag.hasText)
             onDropped: drop => {
                 drop.accepted = false
-                if (drop.hasUrls && root.dropSources(drop.urls)) drop.accept(Qt.CopyAction)
+                if (root.dropSources(root.dropUrls(drop))) drop.accept(Qt.CopyAction)
             }
         }
         Rectangle {
@@ -388,7 +442,7 @@ C.Dialog {
             Text {
                 anchors.centerIn: parent; width: parent.width - root.theme.dp(40); wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
-                text: root.subtitles ? qsTr("Drop subtitle files or folders here") : qsTr("Drop audio files or folders here")
+                text: root.subtitles ? qsTr("Drop subtitle files, folders or links here") : qsTr("Drop audio files or folders here")
                 color: root.theme.foreground; font.pixelSize: root.theme.dp(18)
             }
         }
@@ -416,10 +470,10 @@ C.Dialog {
                         objectName: "trackAssignmentRowDrop_" + entry.index
                         anchors.fill: parent
                         enabled: !root.fileMode && !root.saving && !root.loadingDrop
-                        onEntered: drag => drag.accepted = drag.hasUrls
+                        onEntered: drag => drag.accepted = drag.hasUrls || (root.subtitles && drag.hasText)
                         onDropped: drop => {
                             drop.accepted = false
-                            if (drop.hasUrls && root.dropSources(drop.urls, entry.modelData.url)) drop.accept(Qt.CopyAction)
+                            if (root.dropSources(root.dropUrls(drop), entry.modelData.url)) drop.accept(Qt.CopyAction)
                         }
                     }
                     onClicked: root.fileMode ? root.toggle(root.anchorFile, modelData.url) : root.chooseRow(modelData.url)
@@ -469,7 +523,7 @@ C.Dialog {
         Text {
             anchors.centerIn: parent; width: parent.width - root.theme.dp(40); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
             visible: !(root.onlineMode && !root.providerConfigured) && (root.loading || root.loadingSources || root.loadingDrop || root.matching || root.searching || (!list.count && !root.errorMessage))
-            text: root.searching ? qsTr("Searching subtitles…") : root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources || root.loadingDrop ? qsTr("Loading files…") : root.onlineMode ? qsTr("No subtitles found. Try another title or language.") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
+            text: root.searching ? qsTr("Searching subtitles…") : root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources || root.loadingDrop ? qsTr("Loading files…") : root.onlineMode ? qsTr("No subtitles found. Try another title or language.") : root.linkMode ? qsTr("Paste a direct subtitle file link, then select Add.") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
             color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
         }        Column {
             anchors.centerIn: parent; width: Math.max(0, parent.width - root.theme.dp(60))
@@ -587,10 +641,10 @@ C.Dialog {
                     objectName: "trackAssignmentPickerDropArea"
                     anchors.fill: parent
                     enabled: picker.visible && !root.saving && !root.loadingDrop
-                    onEntered: drag => drag.accepted = drag.hasUrls
+                    onEntered: drag => drag.accepted = drag.hasUrls || (root.subtitles && drag.hasText)
                     onDropped: drop => {
                         drop.accepted = false
-                        if (drop.hasUrls && root.dropSources(drop.urls, picker.targetUrl)) drop.accept(Qt.CopyAction)
+                        if (root.dropSources(root.dropUrls(drop), picker.targetUrl)) drop.accept(Qt.CopyAction)
                     }
                 }
                 C.ScrollBar.vertical: C.ScrollBar {}

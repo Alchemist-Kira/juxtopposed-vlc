@@ -81,6 +81,14 @@ private slots:
         QVERIFY(server.requests[0].url.query().startsWith("languages=en&query="));
         QCOMPARE(server.requests[0].headers.value("api-key"),QByteArray("unit-secret"));QVERIFY(!server.requests[0].headers.value("user-agent").isEmpty());
     }
+    void allLanguagesDoesNotSendALanguageFilter() {
+        QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,results());};
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
+        QSignalSpy spy(&client,&SubtitleSourceService::searchFinished);client.search("The Wand","");
+        QVERIFY(result(spy).value("success").toBool());QCOMPARE(server.requests.size(),1);
+        const QUrlQuery query(server.requests[0].url);
+        QVERIFY(!query.hasQueryItem("languages"));QCOMPARE(query.queryItemValue("query"),"the wand");
+    }
     void consumerKeyAndCustomOverride() {
         QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,results());};
         auto o=options(server);o.consumerApiKey="app-consumer";SubtitleSourceService client(o);client.setStorageDirectory(directory.path());

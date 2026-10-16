@@ -25,7 +25,12 @@ C.Dialog {
     property bool searching: false
     property int searchRequestId: 0
     property string searchTitle: ""
-    property string searchLanguage: "en"
+    property string searchLanguage: ""
+    property var preferredSearchLanguages: []
+    property bool manualSearchLanguage: false
+    onPreferredSearchLanguagesChanged: refreshSearchLanguage()
+    onOnlineLanguagesChanged: Qt.callLater(refreshSearchLanguage)
+    readonly property var searchLanguageChoices: [{code:"",text:qsTr("All languages")}].concat(onlineLanguages)
     property var sourceMappings: ({})
     property var sourceKinds: ({})
     property var onlineSources: []
@@ -115,10 +120,20 @@ C.Dialog {
     function parentFolder(url) { return String(url).startsWith("file:") ? String(url).substring(0, String(url).lastIndexOf("/") + 1) : "" }
     function same(a, b) { return [...new Set(a || [])].sort().join("\n") === [...new Set(b || [])].sort().join("\n") }
     function tracks(url) { return drafts[url] ? drafts[url].tracks : [] }
+    function refreshSearchLanguage() {
+        let language = searchLanguage
+        if (!manualSearchLanguage)
+            language = preferredSearchLanguages.find(code => onlineLanguages.some(item => item.code === code)) || ""
+        else if (!searchLanguageChoices.some(item => item.code === language)) language = ""
+        const changed = language !== searchLanguage
+        searchLanguage = language
+        if (changed && visible && onlineMode) requestSearch()
+    }
     function begin(target, subtitleMode) {
         if (visible || saving) return false
         context = target; subtitles = subtitleMode
-        sourceIndex = 0; onlineSources = []; linkSources = []; linkText = ""; sourceMappings = ({}); sourceKinds = ({}); searchTitle = ""; searchLanguage = "en"; searching = false; cancelableSave = false
+        sourceIndex = 0; onlineSources = []; linkSources = []; linkText = ""; sourceMappings = ({}); sourceKinds = ({}); searchTitle = ""; manualSearchLanguage = false; searching = false; cancelableSave = false
+        refreshSearchLanguage()
         rows = []; sources = []; drafts = ({}); selectedRows = ({}); errorMessage = ""
         folderRuleBaseline = ""; folderRuleLoaded = false; folderRuleTouched = false; folderRuleAutomatic = true; removeFolderRule = false; pendingFolderRule = ({})
         anchorFile = target.scope === "folder" || target.scope === "playlist" ? "" : String(target.url || "")
@@ -423,12 +438,13 @@ C.Dialog {
                 visible: root.onlineMode
                 Layout.preferredWidth: Math.min(root.theme.dp(200), root.width * 0.20); Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                model: root.onlineLanguages; textRole: "text"
+                model: root.searchLanguageChoices; textRole: "text"
                 enabled: root.providerConfigured && !root.saving
-                function syncLanguage() { currentIndex = Math.max(0, root.onlineLanguages.findIndex(item => item.code === root.searchLanguage)) }
+                function syncLanguage() { currentIndex = root.searchLanguageChoices.findIndex(item => item.code === root.searchLanguage) }
+                Connections { target: root; function onSearchLanguageChanged() { languageChoice.syncLanguage() } }
                 onModelChanged: Qt.callLater(syncLanguage)
                 Component.onCompleted: syncLanguage()
-                onActivated: index => { root.searchLanguage = root.onlineLanguages[index].code; root.requestSearch() }
+                onActivated: index => { root.manualSearchLanguage = true; root.searchLanguage = root.searchLanguageChoices[index].code; root.requestSearch() }
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
             }
             C.TextField {

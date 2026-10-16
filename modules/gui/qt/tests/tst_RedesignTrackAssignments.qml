@@ -33,6 +33,8 @@ TestCase {
         width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
         dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
         saveSpy.clear(); rowSpy.clear(); dropSpy.clear(); searchSpy.clear(); linkSpy.clear(); dialog.providerConfigured=false; dialog.folderRuleDefinition=""
+        dialog.preferredSearchLanguages=[]
+        dialog.onlineLanguages=[{code:"en",text:"English"},{code:"es",text:"Spanish"},{code:"ja",text:"Japanese"},{code:"nl",text:"Dutch"}]
         verify(dialog.begin({scope:"file",url:first,urls:[first,second]},true))
         tryCompare(dialog,"opened",true); load([rows()[0]])
     }
@@ -202,6 +204,50 @@ TestCase {
         dialog.reject();tryCompare(dialog,"visible",false)
         verify(dialog.begin({scope:"file",url:first},false));load([rows()[0]])
         compare(dialog.sourceChoices.length,1);dialog.selectSource(1);verify(!dialog.onlineMode)
+    }
+    function test_onlineStartsWithTheFirstAvailablePreferredLanguage() {
+        dialog.preferredSearchLanguages=["zzz","nl","en"]
+        dialog.providerConfigured=true;dialog.selectSource(1)
+        compare(searchSpy.count,1);compare(searchSpy.signalArguments[0][1],"nl")
+        const language=findChild(dialog,"trackAssignmentLanguage")
+        tryCompare(language,"currentText","Dutch")
+        compare(dialog.searchLanguage,"nl")
+    }
+    function test_onlineAutomaticAndUnavailablePreferencesUseAllLanguages() {
+        dialog.providerConfigured=true;dialog.selectSource(1)
+        compare(searchSpy.signalArguments[0][1],"")
+        const language=findChild(dialog,"trackAssignmentLanguage")
+        tryCompare(language,"currentText","All languages")
+        dialog.preferredSearchLanguages=["zzz"]
+        compare(dialog.searchLanguage,"");compare(searchSpy.count,1)
+    }
+    function test_onlineLanguageListRefreshesTheDefaultAndCancelsOldSearch() {
+        dialog.preferredSearchLanguages=["cs","en"]
+        dialog.providerConfigured=true;dialog.selectSource(1)
+        compare(searchSpy.signalArguments[0][1],"en")
+        const old=dialog.searchRequestId
+        dialog.onlineLanguages=[{code:"cs",text:"Czech"},{code:"en",text:"English"}]
+        tryCompare(dialog,"searchLanguage","cs");compare(searchSpy.count,2)
+        tryCompare(findChild(dialog,"trackAssignmentLanguage"),"currentText","Czech")
+        compare(searchSpy.signalArguments[1][1],"cs")
+        dialog.loadSearch(old,{success:true,sources:[{url:"opensubtitles:/42/English.srt",name:"English.srt"}]})
+        compare(dialog.onlineSources.length,0);verify(dialog.searching)
+    }
+    function test_onlineLanguageRefreshKeepsAnExplicitChoice() {
+        dialog.preferredSearchLanguages=["nl"]
+        dialog.providerConfigured=true;dialog.selectSource(1)
+        const language=findChild(dialog,"trackAssignmentLanguage")
+        language.activated(dialog.searchLanguageChoices.findIndex(item=>item.code==="es"))
+        compare(dialog.searchLanguage,"es");compare(searchSpy.count,2)
+        dialog.onlineLanguages=[{code:"nl",text:"Dutch"},{code:"es",text:"Spanish"},{code:"en",text:"English"}]
+        wait(30);compare(dialog.searchLanguage,"es");compare(searchSpy.count,2)
+        tryCompare(language,"currentText","Spanish")
+        dialog.preferredSearchLanguages=["en"]
+        compare(dialog.searchLanguage,"es");compare(searchSpy.count,2)
+        dialog.reject();tryCompare(dialog,"visible",false)
+        verify(dialog.begin({scope:"file",url:first},true));tryCompare(dialog,"opened",true);load([rows()[0]])
+        dialog.selectSource(1);compare(dialog.searchLanguage,"en")
+        tryCompare(language,"currentText","English")
     }
     function test_onlineSearchKeepsChoicesAndIgnoresOldResults() {
         dialog.providerConfigured=true;dialog.selectSource(1);compare(searchSpy.count,1)

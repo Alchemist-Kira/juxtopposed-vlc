@@ -377,6 +377,22 @@ void RedesignPreferences::refresh()
     ++m_revision; emit changed();
 }
 
+QStringList RedesignPreferences::subtitleSearchLanguages() const
+{
+    QStringList result;
+    for (const auto& token : value(QStringLiteral("sub-language")).toString().split(QLatin1Char(','))) {
+        const auto code = token.trimmed().toLower().toUtf8();
+        if (code.isEmpty()) continue;
+        if (code == "any" || code == "none") break;
+        const auto* language = code == "system" ? vlc_get_system_language()
+            : vlc_find_iso639(code.constData(), true);
+        if (!language) continue;
+        const auto searchCode = qfu(*language->psz_iso639_1 ? language->psz_iso639_1 : language->psz_iso639_2T);
+        if (!result.contains(searchCode)) result.append(searchCode);
+    }
+    return result;
+}
+
 QVariantMap RedesignPreferences::playerPresetOptions() const
 {
     QVariantMap options;

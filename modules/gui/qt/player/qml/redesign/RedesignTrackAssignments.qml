@@ -14,6 +14,7 @@ RedesignTrackAssignmentDialog {
     property double pendingPreparation: -1
     property int pendingSaveRequest: -1
     property var pendingSaveRule: ({})
+    RedesignPreferences { id: searchPreferences; ctx: MainCtx }
     providerConfigured: SubtitleSources.configured
     providerHasCustomKey: SubtitleSources.hasCustomKey
     providerHasConsumerKey: SubtitleSources.hasConsumerKey
@@ -58,7 +59,11 @@ RedesignTrackAssignmentDialog {
         target: MainCtx; property: "useGlobalShortcuts"; value: false
         when: root.visible; restoreMode: Binding.RestoreBindingOrValue
     }
-    onOpened: { restartNeeded = false; pendingSaveRule = ({}); SubtitleSources.resetSession() }
+    onOpened: {
+        restartNeeded = false; pendingSaveRule = ({}); SubtitleSources.resetSession()
+        searchPreferences.refresh()
+        preferredSearchLanguages = searchPreferences.subtitleSearchLanguages()
+    }
     onClosed: { pendingSaveRule = ({}); SubtitleSources.resetSession() }
     onSearchRequested: (query, language, request) => {
         pendingSearchRequest = request

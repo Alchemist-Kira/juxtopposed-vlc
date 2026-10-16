@@ -33,6 +33,7 @@ public:
     int revision() const { return m_revision; }
     QString errorMessage() const { return m_error; }
     Q_INVOKABLE void refresh();
+    Q_INVOKABLE QStringList subtitleSearchLanguages() const;
     QVariantList playerPresets() const;
     QString selectedPlayerPreset() const;
     bool pendingPlayerPreset() const { return m_edits.contains(QStringLiteral("qt-player-presets")); }

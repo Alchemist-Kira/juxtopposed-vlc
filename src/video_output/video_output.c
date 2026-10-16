@@ -1869,7 +1869,10 @@ static int vout_Start(vout_thread_sys_t *vout, vlc_video_context *vctx, const vo
 
     sys->private_pool = NULL;
 
+    vlc_mutex_lock(&sys->filter.lock);
+    free(sys->filter.configuration);
     sys->filter.configuration = NULL;
+    vlc_mutex_unlock(&sys->filter.lock);
     video_format_Copy(&sys->filter.src_fmt, &sys->original);
     sys->filter.src_vctx = vctx ? vlc_video_context_Hold(vctx) : NULL;
 
@@ -1968,6 +1971,8 @@ error:
     cs = sys->filter.chain_static;
     sys->filter.chain_interactive = NULL;
     sys->filter.chain_static = NULL;
+    free(sys->filter.configuration);
+    sys->filter.configuration = NULL;
     vlc_mutex_unlock(&sys->filter.lock);
     if (ci != NULL)
         filter_chain_Delete(ci);
@@ -2068,8 +2073,8 @@ static void vout_ReleaseDisplay(vout_thread_sys_t *vout)
         vlc_video_context_Release(sys->filter.src_vctx);
         sys->filter.src_vctx = NULL;
     }
-    free(sys->filter.configuration);
-
+    /* The stopped output is still available to settings callbacks. Its filter
+     * configuration stays valid until the next start or final release. */
     assert(sys->private_pool == NULL);
 
     vlc_mutex_lock(&sys->window_lock);
@@ -2110,11 +2115,15 @@ void vout_StopDisplay(vout_thread_t *vout)
 static void vout_DisableWindow(vout_thread_sys_t *sys)
 {
     vlc_mutex_lock(&sys->window_lock);
-    if (sys->window_enabled) {
-        vlc_window_Disable(sys->display_cfg.window);
-        sys->window_enabled = false;
-    }
+    const bool enabled = sys->window_enabled;
+    sys->window_enabled = false;
     vlc_mutex_unlock(&sys->window_lock);
+
+    /* Stop and Request are serialized by the input resource. The window
+     * provider can wait for its UI thread, which can change display settings
+     * or remove variable callbacks. Do not hold their window lock here. */
+    if (enabled)
+        vlc_window_Disable(sys->display_cfg.window);
 }
 
 void vout_Stop(vout_thread_t *vout)
@@ -2163,6 +2172,7 @@ void vout_Release(vout_thread_t *vout)
 
     free(sys->splitter_name);
     free(sys->display_cfg.icc_profile);
+    free(sys->filter.configuration);
 
     if (sys->dec_device)
         vlc_decoder_device_Release(sys->dec_device);

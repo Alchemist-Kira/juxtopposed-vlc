@@ -50,6 +50,7 @@ static const char dec_dev_arg[] = "--dec-dev=" MODULE_STRING;
 const char vlc_module_name[] = MODULE_STRING;
 
 static size_t current_scenario;
+static size_t window_disable_count;
 
 static void DecoderDeviceClose(struct vlc_decoder_device *device)
     { VLC_UNUSED(device); }
@@ -155,10 +156,23 @@ static int OpenConverter(filter_t *filter)
     return VLC_SUCCESS;
 }
 
+static void DisableWindow(vlc_window_t *wnd)
+{
+    /* A window provider can service a UI display-setting change before its
+     * disable callback returns. Stop must not hold the window lock here. */
+    vlc_object_t *vout = vlc_object_parent(wnd);
+    assert(var_SetInteger(vout, "fit", VLC_VIDEO_FIT_LARGER) == VLC_SUCCESS);
+    assert(var_GetInteger(vout, "fit") == VLC_VIDEO_FIT_LARGER);
+    /* The stopped output must not retain a freed filter configuration. */
+    assert(var_SetString(vout, "video-filter", "adjust") == VLC_SUCCESS);
+    assert(var_SetString(vout, "video-filter", "") == VLC_SUCCESS);
+    window_disable_count++;
+}
+
 static int OpenWindow(vlc_window_t *wnd)
 {
     static const struct vlc_window_operations ops = {
-
+        .disable = DisableWindow,
     };
     wnd->ops = &ops;
     return VLC_SUCCESS;
@@ -301,5 +315,6 @@ int main( int argc, char **argv )
 
     libvlc_release(vlc);
     assert(vout_scenarios_count == current_scenario);
+    assert(window_disable_count > 0);
     return 0;
 }

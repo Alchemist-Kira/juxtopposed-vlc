@@ -102,6 +102,17 @@ int main(void)
     wait_value(&ctx, &video_filter_closes, 8);
     assert(var_SetInteger(output, "test-video-filter-value", 5) == VLC_SUCCESS);
     test_crop_aspect(&ctx, output);
+    test_end(&ctx);
+
+    // A stopped output is retained for the next input. Changes to its filter
+    // settings must remain safe and take effect when it starts again.
+    assert(var_SetString(output, "video-filter", "test-video-filter:test-video-filter") == VLC_SUCCESS);
+    assert(var_SetInteger(output, "test-video-filter-value", 6) == VLC_SUCCESS);
+    player_set_current_mock_media(&ctx, "video-filters-restart", &params, false);
+    player_start(&ctx);
+    wait_state(&ctx, VLC_PLAYER_STATE_PLAYING);
+    wait_value(&ctx, &video_filter_frame_value, 6);
+    assert(atomic_load(&video_filter_opens) == 10);
     vout_Release(output);
     test_end(&ctx);
     ctx_destroy(&ctx);

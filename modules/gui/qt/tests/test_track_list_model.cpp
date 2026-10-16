@@ -25,6 +25,7 @@ class TestTrackListModel : public QObject {
     static vlc_player_track track(TestTrackId& id, const char* title, bool checked = false) {
         vlc_player_track value{};
         value.es_id = reinterpret_cast<vlc_es_id_t*>(&id); value.name = title; value.selected = checked;
+        value.fmt.i_cat = SPU_ES;
         return value;
     }
 private slots:
@@ -75,6 +76,51 @@ private slots:
         QCOMPARE(model.data(model.index(0), TrackListModel::SourceNameRole).toString(), "captions en.srt");
         const auto uri = model.data(model.index(0), TrackListModel::SourceUriRole).toUrl();
         QVERIFY(uri.userInfo().isEmpty()); QCOMPARE(uri.host(), "example.test");
+    }
+    void conciseLabels_data() {
+        QTest::addColumn<QByteArray>("language");QTest::addColumn<QByteArray>("description");
+        QTest::addColumn<bool>("forced");QTest::addColumn<QString>("expected");
+        QTest::newRow("same-language") << QByteArray("eng") << QByteArray("English") << false << QString("English");
+        QTest::newRow("japanese") << QByteArray("jpn") << QByteArray("Japanese") << false << QString("Japanese");
+        QTest::newRow("language-only") << QByteArray("deu") << QByteArray() << false << QString("German");
+        QTest::newRow("commentary") << QByteArray("en") << QByteArray("Director commentary") << false << QString::fromUtf8("English — Director commentary");
+        QTest::newRow("descriptive-language") << QByteArray("en") << QByteArray("English commentary") << false << QString("English commentary");
+        QTest::newRow("sdh") << QByteArray("en") << QByteArray("English (SDH)") << false << QString("English (SDH)");
+        QTest::newRow("forced") << QByteArray("en") << QByteArray("English") << true << QString("English (Forced)");
+        QTest::newRow("named-forced") << QByteArray("en") << QByteArray("English (Forced)") << true << QString("English (Forced)");
+        QTest::newRow("no-language") << QByteArray() << QByteArray("Custom track") << false << QString("Custom track");
+        QTest::newRow("unknown-language") << QByteArray("xx") << QByteArray("Custom track") << false << QString("Custom track");
+        QTest::newRow("unnamed") << QByteArray() << QByteArray() << false << QString("Track 1 - [English]");
+    }
+    void conciseLabels() {
+        QFETCH(QByteArray,language);QFETCH(QByteArray,description);QFETCH(bool,forced);QFETCH(QString,expected);
+        TestTrackId id{};TrackListModel model(nullptr);auto value=track(id,"Track 1 - [English]");
+        value.fmt.psz_language=language.isEmpty()?nullptr:language.data();
+        value.fmt.psz_description=description.isEmpty()?nullptr:description.data();value.fmt.subs.b_forced=forced;
+        model.updateTracks(VLC_PLAYER_LIST_ADDED,&value);
+        QCOMPARE(model.data(model.index(0),TrackListModel::LabelRole).toString(),expected);
+        QCOMPARE(model.data(model.index(0),Qt::DisplayRole).toString(),QString("Track 1 - [English]"));
+    }
+    void duplicateLabelsStayDistinctAfterUpdates() {
+        TestTrackId one{},two{};TrackListModel model(nullptr);
+        auto first=track(one,"Track 1 - [English]"),second=track(two,"Track 2 - [English]");
+        first.fmt.psz_language=second.fmt.psz_language=const_cast<char*>("eng");
+        model.updateTracks(VLC_PLAYER_LIST_ADDED,&first);model.updateTracks(VLC_PLAYER_LIST_ADDED,&second);
+        QCOMPARE(model.data(model.index(0),TrackListModel::LabelRole).toString(),"English (1)");
+        QCOMPARE(model.data(model.index(1),TrackListModel::LabelRole).toString(),"English (2)");
+        QSignalSpy changed(&model,&QAbstractItemModel::dataChanged);
+        second.fmt.psz_description=const_cast<char*>("Commentary");model.updateTracks(VLC_PLAYER_LIST_UPDATED,&second);
+        QCOMPARE(model.data(model.index(0),TrackListModel::LabelRole).toString(),"English");
+        QCOMPARE(model.data(model.index(1),TrackListModel::LabelRole).toString(),QString::fromUtf8("English — Commentary"));
+        QVERIFY(std::any_of(changed.begin(),changed.end(),[](const auto& args){return args[2].template value<QList<int>>().contains(TrackListModel::LabelRole);}));
+    }
+    void externalFileDoesNotNumberTheEmbeddedLanguage() {
+        TestTrackId one{},two{"file:///subtitles/english.srt"};TrackListModel model(nullptr);
+        auto embedded=track(one,"English - [English]"),external=track(two,"Track 2 - [English]");
+        embedded.fmt.psz_language=external.fmt.psz_language=const_cast<char*>("eng");
+        model.updateTracks(VLC_PLAYER_LIST_ADDED,&embedded);model.updateTracks(VLC_PLAYER_LIST_ADDED,&external);
+        QCOMPARE(model.data(model.index(0),TrackListModel::LabelRole).toString(),"English");
+        QCOMPARE(model.data(model.index(1),TrackListModel::SourceNameRole).toString(),"english.srt");
     }
 };
 QTEST_GUILESS_MAIN(TestTrackListModel)

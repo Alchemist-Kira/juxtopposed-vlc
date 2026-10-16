@@ -59,8 +59,8 @@ TestCase {
         id: tracks
         property int refreshCount: 0
         function refresh() { refreshCount++ }
-        ListElement { display: "English"; checked: true; external: false; sourceName: ""; sourceUri: "" }
-        ListElement { display: "Japanese"; checked: false; external: false; sourceName: ""; sourceUri: "" }
+        ListElement { display: "English"; displayLabel: ""; checked: true; external: false; sourceName: ""; sourceUri: "" }
+        ListElement { display: "Japanese"; displayLabel: ""; checked: false; external: false; sourceName: ""; sourceUri: "" }
     }
     RedesignTrackPopup {
         id: trackPicker
@@ -130,8 +130,8 @@ TestCase {
         trackPicker.x = 20; trackPicker.y = 20
         trackPicker.page = "subtitles"
         tracks.clear()
-        tracks.append({display:"English", checked:true, external:false, sourceName:"", sourceUri:""})
-        tracks.append({display:"Japanese", checked:false, external:false, sourceName:"", sourceUri:""})
+        tracks.append({display:"English", displayLabel:"", checked:true, external:false, sourceName:"", sourceUri:""})
+        tracks.append({display:"Japanese", displayLabel:"", checked:false, external:false, sourceName:"", sourceUri:""})
         trackPicker.canAddTracks = true
         trackSelectionSpy.clear()
         trackPreferencesSpy.clear(); addTracksSpy.clear(); editTracksSpy.clear()
@@ -381,6 +381,17 @@ TestCase {
         mouseClick(findChild(external,"trackChoice_1"))
         compare(trackSelectionSpy.signalArguments[1][1],1)
         verify(tracks.get(1).checked)
+    }
+    function test_conciseTrackLabelsKeepFullNamesInTooltips() {
+        tracks.setProperty(0,"display","English - [English]")
+        tracks.setProperty(0,"displayLabel","English")
+        trackPicker.open();tryCompare(trackPicker,"opened",true)
+        const embedded=findChild(trackPicker,"embeddedTrackChoices")
+        const choice=findChild(embedded,"trackChoice_0")
+        compare(choice.text,"English");compare(choice.description,"English - [English]")
+        tracks.setProperty(0,"displayLabel","English (Forced)")
+        tryCompare(choice,"text","English (Forced)")
+        tracks.setProperty(0,"displayLabel","");tryCompare(choice,"text","English - [English]")
     }
     function test_externalTrackActionsClosePopup() {
         trackPicker.open(); tryCompare(trackPicker,"opened",true)

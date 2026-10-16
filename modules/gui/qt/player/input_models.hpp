@@ -52,6 +52,7 @@ public:
         ExternalRole = Qt::UserRole + 1,
         SourceNameRole,
         SourceUriRole,
+        LabelRole,
     };
 
     TrackListModel(vlc_player_t* player, QObject* parent = nullptr);
@@ -85,6 +86,7 @@ signals:
 
 private:
     void sourceNamesChanged();
+    QString trackLabel(int row) const;
     vlc_player_t* m_player;
     class Data {
     public:
@@ -96,6 +98,7 @@ private:
         void update( const vlc_player_track *track_info );
 
         QString m_title;
+        QString m_label;
         //vlc_es_id_t *m_id = NULL;
         ::vlc::vlc_shared_data_ptr<vlc_es_id_t, &vlc_es_id_Hold, &vlc_es_id_Release> m_id;
         bool m_selected = false;

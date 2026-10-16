@@ -17,10 +17,36 @@
  *****************************************************************************/
 #include "input_models.hpp"
 #include <QUrl>
+#include <vlc_iso_lang.h>
 
 #include "player/player_controller.hpp"
 
 //***************************
+
+namespace {
+QString conciseTrackLabel(const vlc_player_track* track)
+{
+    const auto& format = track->fmt;
+    const auto title = qfu(track->name);
+    if (format.i_cat != AUDIO_ES && format.i_cat != SPU_ES) return title;
+    const auto description = qfu(format.psz_description).trimmed();
+    const auto* language = format.psz_language ? vlc_find_iso639(format.psz_language, true) : nullptr;
+    const auto name = language && strcmp(language->psz_iso639_2T, "und")
+        ? qtr(language->psz_eng_name) : QString();
+    QString label;
+    if (name.isEmpty()) label = description.isEmpty() ? title : description;
+    else if (description.isEmpty() || description.compare(name, Qt::CaseInsensitive) == 0
+        || description.compare(qfu(language->psz_eng_name), Qt::CaseInsensitive) == 0) label = name;
+    else if (description.startsWith(name + ' ', Qt::CaseInsensitive)
+        || description.startsWith(qfu(language->psz_eng_name) + ' ', Qt::CaseInsensitive)) label = description;
+    else label = name + QStringLiteral(" — ") + description;
+    if (format.i_cat == SPU_ES && format.subs.b_forced
+        && !label.contains(qtr("Forced"), Qt::CaseInsensitive)
+        && !label.contains(QStringLiteral("forced"), Qt::CaseInsensitive))
+        label += QStringLiteral(" (%1)").arg(qtr("Forced"));
+    return label;
+}
+}
 //  track list model
 //***************************
 
@@ -49,6 +75,8 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const
         return m_data[row].m_title;
     else if (role == Qt::CheckStateRole)
         return QVariant::fromValue<bool>(m_data[row].m_selected);
+    else if (role == LabelRole)
+        return trackLabel(row);
     const char* source = vlc_es_id_GetSourceUri(m_data[row].m_id.get());
     if (role == ExternalRole) return source != nullptr;
     if (source && role == SourceUriRole)
@@ -61,7 +89,7 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const
             const auto uri = vlc_es_id_GetSourceUri(track.m_id.get());
             return uri && !strcmp(uri, source);
         });
-        if (count > 1) name += QStringLiteral(" (%1)").arg(m_data[row].m_title);
+        if (count > 1) name += QStringLiteral(" (%1)").arg(trackLabel(row));
         return name;
     }
     return QVariant{};
@@ -176,12 +204,29 @@ QHash<int, QByteArray> TrackListModel::roleNames() const
     roleNames[ExternalRole] = QByteArrayLiteral("external");
     roleNames[SourceNameRole] = QByteArrayLiteral("sourceName");
     roleNames[SourceUriRole] = QByteArrayLiteral("sourceUri");
+    roleNames[LabelRole] = QByteArrayLiteral("displayLabel");
     return roleNames;
 }
 
 void TrackListModel::sourceNamesChanged()
 {
-    if (!m_data.isEmpty()) emit dataChanged(index(0), index(m_data.size() - 1), {SourceNameRole});
+    if (!m_data.isEmpty()) emit dataChanged(index(0), index(m_data.size() - 1), {SourceNameRole, LabelRole});
+}
+
+QString TrackListModel::trackLabel(int row) const
+{
+    const auto& label = m_data[row].m_label;
+    const char* source = vlc_es_id_GetSourceUri(m_data[row].m_id.get());
+    int count = 0, number = 0;
+    for (int i = 0; i < m_data.size(); ++i) {
+        const char* other = vlc_es_id_GetSourceUri(m_data[i].m_id.get());
+        const bool sameSource = source ? other && !strcmp(source, other) : !other;
+        if (sameSource && m_data[i].m_label.compare(label, Qt::CaseInsensitive) == 0) {
+            ++count;
+            if (i == row) number = count;
+        }
+    }
+    return count > 1 ? QStringLiteral("%1 (%2)").arg(label).arg(number) : label;
 }
 
 void TrackListModel::setMultiSelect(bool multiSelect)
@@ -212,6 +257,7 @@ void TrackListModel::setMultiSelect(bool multiSelect)
 
 TrackListModel::Data::Data(const vlc_player_track *track_info)
     : m_title( qfu(track_info->name) )
+    , m_label( conciseTrackLabel(track_info) )
     , m_id( track_info->es_id, true )
     , m_selected( track_info->selected )
 {
@@ -221,6 +267,7 @@ void TrackListModel::Data::update(const vlc_player_track *track_info)
 {
     m_id.reset(track_info->es_id, true);
     m_title = qfu(track_info->name);
+    m_label = conciseTrackLabel(track_info);
     m_selected = track_info->selected;
 }
 

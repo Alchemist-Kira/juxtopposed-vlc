@@ -139,14 +139,15 @@ ColumnLayout {
             readonly property bool accepted: root.trackGroup < 0 || external === (root.trackGroup === 1)
             readonly property string sourceName: typeof model.sourceName === "string" ? model.sourceName : ""
             readonly property string sourceUri: model.sourceUri === undefined ? "" : String(model.sourceUri)
+            readonly property string label: typeof model.displayLabel === "string" && model.displayLabel.length ? model.displayLabel : display
             visible: accepted
             Layout.fillWidth: true
             implicitHeight: accepted ? root.theme.dp(44) : 0
             TrackChoice {
                 anchors.fill: parent
                 objectName: "trackChoice_" + track.index
-                text: track.external && track.sourceName.length ? track.sourceName : track.display
-                description: track.external && track.sourceUri.length ? text + "\n" + track.sourceUri : text
+                text: track.external && track.sourceName.length ? track.sourceName : track.label
+                description: track.external && track.sourceUri.length ? text + "\n" + track.sourceUri : track.display
                 chosen: track.checked
                 onClicked: root.selectionRequested(track.index, true)
             }

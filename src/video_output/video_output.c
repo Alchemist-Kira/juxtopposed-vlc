@@ -2353,22 +2353,28 @@ int vout_ChangeSource( vout_thread_t *vout, const video_format_t *original,
     return 0;
 }
 
-static int EnableWindowLocked(vout_thread_sys_t *vout, const video_format_t *original)
+static int EnableWindow(vout_thread_sys_t *vout, const video_format_t *original)
 {
     assert(vout != NULL);
     vout_thread_sys_t *sys = vout;
 
     assert(!sys->dummy);
-    vlc_mutex_assert(&sys->window_lock);
+    vlc_mutex_lock(&sys->window_lock);
     VoutGetDisplayCfg(vout, original, &sys->display_cfg);
     vout_UpdateWindowSizeLocked(vout);
+    const bool enabled = sys->window_enabled;
+    vlc_mutex_unlock(&sys->window_lock);
 
-    if (!sys->window_enabled) {
+    /* Request and Stop are serialized by the input resource. As for disable,
+     * the provider can wait for a UI thread that changes display settings. */
+    if (!enabled) {
         if (vlc_window_Enable(sys->display_cfg.window)) {
             msg_Err(&vout->obj, "failed to enable window");
             return -1;
         }
+        vlc_mutex_lock(&sys->window_lock);
         sys->window_enabled = true;
+        vlc_mutex_unlock(&sys->window_lock);
     }
     else
     {
@@ -2442,17 +2448,15 @@ int vout_Request(const vout_configuration_t *cfg, vlc_video_context *vctx, input
     sys->original = original;
     sys->displayed.projection = original.projection_mode;
     vout_InitSource(vout);
+    vlc_mutex_unlock(&sys->window_lock);
 
-    if (EnableWindowLocked(vout, &original) != 0)
+    if (EnableWindow(vout, &original) != 0)
     {
         /* the window was not enabled, nor the display started */
         msg_Err(cfg->vout, "failed to enable window");
-        vlc_mutex_unlock(&sys->window_lock);
         assert(sys->display == NULL);
         return -1;
     }
-    vlc_mutex_unlock(&sys->window_lock);
-
     if (sys->display != NULL)
         vout_StopDisplay(cfg->vout);
 

@@ -50,6 +50,7 @@ static const char dec_dev_arg[] = "--dec-dev=" MODULE_STRING;
 const char vlc_module_name[] = MODULE_STRING;
 
 static size_t current_scenario;
+static size_t window_enable_count;
 static size_t window_disable_count;
 
 static void DecoderDeviceClose(struct vlc_decoder_device *device)
@@ -156,6 +157,18 @@ static int OpenConverter(filter_t *filter)
     return VLC_SUCCESS;
 }
 
+static int EnableWindow(vlc_window_t *wnd, const vlc_window_cfg_t *cfg)
+{
+    VLC_UNUSED(cfg);
+    /* A UI display-setting change can run while window creation waits for
+     * the UI thread. Request must not hold the window lock here. */
+    vlc_object_t *vout = vlc_object_parent(wnd);
+    assert(var_SetInteger(vout, "fit", VLC_VIDEO_FIT_LARGER) == VLC_SUCCESS);
+    assert(var_GetInteger(vout, "fit") == VLC_VIDEO_FIT_LARGER);
+    window_enable_count++;
+    return VLC_SUCCESS;
+}
+
 static void DisableWindow(vlc_window_t *wnd)
 {
     /* A window provider can service a UI display-setting change before its
@@ -172,6 +185,7 @@ static void DisableWindow(vlc_window_t *wnd)
 static int OpenWindow(vlc_window_t *wnd)
 {
     static const struct vlc_window_operations ops = {
+        .enable = EnableWindow,
         .disable = DisableWindow,
     };
     wnd->ops = &ops;
@@ -315,6 +329,7 @@ int main( int argc, char **argv )
 
     libvlc_release(vlc);
     assert(vout_scenarios_count == current_scenario);
+    assert(window_enable_count > 0);
     assert(window_disable_count > 0);
     return 0;
 }

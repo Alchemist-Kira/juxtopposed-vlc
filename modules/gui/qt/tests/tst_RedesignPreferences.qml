@@ -490,6 +490,8 @@ TestCase {
         verify(!audio.includes("filter:audio-filter:spatializer"))
         const effects = catalog.sections.audio.find(section => section.title === "Effects").rows.map(row => row[0])
         verify(effects.includes("filter:audio-filter:stereo_widen"))
+        const pitch = catalog.sections.audio.find(section => section.title === "Effects").rows.find(row => row[0] === "pitch-shift")
+        compare(pitch[2].decimals, 2)
         verify(!effects.includes("filter:audio-filter:stereowiden"))
         verify(effects.indexOf("audio-spatial-mode") < effects.indexOf("filter:audio-filter:stereo_widen"))
         verify(effects.indexOf("filter:audio-filter:stereo_widen") < effects.indexOf("filter:audio-filter:compressor"))

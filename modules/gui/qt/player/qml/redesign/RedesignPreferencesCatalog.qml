@@ -109,7 +109,7 @@ QtObject {
                 ["audio-spatial", qsTr("Spatial audio")],
                 ["audio-spatial-mode", qsTr("Spatial audio mode"), {enabledWhen: "audio-spatial"}],
                 ["filter:audio-filter:stereo_widen", qsTr("Stereo widening")], ["filter:audio-filter:compressor", qsTr("Compressor")],
-                ["pitch-shift", qsTr("Pitch shift")], ["filter:audio-filter:chorus_flanger", qsTr("Chorus/flanger")], ["filter:audio-filter:karaoke", qsTr("Karaoke")] ] },
+                ["pitch-shift", qsTr("Pitch shift"), {decimals: 2}], ["filter:audio-filter:chorus_flanger", qsTr("Chorus/flanger")], ["filter:audio-filter:karaoke", qsTr("Karaoke")] ] },
             { title: qsTr("Tracks"), rows: [ ["redesign-audio-language", qsTr("Preferred audio language")], ["audio-desync", qsTr("Audio delay"), {factor: 0.001, decimals: 2, suffix: " s"}] ] },
             { title: qsTr("Visualization"), rows: [ ["audio-visual", qsTr("Visualizer"), {choiceLabels: {none: qsTr("Disabled")}}] ] } ],
         subtitles: [

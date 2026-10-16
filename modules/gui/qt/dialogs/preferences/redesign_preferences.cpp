@@ -64,11 +64,12 @@ const QStringList& videoFilterOptions()
     return names;
 }
 
-const QStringList& spatializerOptions()
+const QStringList& audioFilterFloatOptions()
 {
     static const QStringList names{
         QStringLiteral("spatializer-roomsize"), QStringLiteral("spatializer-width"),
-        QStringLiteral("spatializer-wet"), QStringLiteral("spatializer-dry"), QStringLiteral("spatializer-damp")
+        QStringLiteral("spatializer-wet"), QStringLiteral("spatializer-dry"), QStringLiteral("spatializer-damp"),
+        QStringLiteral("pitch-shift")
     };
     return names;
 }
@@ -117,7 +118,7 @@ const QStringList& presetOptions()
         };
         names += videoFilterOptions();
         names += overlayOptions();
-        names += spatializerOptions();
+        names += audioFilterFloatOptions();
         names.append(QStringLiteral("sub-source"));
         names += {QStringLiteral("preferred-resolution"), QStringLiteral("d3d11-hdr-mode")};
         return names;
@@ -870,6 +871,8 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
     if (!cfg || !CONFIG_ITEM(cfg->i_type)) return {};
     QVariantMap result{{QStringLiteral("name"), name}, {QStringLiteral("title"), qtr(cfg->psz_text ? cfg->psz_text : cfg->psz_name)},
         {QStringLiteral("help"), qtr(cfg->psz_longtext ? cfg->psz_longtext : "")}, {QStringLiteral("value"), value(name)}};
+    if (name == QLatin1String("pitch-shift"))
+        result.insert(QStringLiteral("help"), qtr("Set the pitch in semitones. Use 0 to turn off this effect. Playback speed does not change."));
     if (name == QLatin1String("audio-spatial") || name == QLatin1String("audio-spatial-mode")) {
         const bool supported = module_exists("spatialaudio");
         result.insert(QStringLiteral("supported"), supported);
@@ -1163,6 +1166,8 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     ++m_revision;
     emit changed();
     if (m_autoSave) m_saveTimer.start();
+    if (name == QLatin1String("pitch-shift"))
+        return stage(QStringLiteral("filter:audio-filter:scaletempo_pitch"), normalized.toFloat() != 0.f);
     return true;
 }
 
@@ -1376,10 +1381,10 @@ bool RedesignPreferences::save()
             aout_Release(output);
         }
     }
-    if (std::any_of(spatializerOptions().cbegin(), spatializerOptions().cend(), [&](const auto& name) { return previous.contains(name); })) {
+    if (std::any_of(audioFilterFloatOptions().cbegin(), audioFilterFloatOptions().cend(), [&](const auto& name) { return previous.contains(name); })) {
         audio_output_t* output = vlc_player_aout_Hold(player);
         if (output) {
-            for (const auto& name : spatializerOptions()) {
+            for (const auto& name : audioFilterFloatOptions()) {
                 if (!previous.contains(name)) continue;
                 const QByteArray bytes = name.toUtf8();
                 if (var_Type(output, bytes.constData()) == 0) var_Create(output, bytes.constData(), VLC_VAR_FLOAT);

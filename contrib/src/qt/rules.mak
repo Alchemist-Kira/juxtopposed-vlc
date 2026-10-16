@@ -22,7 +22,7 @@ else
 DEPS_qt += freetype2 $(DEPS_freetype2)
 endif
 
-ifeq ($(call need_pkg,"Qt6Core >= $(QTBASE_VERSION_MAJOR) Qt6Gui >= $(QTBASE_VERSION_MAJOR) Qt6Widgets >= $(QTBASE_VERSION_MAJOR)"),)
+ifeq ($(call need_pkg,"Qt6Core >= $(QTBASE_VERSION_MAJOR) Qt6Gui >= $(QTBASE_VERSION_MAJOR) Qt6Widgets >= $(QTBASE_VERSION_MAJOR) Qt6Network >= $(QTBASE_VERSION_MAJOR)"),)
 PKGS_FOUND += qt
 endif
 ifndef HAVE_CROSS_COMPILE
@@ -82,7 +82,7 @@ endif
 QTBASE_COMMON_CONFIG := -DFEATURE_pkg_config=OFF -DINPUT_openssl=no \
 	-DFEATURE_dbus=OFF -DFEATURE_zstd=OFF -DFEATURE_concurrent=OFF -DFEATURE_androiddeployqt=OFF \
 	-DFEATURE_sql=OFF \
-	-DFEATURE_xml=OFF -DFEATURE_printsupport=OFF -DFEATURE_network=OFF \
+	-DFEATURE_xml=OFF -DFEATURE_printsupport=OFF \
 	-DFEATURE_pdf=OFF \
 	-DQT_BUILD_EXAMPLES=OFF -DQT_GENERATE_SBOM=OFF \
 	--log-level=STATUS
@@ -100,7 +100,7 @@ ifdef ENABLE_LTO
 QTBASE_CONFIG += -DFEATURE_ltcg=ON
 endif
 
-QTBASE_CONFIG += $(QTBASE_COMMON_CONFIG) \
+QTBASE_CONFIG += $(QTBASE_COMMON_CONFIG) -DFEATURE_network=ON \
     -DFEATURE_gif=OFF \
 	-DFEATURE_harfbuzz=ON -DFEATURE_system_harfbuzz=ON -DFEATURE_jpeg=ON -DFEATURE_system_jpeg=ON \
 	-DFEATURE_png=ON -DFEATURE_system_png=ON -DFEATURE_zlib=ON -DFEATURE_system_zlib=ON \
@@ -110,7 +110,7 @@ QTBASE_CONFIG += $(QTBASE_COMMON_CONFIG) \
 	-DFEATURE_keysequenceedit=OFF -DFEATURE_mdiarea=OFF \
 	-DCMAKE_TOOLCHAIN_FILE=$(abspath toolchain.cmake) $(QT_HOST_PATH)
 
-QTBASE_NATIVE_CONFIG := $(QTBASE_COMMON_CONFIG) -DQT_BUILD_TESTS=FALSE \
+QTBASE_NATIVE_CONFIG := $(QTBASE_COMMON_CONFIG) -DFEATURE_network=OFF -DQT_BUILD_TESTS=FALSE \
 	-DFEATURE_accessibility=ON -DFEATURE_widgets=OFF -DFEATURE_testlib=OFF \
 	-DFEATURE_vnc=OFF -DFEATURE_linuxfb=OFF -DFEATURE_xlib=OFF \
 	-DFEATURE_vulkan=OFF -DFEATURE_imageformatplugin=OFF \

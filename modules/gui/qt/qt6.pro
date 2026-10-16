@@ -1,7 +1,8 @@
 TEMPLATE = app
 
-QT = core gui qml svg quick widgets quickcontrols2
+QT = core gui qml svg quick widgets quickcontrols2 network
 QTPLUGIN = qsvgicon qsvg qjpeg qico
+win32: QTPLUGIN += qschannelbackend
 
 CONFIG -= entrypoint
 CONFIG -= debug_and_release

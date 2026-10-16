@@ -218,7 +218,7 @@ C.Dialog {
                         RedesignButton {
                             objectName: "playlistRemoveFile" + index
                             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                            iconName: "minus"; text: qsTr("Remove %1").arg(name); enabled: !root.busy
+                            iconName: "remove"; text: qsTr("Remove %1").arg(name); enabled: !root.busy
                             onClicked: root.removeFile(index)
                         }
                     }

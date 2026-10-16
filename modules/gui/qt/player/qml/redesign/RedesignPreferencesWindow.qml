@@ -132,19 +132,19 @@ Window {
                     width: navigation.width
                     Repeater {
                         model: [
-                            {group: qsTr("App"), key: "general", title: qsTr("General"), icon: "tuning"},
-                            {key: "interface", title: qsTr("Interface"), icon: "cursor"},
-                            {key: "privacy", title: qsTr("Privacy"), icon: "shield"},
-                            {key: "controls", title: qsTr("Controls"), icon: "keyboard"},
-                            {group: qsTr("Media"), key: "playback", title: qsTr("Playback"), icon: "play"},
-                            {key: "video", title: qsTr("Video"), icon: "display"},
-                            {key: "audio", title: qsTr("Audio"), icon: "audio"},
-                            {key: "subtitles", title: qsTr("Subtitles"), icon: "subtitles"},
-                            {key: "library", title: qsTr("Library"), icon: "folder"},
-                            {group: qsTr("System"), key: "network", title: qsTr("Network"), icon: "network"},
-                            {key: "performance", title: qsTr("Performance"), icon: "tuning"},
-                            {key: "recording", title: qsTr("Recording"), icon: "record"},
-                            {key: "extensions", title: qsTr("Extensions"), icon: "puzzle"} ]
+                            {group: qsTr("App"), key: "general", title: qsTr("General"), icon: "nav-preferences"},
+                            {key: "interface", title: qsTr("Interface"), icon: "nav-interface"},
+                            {key: "privacy", title: qsTr("Privacy"), icon: "nav-privacy"},
+                            {key: "controls", title: qsTr("Controls"), icon: "nav-hotkeys"},
+                            {group: qsTr("Media"), key: "playback", title: qsTr("Playback"), icon: "nav-playback"},
+                            {key: "video", title: qsTr("Video"), icon: "nav-video"},
+                            {key: "audio", title: qsTr("Audio"), icon: "nav-audio"},
+                            {key: "subtitles", title: qsTr("Subtitles"), icon: "nav-subtitles"},
+                            {key: "library", title: qsTr("Library"), icon: "nav-folder"},
+                            {group: qsTr("System"), key: "network", title: qsTr("Network"), icon: "nav-streaming"},
+                            {key: "performance", title: qsTr("Performance"), icon: "nav-preferences"},
+                            {key: "recording", title: qsTr("Recording"), icon: "nav-record"},
+                            {key: "extensions", title: qsTr("Extensions"), icon: "nav-plugins"} ]
                         delegate: Column {
                             required property var modelData
                             width: navigation.width
@@ -157,9 +157,10 @@ Window {
                             Item {
                                 width: parent.width; height: theme.dp(48)
                                 RedesignButton {
+                                    objectName: "settingsCategory_" + modelData.key
                                     width: parent.width - theme.dp(20); x: theme.dp(14); height: theme.dp(40)
                                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                                    caption: modelData.title; text: caption; iconName: modelData.icon
+                                    caption: modelData.title; text: caption; iconName: modelData.icon + (selected ? "-active" : "")
                                     leftAligned: true
                                     selectedForeground: theme.bright
                                     background: Rectangle { radius: theme.dp(3); color: parent.selected ? root.lightTheme ? theme.selected : "#222222" : parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }

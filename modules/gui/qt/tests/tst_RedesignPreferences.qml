@@ -17,6 +17,7 @@ TestCase {
         property var values: ({resize: true, fastSeek: false, timeout: 1800})
         property QtObject ctx: shortcuts
         property bool invalidLanguage: false
+        property string providedHelp: ""
         function cancelLanguageEdit(name) { invalidLanguage=false;revision++ }
         function value(name) { return values[name] }
         function refresh() { refreshCount++; revision++ }
@@ -29,7 +30,7 @@ TestCase {
             if (name === "audio-spatial-mode") return {kind: "integer", title: "Spatial audio mode", choices: [{label: "Headphone virtualization", value: 2}, {label: "Surround speakers", value: 0}]}
             if (name === "volumeStep") return {kind: "float", title: "Volume step", choices: []}
             if (name === "device") return {kind: "string", title: "Output device", choices: [{label: "System default", value: ""}, {label: "Headphones", value: "native-headphones"}]}
-            return {kind: name === "timeout" ? "integer" : name === "clickPolicy" ? "string" : "bool", title: name, help: "", choices: []}
+            return {kind: name === "timeout" ? "integer" : name === "clickPolicy" ? "string" : "bool", title: name, help: providedHelp, choices: []}
         }
         function stage(name, value) {
             if (name.endsWith("-language") && value==="invalid") { invalidLanguage=true;return false }
@@ -195,6 +196,7 @@ TestCase {
     SignalSpy { id: confirmationAccepted; target: confirmation; signalName: "accepted" }
     SignalSpy { id: confirmationRejected; target: confirmation; signalName: "rejected" }
     function init() {
+        store.providedHelp = ""
         defaults.visible = false; defaults.subtitles = false
         confirmation.close(); confirmationAccepted.clear(); confirmationRejected.clear()
         actionRow.visible = false; actionSpy.clear()
@@ -274,6 +276,18 @@ TestCase {
         mouseClick(choice);tryCompare(popup,"opened",true);search.text="not a language"
         compare(popup.entries.length,0);search.accepted();verify(popup.visible)
         popup.close()
+    }
+    function test_helpIconFollowsNativeMetadataAndCompactPresentation() {
+        const icon = findChild(resizeRow, "preferenceHelpIcon")
+        verify(icon); verify(!icon.visible)
+        store.providedHelp = "Help from the native setting."
+        verify(icon.visible)
+        compare(findChild(resizeRow, "redesignToolTip").text, store.providedHelp)
+        const previous = resizeRow.presentation
+        resizeRow.presentation = Object.assign({}, previous, {compact: true})
+        verify(!icon.visible)
+        resizeRow.presentation = previous
+        store.providedHelp = ""; verify(!icon.visible)
     }
     function test_volumeStepUsesPercentagePoints() {
         volumeStepRow.visible = true
@@ -471,6 +485,8 @@ TestCase {
         const audio = catalog.sections.audio.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])
         verify(audio.includes("redesign-audio-device"))
         verify(!audio.includes("aout"))
+        const visualizer = catalog.sections.audio.find(section => section.title === "Visualization").rows[0]
+        compare(visualizer[2].choiceLabels.none, "Disabled")
         verify(!audio.includes("filter:audio-filter:spatializer"))
         const effects = catalog.sections.audio.find(section => section.title === "Effects").rows.map(row => row[0])
         verify(effects.includes("filter:audio-filter:stereo_widen"))

@@ -111,7 +111,7 @@ QtObject {
                 ["filter:audio-filter:stereo_widen", qsTr("Stereo widening")], ["filter:audio-filter:compressor", qsTr("Compressor")],
                 ["pitch-shift", qsTr("Pitch shift")], ["filter:audio-filter:chorus_flanger", qsTr("Chorus/flanger")], ["filter:audio-filter:karaoke", qsTr("Karaoke")] ] },
             { title: qsTr("Tracks"), rows: [ ["redesign-audio-language", qsTr("Preferred audio language")], ["audio-desync", qsTr("Audio delay"), {factor: 0.001, decimals: 2, suffix: " s"}] ] },
-            { title: qsTr("Visualization"), rows: [ ["audio-visual", qsTr("Visualizer")] ] } ],
+            { title: qsTr("Visualization"), rows: [ ["audio-visual", qsTr("Visualizer"), {choiceLabels: {none: qsTr("Disabled")}}] ] } ],
         subtitles: [
             { title: qsTr("Tracks & Languages"), rows: [ ["spu", qsTr("Enable subtitles")], ["redesign-sub-language", qsTr("Preferred language")], ["subsdec-encoding", qsTr("Text encoding")] ] },
             { title: qsTr("Loading Subtitles"), rows: [ ["sub-autodetect-file", qsTr("Load subtitle files automatically")], ["sub-autodetect-fuzzy", qsTr("File name matching")] ] },

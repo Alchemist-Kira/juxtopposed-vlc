@@ -30,6 +30,19 @@
 namespace {
 const QString presetOption = QStringLiteral("qt-player-presets");
 
+QString audioFilterHelp(const QString& name)
+{
+    if (name == QLatin1String("equalizer")) return qtr("Change the level of each frequency band.");
+    if (name == QLatin1String("normvol")) return qtr("Reduce the volume when the average audio level is above the target level.");
+    if (name == QLatin1String("compressor")) return qtr("Reduce the difference between loud and quiet sounds.");
+    if (name == QLatin1String("stereo_widen")) return qtr("Increase the separation between the left and right audio channels.");
+    if (name == QLatin1String("chorus_flanger")) return qtr("Mix the audio with delayed copies to change its sound.");
+    if (name == QLatin1String("karaoke")) return qtr("Reduce sounds in the center of stereo audio.");
+    if (name == QLatin1String("spatializer")) return qtr("Add the sound of a room to stereo audio.");
+    if (name == QLatin1String("audioscrobbler")) return qtr("Send information about played tracks to Last.fm.");
+    return {};
+}
+
 const QStringList& videoFilterOptions()
 {
     static const QStringList names{
@@ -848,7 +861,8 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
         const auto parts = name.split(QLatin1Char(':'));
         if (parts.size() != 3 || !module_exists(parts[2].toUtf8().constData())) return {};
         return {{QStringLiteral("kind"), QStringLiteral("bool")}, {QStringLiteral("title"), parts[2]},
-            {QStringLiteral("value"), value(name)}, {QStringLiteral("defaultValue"), false}};
+            {QStringLiteral("value"), value(name)}, {QStringLiteral("defaultValue"), false},
+            {QStringLiteral("help"), parts[1] == QLatin1String("audio-filter") ? audioFilterHelp(parts[2]) : QString()}};
     }
 
     const QByteArray bytes = name.toUtf8();

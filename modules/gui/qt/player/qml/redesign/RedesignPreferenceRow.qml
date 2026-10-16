@@ -67,6 +67,7 @@ ColumnLayout {
                 wrapMode: Text.WordWrap
             }
             RedesignIcon {
+                objectName: "preferenceHelpIcon"
                 name: "info"; color: theme.foreground; opacity: 0.4
                 width: theme.dp(16); height: width
                 x: labelText.width + theme.dp(8); anchors.verticalCenter: parent.verticalCenter

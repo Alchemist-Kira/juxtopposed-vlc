@@ -113,6 +113,16 @@ ColumnLayout {
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         }
     }
+    Loader {
+        Layout.fillWidth: true
+        Layout.topMargin: active ? theme.dp(8) : 0
+        active: !!root.presentation.spatializer
+        visible: active
+        sourceComponent: RedesignSpatializer {
+            backend: root.backend
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        }
+    }
     Component {
         id: actionEditor
         Item {

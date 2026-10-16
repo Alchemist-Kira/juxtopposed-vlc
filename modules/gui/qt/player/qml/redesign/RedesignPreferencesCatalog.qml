@@ -106,6 +106,7 @@ QtObject {
             { title: qsTr("Effects"), rows: [ ["filter:audio-filter:equalizer", qsTr("Equalizer")],
                 ["equalizer-preset", qsTr("Equalizer preset"), {equalizer: true}],
                 ["equalizer-2pass", qsTr("Two-pass")],
+                ["filter:audio-filter:spatializer", qsTr("Spatializer"), {spatializer: true}],
                 ["audio-spatial", qsTr("Spatial audio")],
                 ["audio-spatial-mode", qsTr("Spatial audio mode"), {enabledWhen: "audio-spatial"}],
                 ["filter:audio-filter:stereowiden", qsTr("Stereo widening")], ["filter:audio-filter:compressor", qsTr("Compressor")],

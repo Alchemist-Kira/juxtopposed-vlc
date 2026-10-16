@@ -16,10 +16,12 @@ TestCase {
         property var values: ({})
         property var gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         property bool supported: true
+        property bool spatializerSupported: true
         property string lastOption
         property var lastValue
         function value(name) { return values[name] }
         function describe(name) {
+            if (name === "filter:audio-filter:spatializer") return spatializerSupported ? {kind: "bool"} : {}
             if (name.endsWith("-track")) return {kind: "integer", editor: "track", maximum: 2147483647}
             if (name === "redesign-equalizer-preset") {
                 if (!supported) return {}
@@ -57,7 +59,7 @@ TestCase {
     function item(name) { return findChild(audio, name) }
     function init() {
         store.values = {"redesign-audio-track": 0, "redesign-audio-language": "Automatic", "redesign-equalizer-preset": "", "equalizer-2pass": false, "equalizer-preamp": 12}
-        store.gains = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; store.supported = true; store.revision++
+        store.gains = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; store.supported = true; store.spatializerSupported = true; store.revision++
         store.lastOption = ""; store.lastValue = undefined
         delaySeconds = 0; stereoRequest = -1
         stereoChoices.clear(); stereoChoices.append({display: "Mono", checked: false}); stereoChoices.append({display: "Stereo", checked: true})
@@ -71,6 +73,7 @@ TestCase {
         verify(item("inlineEqualizerPreset").y < item("inlineEqualizer").y)
         verify(item("inlineEqualizer").y < item("inlineEqualizerTwoPass").y)
         verify(!item("inlineEqualizer").expanded)
+        verify(item("inlineEqualizerTwoPass").y < item("inlineSpatializerSetting").y)
     }
     function test_stereoSelectorUsesFullPanelWidthAndNativeSelection() {
         const field = findChild(item("stereoModeSetting"), "modelChoiceField")
@@ -125,6 +128,11 @@ TestCase {
         compare(store.lastOption, "equalizer-2pass"); compare(store.lastValue, true)
         store.stage("equalizer-2pass", false)
         verify(!toggle.checked)
+    }
+    function test_unavailableSpatializerDoesNotShowEditors() {
+        verify(item("inlineSpatializerSetting").visible)
+        store.spatializerSupported = false; store.revision++
+        verify(!item("inlineSpatializerSetting").visible)
     }
     function test_unavailableEqualizerDoesNotShowEditors() {
         store.supported = false; store.revision++

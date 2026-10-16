@@ -51,6 +51,15 @@ const QStringList& videoFilterOptions()
     return names;
 }
 
+const QStringList& spatializerOptions()
+{
+    static const QStringList names{
+        QStringLiteral("spatializer-roomsize"), QStringLiteral("spatializer-width"),
+        QStringLiteral("spatializer-wet"), QStringLiteral("spatializer-dry"), QStringLiteral("spatializer-damp")
+    };
+    return names;
+}
+
 const QStringList& overlayOptions()
 {
     static const QStringList names{
@@ -95,6 +104,7 @@ const QStringList& presetOptions()
         };
         names += videoFilterOptions();
         names += overlayOptions();
+        names += spatializerOptions();
         names.append(QStringLiteral("sub-source"));
         names += {QStringLiteral("preferred-resolution"), QStringLiteral("d3d11-hdr-mode")};
         return names;
@@ -1348,6 +1358,18 @@ bool RedesignPreferences::save()
                 if (name == QLatin1String("equalizer-preamp")) var_SetFloat(output, bytes.constData(), current.toFloat());
                 else if (name == QLatin1String("equalizer-2pass")) var_SetBool(output, bytes.constData(), current.toBool());
                 else if (name != QLatin1String("equalizer-preset") || !current.toString().isEmpty()) var_SetString(output, bytes.constData(), current.toString().toUtf8().constData());
+            }
+            aout_Release(output);
+        }
+    }
+    if (std::any_of(spatializerOptions().cbegin(), spatializerOptions().cend(), [&](const auto& name) { return previous.contains(name); })) {
+        audio_output_t* output = vlc_player_aout_Hold(player);
+        if (output) {
+            for (const auto& name : spatializerOptions()) {
+                if (!previous.contains(name)) continue;
+                const QByteArray bytes = name.toUtf8();
+                if (var_Type(output, bytes.constData()) == 0) var_Create(output, bytes.constData(), VLC_VAR_FLOAT);
+                var_SetFloat(output, bytes.constData(), value(name).toFloat());
             }
             aout_Release(output);
         }

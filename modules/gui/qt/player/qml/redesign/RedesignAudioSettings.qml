@@ -102,4 +102,12 @@ ColumnLayout {
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         onToggled: checked => root.backend.stage("equalizer-2pass", checked)
     }
+    RedesignPreferenceRow {
+        objectName: "inlineSpatializerSetting"
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(16)
+        backend: root.backend; optionName: "filter:audio-filter:spatializer"; label: qsTr("Spatializer")
+        presentation: ({compact: true, spatializer: true})
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+    }
+
 }

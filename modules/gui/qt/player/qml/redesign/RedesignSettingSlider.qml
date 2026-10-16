@@ -24,6 +24,9 @@ ColumnLayout {
     property var ticks: []
     property string tickSuffix
     property bool positiveTickSign: false
+    property real trackHeight: 14
+    property real trackRadius: 5
+    property real trackInset: 0
     property real sliderTopMargin: 0
     property real sliderLeftMargin: 0
     property bool scaleLabelsVisible: true
@@ -125,8 +128,8 @@ ColumnLayout {
         RedesignToolTip { theme: root.theme; text: Number(root.currentValue).toLocaleString(Qt.locale(), 'f', root.decimals) + root.suffix; visible: parent.hovered || parent.pressed; delay: 500 }
         background: Rectangle {
             x: slider.leftPadding; y: slider.topPadding + slider.availableHeight / 2 - height / 2
-            width: slider.availableWidth; height: theme.dp(14); radius: theme.dp(5); color: theme.field
-            Rectangle { width: slider.position * parent.width; height: parent.height; radius: parent.radius; color: theme.progress }
+            width: slider.availableWidth; height: theme.dp(root.trackHeight); radius: theme.dp(root.trackRadius); color: theme.field
+            Rectangle { x: theme.dp(root.trackInset); y: x; width: slider.position * Math.max(0, parent.width - 2 * x); height: Math.max(0, parent.height - 2 * y); radius: Math.max(0, parent.radius - x); color: theme.progress }
             Repeater {
                 model: root.ticks
                 Rectangle {

@@ -39,7 +39,13 @@ SubtitleSourceService::SubtitleSourceService(QObject* parent)
     : SubtitleSourceService(Options{}, parent) {}
 
 SubtitleSourceService::SubtitleSourceService(const Options& options, QObject* parent)
-    : QObject(parent), m_options(options), m_network(this) {}
+    : QObject(parent), m_options(options), m_network(this)
+{
+    m_languages = {QVariantMap{{"code", "en"}, {"text", tr("English")}},
+        QVariantMap{{"code", "es"}, {"text", tr("Spanish")}}, QVariantMap{{"code", "ja"}, {"text", tr("Japanese")}},
+        QVariantMap{{"code", "de"}, {"text", tr("German")}}, QVariantMap{{"code", "nl"}, {"text", tr("Dutch")}},
+        QVariantMap{{"code", "fr"}, {"text", tr("French")}}};
+}
 
 SubtitleSourceService::~SubtitleSourceService()
 {
@@ -81,7 +87,9 @@ bool SubtitleSourceService::setApiKey(const QString& value)
     settings.setValue(QStringLiteral("OpenSubtitles/api-key"), key); settings.sync();
     if (settings.status() != QSettings::NoError) return false;
     QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
-    cancelSearch(); m_apiKey = key; emit configurationChanged(); return true;
+    cancelSearch(); cancelPreparation(); ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr; m_languagesLoaded = false; m_apiKey = key; emit configurationChanged(); return true;
 }
 
 QString SubtitleSourceService::networkError(int status, QNetworkReply::NetworkError error) const
@@ -148,7 +156,10 @@ QVariantList SubtitleSourceService::parseSources(const QByteArray& bytes, QStrin
             if (id <= 0 || seen.contains(id)) continue;
             const auto name = safeName(file.value("file_name").toString(attributes.value("release").toString()));
             const auto url = sourceUrl(id, name); seen.insert(id); m_records.insert(url, {id, name});
-            sources.append(QVariantMap{{"url", url}, {"name", name},
+            const QFileInfo cached(cachePath({id, name}));
+            const auto available = cached.isFile() && cached.size() > 0 && cached.size() <= m_options.maxFileBytes
+                ? QUrl::fromLocalFile(cached.absoluteFilePath()).toString(QUrl::FullyEncoded) : url;
+            sources.append(QVariantMap{{"url", available}, {"name", name},
                 {"language", attributes.value("language").toString()},
                 {"release", attributes.value("release").toString()},
                 {"hearingImpaired", attributes.value("hearing_impaired").toBool()},
@@ -157,6 +168,33 @@ QVariantList SubtitleSourceService::parseSources(const QByteArray& bytes, QStrin
         }
     }
     return sources;
+}
+
+void SubtitleSourceService::fetchLanguages()
+{
+    if (!configured() || m_languagesLoaded || m_languagesReply) return;
+    const auto generation = ++m_languagesGeneration;
+    m_languagesReply = request(m_options.apiBase.resolved(QUrl(QStringLiteral("infos/languages"))), {}, true,
+        m_options.maxJsonBytes, [this, generation](const QByteArray& bytes, const QString& error) {
+            if (generation != m_languagesGeneration) return;
+            m_languagesReply = nullptr;
+            if (!error.isEmpty()) return;
+            const auto data = QJsonDocument::fromJson(bytes).object().value("data").toArray();
+            QVariantList languages; QSet<QString> seen;
+            const QRegularExpression code(QStringLiteral("^[a-z]{2,3}(?:-[a-z]{2,3})?$"));
+            for (const auto& value : data) {
+                const auto item = value.toObject();
+                const auto key = item.value("language_code").toString();
+                const auto name = item.value("language_name").toString();
+                if (seen.contains(key) || name.isEmpty() || !code.match(key).hasMatch()) continue;
+                seen.insert(key); languages.append(QVariantMap{{"code", key}, {"text", name}});
+            }
+            if (languages.isEmpty()) return;
+            std::sort(languages.begin(), languages.end(), [](const QVariant& a, const QVariant& b) {
+                return QString::localeAwareCompare(a.toMap().value("text").toString(), b.toMap().value("text").toString()) < 0;
+            });
+            m_languages = languages; m_languagesLoaded = true; emit languagesChanged();
+        });
 }
 
 quint64 SubtitleSourceService::search(const QString& text, const QString& language)
@@ -224,7 +262,9 @@ void SubtitleSourceService::cancelPreparation()
 
 void SubtitleSourceService::resetSession()
 {
-    cancelSearch(); cancelPreparation(); m_records.clear();
+    cancelSearch(); cancelPreparation(); m_records.clear(); ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr;
 }
 
 quint64 SubtitleSourceService::prepareRows(const QVariantList& rows)
@@ -298,7 +338,9 @@ void SubtitleSourceService::finishPreparation(quint64 generation, const QString&
         }
         row.insert("tracks", tracks); rows.append(row);
     }
+    QVariantMap resolved;
+    for (auto it = m_ready.cbegin(); it != m_ready.cend(); ++it) resolved.insert(it.key(), it.value());
     m_rows.clear(); m_pending.clear(); m_ready.clear();
     m_preparing = false; emit preparingChanged();
-    emit preparationFinished(generation, {{"success", error.isEmpty()}, {"error", error}, {"rows", rows}});
+    emit preparationFinished(generation, {{"success", error.isEmpty()}, {"error", error}, {"rows", rows}, {"resolved", resolved}});
 }

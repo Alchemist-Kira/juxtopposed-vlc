@@ -14,6 +14,7 @@ class SubtitleSourceService : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool configured READ configured NOTIFY configurationChanged FINAL)
+    Q_PROPERTY(QVariantList languages READ languages NOTIFY languagesChanged FINAL)
     Q_PROPERTY(bool preparing READ preparing NOTIFY preparingChanged FINAL)
 public:
     struct Options {
@@ -27,6 +28,8 @@ public:
     ~SubtitleSourceService() override;
     void setStorageDirectory(const QString& directory);
     bool configured() const { return !m_apiKey.isEmpty(); }
+    QVariantList languages() const { return m_languages; }
+    Q_INVOKABLE void fetchLanguages();
     bool preparing() const { return m_preparing; }
     Q_INVOKABLE bool setApiKey(const QString& key);
     Q_INVOKABLE quint64 search(const QString& query, const QString& language);
@@ -37,6 +40,7 @@ public:
 signals:
     void configurationChanged();
     void preparingChanged();
+    void languagesChanged();
     void searchFinished(quint64 request, const QVariantMap& result);
     void preparationFinished(quint64 request, const QVariantMap& result);
 private:
@@ -55,6 +59,10 @@ private:
     QNetworkAccessManager m_network;
     QString m_storageDirectory;
     QByteArray m_apiKey;
+    QVariantList m_languages;
+    bool m_languagesLoaded = false;
+    quint64 m_languagesGeneration = 0;
+    QPointer<QNetworkReply> m_languagesReply;
     QPointer<QNetworkReply> m_searchReply;
     QPointer<QNetworkReply> m_downloadReply;
     quint64 m_searchGeneration = 0;

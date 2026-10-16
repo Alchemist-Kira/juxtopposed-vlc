@@ -109,6 +109,43 @@ private slots:
         const auto tracks=answer.value("rows").toList()[0].toMap().value("tracks").toStringList();QCOMPARE(tracks.size(),2);QCOMPARE(tracks[0],tracks[1]);
         QFile file(QUrl(tracks[0]).toLocalFile());QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),captions());
         spy.clear();client.prepareRows(row({selected}));QVERIFY(result(spy).value("success").toBool());QCOMPARE(server.requests.size(),3);
+        const auto cached=search(client)[0].toMap().value("url").toString();QCOMPARE(cached,tracks[0]);
+    }
+    void languageListIsValidatedAndCached() {
+        QTemporaryDir directory;Server server;
+        server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,R"json({"data":[{"language_code":"en","language_name":"English"},{"language_code":"pt-br","language_name":"Portuguese (Brazil)"},{"language_code":"en","language_name":"Duplicate"},{"language_code":"../../bad","language_name":"Bad"}]})json");};
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
+        QSignalSpy spy(&client,&SubtitleSourceService::languagesChanged);client.fetchLanguages();QVERIFY(spy.wait());
+        QCOMPARE(client.languages().size(),2);QCOMPARE(server.requests.size(),1);QCOMPARE(server.requests[0].url.path(),"/api/infos/languages");
+        client.fetchLanguages();QTest::qWait(40);QCOMPARE(server.requests.size(),1);
+    }
+    void partialDownloadCanBeRetriedWithoutSpendingQuotaAgain() {
+        QTemporaryDir directory;Server server;bool fail=true;
+        server.respond=[&](const HttpRequest& request,QTcpSocket* socket){
+            if(request.url.path()=="/api/subtitles")Server::send(socket,results());
+            else if(request.url.path()=="/api/download") {
+                const auto id=QJsonDocument::fromJson(request.body).object().value("file_id").toInt();
+                if(id==43 && fail)Server::send(socket,"{}",429);
+                else Server::send(socket,QJsonDocument(QJsonObject{{"link",server.base().resolved(QUrl("../file.srt")).toString()}}).toJson());
+            } else Server::send(socket,captions());
+        };
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
+        const auto sources=search(client);const auto a=sources[0].toMap().value("url").toString(),b=sources[1].toMap().value("url").toString();
+        QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({a,b}));auto answer=result(spy);
+        QVERIFY(!answer.value("success").toBool());QCOMPARE(answer.value("resolved").toMap().size(),1);QVERIFY(answer.value("rows").toList().isEmpty());
+        QCOMPARE(server.requests.size(),4);fail=false;spy.clear();client.prepareRows(row({a,b}));answer=result(spy);
+        QVERIFY(answer.value("success").toBool());QCOMPARE(server.requests.size(),6);QCOMPARE(answer.value("resolved").toMap().size(),2);
+    }
+    void cancelDownloadDoesNotEmitOrWriteAFile() {
+        QTemporaryDir directory;Server server;
+        server.respond=[](const HttpRequest& request,QTcpSocket* socket){if(request.url.path()=="/api/subtitles")Server::send(socket,results());};
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
+        const auto selected=search(client)[0].toMap().value("url").toString();QSignalSpy spy(&client,&SubtitleSourceService::preparationFinished);client.prepareRows(row({selected}));
+        QTRY_COMPARE(server.requests.size(),2);client.cancelPreparation();QTest::qWait(40);QVERIFY(!client.preparing());QCOMPARE(spy.count(),0);
+        QVERIFY(!QFileInfo::exists(directory.filePath("opensubtitles/42/The_Wand_S01E04.en.srt")));
+    }
+    void tlsBackendIsAvailable() {
+        QVERIFY2(QSslSocket::supportsSsl(),"The subtitle source needs a working TLS backend");
     }
     void rejectsBadFilesAndLimits_data() {
         QTest::addColumn<QByteArray>("body");QTest::addColumn<qint64>("limit");

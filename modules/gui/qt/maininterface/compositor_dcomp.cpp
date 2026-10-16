@@ -400,19 +400,24 @@ void CompositorDirectComposition::destroyMainInterface()
     assert(!m_uiVisual);
 }
 
+void CompositorDirectComposition::cancelVoutWindowSetup()
+{
+    QMutexLocker lock(&m_setupStateLock);
+    m_setupState = SetupState::Fail;
+    m_setupStateCond.notify_all();
+}
+
 void CompositorDirectComposition::unloadGUI()
 {
+    cancelVoutWindowSetup();
     m_acrylicSurface.reset();
     m_interfaceWindowHandler.reset();
 
     {
-        QMutexLocker lock(&m_setupStateLock);
         if (m_quickView) {
             disconnect(m_quickView.get(), &QQuickWindow::frameSwapped,
                        this, nullptr);
         }
-        m_setupState = SetupState::Fail;
-        m_setupStateCond.notify_all();
     }
 
     //at this point we need to unload the QML content but the window still need to

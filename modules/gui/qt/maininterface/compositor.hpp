@@ -92,6 +92,10 @@ public:
      */
     virtual void unloadGUI() = 0;
 
+    // Called on the GUI thread before interface teardown takes the global
+    // interface lock. Wake video setup that may be waiting while holding it.
+    virtual void cancelVoutWindowSetup() {}
+
     [[nodiscard]] virtual bool setupVoutWindow(vlc_window_t *p_wnd, VoutDestroyCb destroyCb) = 0;
 
     virtual Type type() const = 0;

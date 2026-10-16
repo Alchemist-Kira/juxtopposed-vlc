@@ -1531,6 +1531,12 @@ static void *Thread( void *obj )
 
 static void *ThreadCleanup( qt_intf_t *p_intf, CleanupReason cleanupReason )
 {
+    // WindowOpen holds lock while the compositor waits for its first frame.
+    // Cancel that wait before taking lock, while the GUI thread can still
+    // complete teardown even if rendering has not started.
+    if (p_intf->p_compositor)
+        p_intf->p_compositor->cancelVoutWindowSetup();
+
     {
         vlc::threads::mutex_locker locker (lock);
         if( cleanupReason == CLEANUP_ERROR )

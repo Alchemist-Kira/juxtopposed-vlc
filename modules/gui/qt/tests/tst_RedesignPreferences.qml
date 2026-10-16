@@ -471,6 +471,13 @@ TestCase {
         const audio = catalog.sections.audio.reduce((names, section) => names.concat(section.rows.map(row => row[0])), [])
         verify(audio.includes("redesign-audio-device"))
         verify(!audio.includes("aout"))
+        verify(!audio.includes("filter:audio-filter:spatializer"))
+        const effects = catalog.sections.audio.find(section => section.title === "Effects").rows.map(row => row[0])
+        verify(effects.includes("filter:audio-filter:stereo_widen"))
+        verify(!effects.includes("filter:audio-filter:stereowiden"))
+        verify(effects.indexOf("audio-spatial-mode") < effects.indexOf("filter:audio-filter:stereo_widen"))
+        verify(effects.indexOf("filter:audio-filter:stereo_widen") < effects.indexOf("filter:audio-filter:compressor"))
+        verify(catalog.advancedSections.audio.some(section => section.rows.some(row => row[0] === "filter:audio-filter:spatializer" && row[2].spatializer)))
         verify(catalog.advancedSections.audio.some(section => section.rows.some(row => row[0] === "aout")))
         verify(catalog.advancedSections.playback[0].rows.some(row => row[0] === "input-timeshift-path"))
     }

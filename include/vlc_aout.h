@@ -621,6 +621,17 @@ VLC_API void     aout_FiltersChangeViewpoint(aout_filters_t *, const vlc_viewpoi
  */
 VLC_API vout_thread_t *aout_filter_GetVout(filter_t *, const video_format_t *);
 
+/**
+ * Change the picture format of an audio visualization's video output.
+ *
+ * Call after aout_filter_GetVout() succeeds, from the visualization's picture
+ * production thread. The caller must serialize this with picture submission
+ * and stop that thread before closing the filter. The video window is reused
+ * and the audio output stays active. On failure, the caller can restore its
+ * previous format.
+ */
+VLC_API int aout_filter_UpdateVoutFormat(filter_t *, const video_format_t *);
+
 /** @} */
 
 /**

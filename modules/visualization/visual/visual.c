@@ -184,6 +184,9 @@ typedef struct
     int             i_effect;
     bool            dead;
     vlc_thread_t    thread;
+    video_format_t  format;
+    vlc_tick_t     resize_retry;
+    bool           display_ready;
 } filter_sys_t;
 
 static const struct vlc_filter_operations filter_ops = {
@@ -195,27 +198,37 @@ static const struct vlc_filter_operations filter_ops = {
 /*****************************************************************************
  * Open: open the visualizer
  *****************************************************************************/
+static bool GetSize(filter_t *filter, unsigned *width, unsigned *height)
+{
+    const int64_t requested_width = var_InheritInteger(filter, "effect-width");
+    const int64_t requested_height = var_InheritInteger(filter, "effect-height");
+    if (requested_width > INT_MAX || requested_height > INT_MAX)
+        return false;
+    /* Effects require at least 532x400 and even dimensions. */
+    *width = (unsigned)__MAX(532, requested_width) & ~1u;
+    *height = (unsigned)__MAX(400, requested_height) & ~1u;
+    return true;
+}
+
 static int Open( vlc_object_t *p_this )
 {
     filter_t     *p_filter = (filter_t *)p_this;
     filter_sys_t *p_sys;
 
     char *psz_effects, *psz_parser;
+    unsigned width, height;
+    if (!GetSize(p_filter, &width, &height))
+    {
+        msg_Err(p_filter, "visualization image size is too large");
+        return VLC_EGENERIC;
+    }
 
     p_sys = p_filter->p_sys = malloc( sizeof( filter_sys_t ) );
     if( unlikely (p_sys == NULL ) )
         return VLC_EGENERIC;
     p_sys->pool = NULL;
-
-    int width = var_InheritInteger( p_filter , "effect-width");
-    int height = var_InheritInteger( p_filter , "effect-height");
-    /* No resolution under 400x532 and no odd dimension */
-    if( width < 532 )
-        width  = 532;
-    width &= ~1;
-    if( height < 400 )
-        height = 400;
-    height &= ~1;
+    p_sys->resize_retry = 0;
+    p_sys->display_ready = true;
 
     p_sys->i_effect = 0;
     p_sys->effect   = NULL;
@@ -314,6 +327,7 @@ static int Open( vlc_object_t *p_this )
     p_sys->pool = picture_pool_NewFromFormat(&fmt, 3);
     if (p_sys->pool == NULL)
         goto error;
+    p_sys->format = fmt;
 
     p_sys->p_vout = aout_filter_GetVout( p_filter, &fmt );
     if( p_sys->p_vout == NULL )
@@ -347,9 +361,55 @@ error:
     return VLC_EGENERIC;
 }
 
+static void Resize(filter_t *filter)
+{
+    filter_sys_t *sys = filter->p_sys;
+    unsigned width, height;
+    if (!GetSize(filter, &width, &height))
+        return;
+    if ((sys->display_ready && width == sys->format.i_width && height == sys->format.i_height)
+        || vlc_tick_now() < sys->resize_retry)
+        return;
+
+    video_format_t fmt = sys->format;
+    fmt.i_width = fmt.i_visible_width = width;
+    fmt.i_height = fmt.i_visible_height = height;
+    picture_pool_t *pool = picture_pool_NewFromFormat(&fmt, 3);
+    if (pool == NULL)
+    {
+        sys->resize_retry = vlc_tick_now() + VLC_TICK_FROM_SEC(1);
+        return;
+    }
+
+    if (aout_filter_UpdateVoutFormat(filter, &fmt) != VLC_SUCCESS)
+    {
+        picture_pool_Release(pool);
+        sys->display_ready = aout_filter_UpdateVoutFormat(filter, &sys->format) == VLC_SUCCESS;
+        sys->resize_retry = vlc_tick_now() + VLC_TICK_FROM_SEC(1);
+        return;
+    }
+
+    picture_pool_Release(sys->pool);
+    sys->pool = pool;
+    sys->format = fmt;
+    sys->display_ready = true;
+    for (int i = 0; i < sys->i_effect; ++i)
+    {
+        visual_effect_t *effect = sys->effect[i];
+        effect->pf_free(effect->p_data);
+        effect->p_data = NULL;
+        effect->i_width = width;
+        effect->i_height = height;
+    }
+    msg_Dbg(filter, "visualization canvas resized to %ux%u", width, height);
+}
+
 static block_t *DoRealWork( filter_t *p_filter, block_t *p_in_buf )
 {
     filter_sys_t *p_sys = p_filter->p_sys;
+    Resize(p_filter);
+    if (!p_sys->display_ready)
+        return p_in_buf;
 
     /* First, get a new picture */
     picture_t *p_outpic = picture_pool_Wait(p_sys->pool);

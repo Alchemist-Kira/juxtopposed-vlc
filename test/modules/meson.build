@@ -1,4 +1,13 @@
 vlc_tests += {
+    'name': 'test_modules_visualization_resize',
+    'sources': files('visualization/resize.c'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['visual', 'demux_mock', 'araw', 'adummy'],
+    'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+}
+
+vlc_tests += {
     'name' : 'test_modules_lua_extension',
     'sources' : files('lua/extension.c'),
     'suite' : ['modules', 'test_modules'],

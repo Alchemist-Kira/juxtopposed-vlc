@@ -87,6 +87,7 @@ check_PROGRAMS = \
 	test_modules_lua_extension \
 	test_modules_misc_medialibrary \
 	test_modules_misc_media_tracks \
+	test_modules_visualization_resize \
 	test_modules_packetizer_helpers \
 	test_modules_packetizer_hxxx \
 	test_modules_packetizer_h264 \
@@ -425,6 +426,8 @@ test_modules_misc_medialibrary_LDADD = $(LIBVLCCORE) $(LIBVLC)
 
 test_modules_misc_media_tracks_SOURCES = modules/misc/media_tracks.c
 test_modules_misc_media_tracks_LDADD = $(LIBVLCCORE) $(LIBVLC) ../compat/libcompat.la
+test_modules_visualization_resize_SOURCES = modules/visualization/resize.c
+test_modules_visualization_resize_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_modules_packetizer_helpers_SOURCES = modules/packetizer/helpers.c
 test_modules_packetizer_helpers_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_modules_packetizer_hxxx_SOURCES = modules/packetizer/hxxx.c

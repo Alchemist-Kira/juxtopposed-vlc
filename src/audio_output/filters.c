@@ -450,6 +450,20 @@ vout_thread_t *aout_filter_GetVout(filter_t *filter, const video_format_t *fmt)
     return vout;
 }
 
+int aout_filter_UpdateVoutFormat(filter_t *filter, const video_format_t *fmt)
+{
+    struct filter_owner_sys *owner_sys = filter->owner.sys;
+    assert(owner_sys->vout != NULL);
+    assert(owner_sys->clock != NULL);
+
+    video_format_t adjusted = *fmt;
+    video_format_AdjustColorSpace(&adjusted);
+    const vout_configuration_t cfg = {
+        .vout = owner_sys->vout, .clock = owner_sys->clock, .fmt = &adjusted,
+    };
+    return vout_Request(&cfg, NULL, NULL);
+}
+
 static int AppendFilter(vlc_object_t *obj, const char *type, const char *name,
                         aout_filters_t *restrict filters,
                         audio_sample_format_t *restrict infmt,
@@ -477,17 +491,23 @@ static int AppendFilter(vlc_object_t *obj, const char *type, const char *name,
         return -1;
     }
 
+    if (owner_sys.vout != NULL)
+    {
+        // The probe uses the local owner. A visualization can also update its
+        // video format later, so retain that owner for the filter's lifetime.
+        struct filter_owner_sys *retained_owner = vlc_obj_malloc(filter, sizeof(*retained_owner));
+        if (retained_owner == NULL)
+            goto error;
+        *retained_owner = owner_sys;
+        filter->owner.sys = retained_owner;
+    }
+
     /* convert to the filter input format if necessary */
     if (aout_FiltersPipelineCreate (obj, filters->tab, &filters->count,
                                     max - 1, infmt, &filter->fmt_in.audio))
     {
         msg_Err (filter, "cannot add user %s \"%s\" (skipped)", type, name);
-        vlc_filter_Delete(filter);
-        if (owner_sys.vout != NULL)
-            vout_Close(owner_sys.vout);
-        if (owner_sys.clock != NULL)
-            vlc_clock_Delete(owner_sys.clock);
-        return -1;
+        goto error;
     }
 
     assert (filters->count < max);
@@ -497,6 +517,14 @@ static int AppendFilter(vlc_object_t *obj, const char *type, const char *name,
     filters->count++;
     *infmt = filter->fmt_out.audio;
     return 0;
+
+error:
+    vlc_filter_Delete(filter);
+    if (owner_sys.vout != NULL)
+        vout_Close(owner_sys.vout);
+    if (owner_sys.clock != NULL)
+        vlc_clock_Delete(owner_sys.clock);
+    return -1;
 }
 
 static int AppendRemapFilter(vlc_object_t *obj, aout_filters_t *restrict filters,

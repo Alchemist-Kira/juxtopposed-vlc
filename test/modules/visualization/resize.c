@@ -4,14 +4,20 @@
 #endif
 
 #define MODULE_NAME test_visual_resize
+#ifndef VISUAL_RESIZE_TEST_PLUGIN
 #undef VLC_DYNAMIC_PLUGIN
-#include "../../libvlc/test.h"
+#endif
+#include <vlc/vlc.h>
 #include <vlc_common.h>
 #include <vlc_plugin.h>
 #include <vlc_player.h>
 #include <vlc_window.h>
 #include <vlc_vout_display.h>
 #include <stdatomic.h>
+#include <stdio.h>
+#include <stdlib.h>
+#undef NDEBUG
+#include <assert.h>
 #include "../../../lib/libvlc_internal.h"
 
 static atomic_uint_fast64_t picture_size;
@@ -84,9 +90,11 @@ vlc_module_begin()
         add_shortcut("resize-test")
 vlc_module_end()
 
+#ifndef VISUAL_RESIZE_TEST_PLUGIN
 VLC_EXPORT const vlc_plugin_cb vlc_static_modules[] = {
     VLC_SYMBOL(vlc_entry), NULL
 };
+#endif
 
 static void wait_picture(unsigned width, unsigned height, unsigned previous)
 {
@@ -184,17 +192,29 @@ static void test_resize(const char *effect)
     assert(atomic_load(&window_closes) == 1);
 }
 
-int main(void)
+static void Timeout(void *opaque)
 {
-    test_init();
-    // Each effect creates an instance and tests a failed display plus recovery.
-    if (getenv("VLC_TEST_TIMEOUT") == NULL)
-        alarm(25);
+    (void) opaque;
+    fputs("visualization resize test timed out\n", stderr);
+    abort();
+}
+
+#ifdef VISUAL_RESIZE_TEST_PLUGIN
+VLC_EXPORT int visual_resize_test_run(void);
+int visual_resize_test_run(void)
+#else
+int main(void)
+#endif
+{
+    vlc_timer_t timer;
+    assert(vlc_timer_create(&timer, Timeout, NULL) == 0);
+    vlc_timer_schedule(timer, false, VLC_TICK_FROM_SEC(25), 0);
     const char *effects[] = { "scope", "spectrum", "spectrometer", "vuMeter", "dummy" };
     for (size_t i = 0; i < ARRAY_SIZE(effects); ++i)
     {
         test_resize(effects[i]);
         fprintf(stderr, "%s: live resize and recovery passed\n", effects[i]);
     }
+    vlc_timer_destroy(timer);
     return 0;
 }

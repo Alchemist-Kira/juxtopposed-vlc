@@ -22,6 +22,7 @@
 #include "util/shared_input_item.hpp"
 #include "util/playlist_cover_store.hpp"
 #include "util/track_matching.hpp"
+#include "../../../misc/medialibrary/track_rules.hpp"
 #include <QScopeGuard>
 
 #include <utility>
@@ -424,8 +425,9 @@ QVariantList trackSources(QFileInfoList files, bool subtitles, const QString& fo
 void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJSValue callback)
 {
     if (!callback.isCallable()) return;
+    const bool automatic = !subtitles || var_InheritBool(m_intf, "sub-autodetect-file");
     runOnMLThread<QVariantMap>(this,
-        [target, subtitles](vlc_medialibrary_t* ml, QVariantMap& result) {
+        [target, subtitles, automatic](vlc_medialibrary_t* ml, QVariantMap& result) {
             result = {{"success", false}, {"error", qtr("VLC cannot read these files. Select them again.")}};
             QList<QUrl> urls;
             const auto scope = target.value("scope").toString();
@@ -461,6 +463,20 @@ void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJ
                 for (const auto& value : target.value("urls").toList()) urls.append(value.toUrl());
             } else return;
             const auto type = subtitles ? VLC_ML_FILE_TYPE_SUBTITLE : VLC_ML_FILE_TYPE_SOUNDTRACK;
+            bool hasFolderRule = false;
+            if (scope == "folder") {
+                const auto folder = target.value("folder", target.value("url")).toUrl();
+                char* value = nullptr;
+                const int status = vlc_ml_folder_get_track_rule(ml, folder.toEncoded().constData(), type, &value);
+                const auto definition = qfu(value); free(value);
+                result.insert("folderRule", definition); result.insert("automaticMatching", automatic);
+                if (status != VLC_SUCCESS) result.insert("ruleError", qtr("VLC could not read the saved folder matches. Save again to replace them."));
+                std::vector<vlc::medialibrary::trackrules::Pair> pairs;
+                if (!definition.isEmpty() && vlc::medialibrary::trackrules::decode(definition.toStdString(), pairs) && !pairs.empty()) {
+                    hasFolderRule = true;
+                    result.insert("sourceFolder", QUrl::fromLocalFile(QString::fromStdString(pairs.front().source)).toString(QUrl::FullyEncoded));
+                }
+            }
             QVariantList rows;
             QSet<QUrl> seen;
             for (const auto& url : urls) {
@@ -474,13 +490,23 @@ void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJ
                 const bool explicitSelection = media && (subtitles ? media->b_subtitle_track_selection : media->b_soundtrack_track_selection);
                 const auto baseline = selectedTracks(media.get(), type);
                 auto initial = baseline;
+                bool inherited = false;
+                if (!explicitSelection && (scope == "folder" ? hasFolderRule : automatic)) {
+                    vlc_ml_file_list_t* files = nullptr;
+                    const int status = vlc_ml_media_get_folder_tracks(ml, uri.constData(), type, &inherited, &files);
+                    if (status != VLC_SUCCESS) inherited = false;
+                    if (inherited) initial.clear();
+                    if (status == VLC_SUCCESS && files) for (const auto& file : ml_range_iterate<vlc_ml_file_t>(files)) initial.append(qfu(file.psz_mrl));
+                    if (files) vlc_ml_file_list_release(files);
+                    initial.removeDuplicates();
+                }
                 if (!explicitSelection && url == target.value("runtimeUrl").toUrl()) {
                     initial.append(trackStrings(target.value("runtimeTracks")));
                     initial.removeDuplicates();
                 }
                 rows.append(QVariantMap{{"url", url.toString(QUrl::FullyEncoded)}, {"name", name},
                     {"location", url.toDisplayString(QUrl::PreferLocalFile)},
-                    {"explicitSelection", explicitSelection}, {"initialTracks", initial},
+                    {"explicitSelection", explicitSelection}, {"inheritedRule", inherited}, {"initialTracks", initial},
                     {"baseline", baseline}});
             }
             result.insert("success", true); result.insert("error", QString()); result.insert("rows", rows);
@@ -580,12 +606,80 @@ void MediaLib::requestTrackMatches(const QList<QUrl>& media, const QList<QUrl>& 
 
 void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback)
 {
+    saveTrackAssignmentsImpl(rows, subtitles, {}, std::move(callback));
+}
+
+QString MediaLib::trackFolderRuleDefinition(const QVariantList& rows, const QUrl& folder,
+                                           const QUrl& source, const QString& inherited) const
+{
+    namespace Rules = vlc::medialibrary::trackrules;
+    if (!folder.isLocalFile() || !QFileInfo(folder.toLocalFile()).isAbsolute()) return {};
+    const auto target = QDir::cleanPath(folder.toLocalFile());
+    std::vector<Rules::Pair> pairs;
+    std::vector<Rules::Pair> previous;
+    Rules::decode(inherited.toStdString(), previous);
+    QSet<QString> families, untouched;
+    QVariantList validRows;
+    for (const auto& value : rows) {
+        const auto row = value.toMap(); const auto media = row.value("url").toUrl();
+        if (!media.isLocalFile()) continue;
+        const auto parent = QDir::cleanPath(QFileInfo(media.toLocalFile()).absolutePath());
+#ifdef Q_OS_WIN
+        if (parent.compare(target, Qt::CaseInsensitive) != 0) continue;
+#else
+        if (parent != target) continue;
+#endif
+        validRows.append(row);
+        const auto family = QString::fromStdString(Rules::family(media.fileName().toStdString()));
+        families.insert(family);
+        if (row.value("inheritedRule").toBool() && !row.value("manual").toBool()
+            && sameTracks(trackStrings(row.value("initialTracks")), trackStrings(row.value("tracks")))) untouched.insert(family);
+    }
+    for (const auto& pair : previous) {
+        const auto family = QString::fromStdString(Rules::family(pair.media));
+        if (family == "*" ? validRows.isEmpty() || !untouched.isEmpty() : !families.contains(family) || untouched.contains(family)) pairs.push_back(pair);
+    }
+    for (const auto& value : validRows) {
+        const auto row = value.toMap(); const auto media = row.value("url").toUrl();
+        for (const auto& entry : row.value("tracks").toList()) {
+            const auto track = entry.toUrl();
+            if (!track.isLocalFile() || !QFileInfo(track.toLocalFile()).isAbsolute()) continue;
+            auto root = source.isLocalFile() ? QDir::cleanPath(source.toLocalFile()) : QString();
+            const auto relative = root.isEmpty() ? QStringLiteral("../") : QDir(root).relativeFilePath(track.toLocalFile());
+            if (relative == ".." || relative.startsWith("../")) {
+                root = QFileInfo(track.toLocalFile()).absolutePath();
+                if (!Rules::episodes(QFileInfo(root).fileName().toStdString()).empty()) root = QFileInfo(root).absolutePath();
+            }
+            pairs.push_back({media.fileName().toStdString(), QDir::cleanPath(track.toLocalFile()).toStdString(), root.toStdString()});
+        }
+    }
+    pairs = Rules::distinct(pairs);
+    return pairs.empty() ? QString() : QString::fromStdString(Rules::encode(pairs));
+}
+
+void MediaLib::saveTrackAssignmentsWithRule(const QVariantList& rows, bool subtitles,
+                                           const QVariantMap& rule, QJSValue callback)
+{
+    saveTrackAssignmentsImpl(rows, subtitles, rule, std::move(callback));
+}
+
+void MediaLib::saveTrackAssignmentsImpl(const QVariantList& rows, bool subtitles,
+                                       const QVariantMap& rule, QJSValue callback)
+{
     if (!callback.isCallable()) return;
     runOnMLThread<QVariantMap>(this,
-        [rows, subtitles](vlc_medialibrary_t* ml, QVariantMap& result) {
+        [rows, subtitles, rule](vlc_medialibrary_t* ml, QVariantMap& result) {
             QVariantList saved;
             result = {{"success", false}, {"error", QString()}, {"saved", saved}};
             const auto type = subtitles ? VLC_ML_FILE_TYPE_SUBTITLE : VLC_ML_FILE_TYPE_SOUNDTRACK;
+            if (!rule.isEmpty()) {
+                std::vector<vlc::medialibrary::trackrules::Pair> pairs;
+                const auto definition = rule.value("definition").toString();
+                if (!rule.value("folder").toUrl().isLocalFile()
+                    || (!definition.isEmpty() && !vlc::medialibrary::trackrules::decode(definition.toStdString(), pairs))) {
+                    result["error"] = qtr("VLC cannot save these folder matches. Select the folder again."); return;
+                }
+            }
             struct Edit { QUrl url; QStringList before; QStringList after; QStringList initial; };
             QList<Edit> edits;
             QSet<QUrl> seen;
@@ -629,7 +723,8 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                         result["error"] = qtr("VLC cannot read this track: %1").arg(track.toDisplayString()); return;
                     }
                 }
-                if (!sameTracks(before, after) || !sameTracks(initial, after)) edits.append({url, before, after, initial});
+                if (!sameTracks(before, after) || !sameTracks(initial, after)
+                    || (row.value("inheritedRule").toBool() && row.value("manual").toBool())) edits.append({url, before, after, initial});
             }
             for (const auto& edit : edits) {
                 const auto uri = edit.url.toEncoded();
@@ -653,6 +748,14 @@ void MediaLib::saveTrackAssignments(const QVariantList& rows, bool subtitles, QJ
                 saved.append(QVariantMap{{"url", edit.url.toString(QUrl::FullyEncoded)},
                     {"baseline", edit.before}, {"initialTracks", edit.initial}, {"tracks", edit.after}});
                 result["saved"] = saved;
+            }
+            if (!rule.isEmpty()) {
+                const auto folder = rule.value("folder").toUrl().toEncoded();
+                const auto definition = rule.value("definition").toString().toUtf8();
+                if (vlc_ml_folder_set_track_rule(ml, folder.constData(), type, definition.isEmpty() ? nullptr : definition.constData()) != VLC_SUCCESS) {
+                    result["error"] = qtr("VLC could not save the folder matches. Try Save again."); return;
+                }
+                result["folderRuleSaved"] = true; result["folderRule"] = QString::fromUtf8(definition);
             }
             result["success"] = true;
         },

@@ -32,7 +32,7 @@ TestCase {
         finishMatching=true
         width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
         dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
-        saveSpy.clear(); rowSpy.clear(); dropSpy.clear(); searchSpy.clear(); linkSpy.clear(); dialog.providerConfigured=false
+        saveSpy.clear(); rowSpy.clear(); dropSpy.clear(); searchSpy.clear(); linkSpy.clear(); dialog.providerConfigured=false; dialog.folderRuleDefinition=""
         verify(dialog.begin({scope:"file",url:first,urls:[first,second]},true))
         tryCompare(dialog,"opened",true); load([rows()[0]])
     }
@@ -277,6 +277,87 @@ TestCase {
             const item=findChild(dialog,name),point=item.mapToItem(testCase,0,0)
             verify(point.x>=0 && point.y>=0,name);verify(point.x+item.width<=width && point.y+item.height<=height,name)
         }
+    }
+    function test_folderRuleOnlySaveAndRetry() {
+        dialog.selectScope(1);load(rows());dialog.folderRuleDefinition="new-rule"
+        compare(dialog.changedRows.length,0);verify(dialog.folderRuleChanged)
+        dialog.submit();compare(saveSpy.count,1);compare(saveSpy.signalArguments[0][0].length,0)
+        dialog.finish(dialog.requestId,{success:false,error:"Could not save folder matches",saved:[]})
+        verify(dialog.visible);verify(findChild(dialog,"trackAssignmentSave").enabled)
+        dialog.submit();compare(saveSpy.count,2)
+        dialog.finish(dialog.requestId,{success:true,saved:[],folderRuleSaved:true,folderRule:"new-rule"})
+        tryCompare(dialog,"visible",false)
+    }
+    function test_pendingRuleSurvivesReturningToFileScope() {
+        dialog.selectScope(1);load(rows());dialog.folderRuleDefinition="new-rule"
+        dialog.selectScope(0);load([rows()[0]])
+        verify(dialog.folderRuleChanged);compare(dialog.pendingFolderRule.urls.length,2)
+        dialog.submit();compare(saveSpy.count,1);compare(saveSpy.signalArguments[0][0].length,0)
+    }
+    function test_inheritedChoiceCanBePinnedWithoutChangingTracks() {
+        dialog.loadRows(dialog.requestId,{success:true,rows:[{url:first,name:"Episode.mkv",baseline:[english],initialTracks:[english],inheritedRule:true}]})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:english,name:"English.srt"}]})
+        dialog.toggle(first,english);dialog.toggle(first,english)
+        compare(dialog.changedRows.length,1);dialog.submit();compare(saveSpy.count,1)
+        const row=saveSpy.signalArguments[0][0][0]
+        verify(row.inheritedRule && row.manual);compare(row.tracks[0],english)
+    }
+    function test_missingInheritedLanguageDoesNotSelectAnotherLanguage() {
+        dialog.selectScope(1)
+        dialog.loadRows(dialog.requestId,{success:true,folderRule:"old",rows:[{url:first,name:"Episode.mkv",baseline:[],initialTracks:[],inheritedRule:true}]})
+        dialog.folderRuleDefinition="old"
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[{url:spanish,name:"Spanish.srt"}]})
+        dialog.applyMatches({[first]:[spanish]});compare(dialog.tracks(first).length,0)
+        compare(dialog.changedRows.length,0);verify(!dialog.folderRuleChanged)
+        dialog.applyMatches({[first]:[spanish]},true);compare(dialog.tracks(first)[0],spanish);verify(dialog.folderRuleTouched)
+    }
+    function test_inheritedSourceOutsideTheCurrentFolderCanBeSelectedAgain() {
+        dialog.loadRows(dialog.requestId,{success:true,rows:[{url:first,name:"Episode.mkv",baseline:[],initialTracks:[english],inheritedRule:true}]})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[]})
+        const list=findChild(dialog,"trackAssignmentList")
+        tryVerify(() => !!list.itemAtIndex(0))
+        mouseClick(list.itemAtIndex(0))
+        compare(dialog.tracks(first).length,0)
+        compare(dialog.visibleSources.length,1)
+        mouseClick(list.itemAtIndex(0))
+        compare(dialog.tracks(first)[0],english)
+        dialog.submit();compare(saveSpy.count,1)
+        verify(saveSpy.signalArguments[0][0][0].manual)
+    }
+    function test_savedSourceRestoredWithoutOverwritingPendingSource() {
+        dialog.selectScope(1)
+        dialog.loadRows(dialog.requestId,{success:true,folderRule:"old",sourceFolder:"file:///captions/",rows:rows()})
+        dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[]})
+        compare(dialog.sourceFolder,"file:///captions/")
+        dialog.folderRuleTouched=true;dialog.sourceFolder="file:///other/"
+        dialog.selectScope(0);load([rows()[0]]);dialog.selectScope(1)
+        dialog.loadRows(dialog.requestId,{success:true,folderRule:"old",sourceFolder:"file:///captions/",rows:rows()})
+        compare(dialog.sourceFolder,"file:///other/")
+    }
+    function test_removeRuleIsReversibleUntilSave() {
+        dialog.selectScope(1);load(rows());dialog.folderRuleBaseline="old";dialog.folderRuleDefinition="old"
+        const button=findChild(dialog,"trackAssignmentRemoveFolderRule")
+        verify(button.visible);mouseClick(button);verify(dialog.removeFolderRule);verify(dialog.folderRuleChanged)
+        mouseClick(button);verify(!dialog.removeFolderRule);verify(!dialog.folderRuleChanged)
+        mouseClick(button);dialog.reject();compare(saveSpy.count,0);verify(!dialog.removeFolderRule)
+    }
+    function test_removeRuleCanSaveWithoutChangingFileChoices() {
+        dialog.selectScope(1);load(rows());dialog.folderRuleBaseline="old";dialog.folderRuleDefinition="old"
+        mouseClick(findChild(dialog,"trackAssignmentRemoveFolderRule"));dialog.submit()
+        compare(saveSpy.count,1);compare(saveSpy.signalArguments[0][0].length,0);verify(dialog.folderRuleTarget.remove)
+    }
+    function test_lateFolderRuleResultDoesNotChangeFileScope() {
+        dialog.selectScope(1);const stale=dialog.requestId;dialog.selectScope(0);load([rows()[0]])
+        dialog.loadRows(stale,{success:true,folderRule:"stale",sourceFolder:"file:///stale/",rows:rows()})
+        compare(dialog.folderRuleBaseline,"");verify(!dialog.folderRuleLoaded)
+    }
+    function test_folderRuleSmallScaledFooter() {
+        dialog.selectScope(1);load(rows());dialog.folderRuleBaseline="old";dialog.folderRuleDefinition="old"
+        width=500;height=350;dialog.scaleFactor=1.5;dialog.folderRuleAutomatic=false;wait(50)
+        const cancel=findChild(dialog,"trackAssignmentCancel"),save=findChild(dialog,"trackAssignmentSave"),remove=findChild(dialog,"trackAssignmentRemoveFolderRule")
+        const a=cancel.mapToItem(testCase,0,0),b=remove.mapToItem(testCase,0,0),c=save.mapToItem(testCase,0,0)
+        verify(a.x+cancel.width<=b.x);verify(b.x+remove.width<=c.x)
+        verify(c.x+save.width<=width);verify(c.y+save.height<=height)
     }
     function test_onlineLayout_data() {
         return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]

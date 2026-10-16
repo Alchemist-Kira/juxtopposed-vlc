@@ -16,6 +16,7 @@ RedesignSvg {
     sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
     fillMode: Image.PreserveAspectFit
     readonly property var paths: {
+    "refresh": "<path d=\"M20 10C19.5714 8 17.4286 4 12.2857 4C7.14286 4 5.42857 8 4.57143 10M9.71429 8.5L4.57143 10L2 6.5M4 14C4.42857 16 6.57143 20 11.7143 20C16.8571 20 18.5714 16 19.4286 14M14.2857 15.5L19.4286 14L22 17.5\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
     "link": "<path d=\"M14.5 7H17C19.7614 7 22 9.23858 22 12C22 14.7614 19.7614 17 17 17H14.5M9.5 17H7C4.23858 17 2 14.7614 2 12C2 9.23858 4.23858 7 7 7H9.5\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linecap=\"round\"/>",
     "subtitle-file": "<rect x=\"4.25\" y=\"2.75\" width=\"15.5\" height=\"18.5\" rx=\"3.25\" fill=\"none\" stroke=\"COLOR\" stroke-width=\"1.5\"/><path d=\"M8 12.25H16M8 15.75H13.5\" fill=\"none\" stroke=\"COLOR\" stroke-width=\"1.5\" stroke-linecap=\"round\"/>",
     "audio-file": "<rect x=\"4.25\" y=\"2.75\" width=\"15.5\" height=\"18.5\" rx=\"3.25\" fill=\"none\" stroke=\"COLOR\" stroke-width=\"1.5\"/><path d=\"M11 15V9L16 8V14M11 15C11 16.1 10 17 8.9 17C7.8 17 7 16.5 7 15.7C7 14.9 8 14.2 9.1 14.2C9.8 14.2 10.5 14.5 11 15ZM16 14C16 15.1 15 16 13.9 16C12.8 16 12 15.5 12 14.7C12 13.9 13 13.2 14.1 13.2C14.8 13.2 15.5 13.5 16 14Z\" fill=\"none\" stroke=\"COLOR\" stroke-width=\"1.3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",

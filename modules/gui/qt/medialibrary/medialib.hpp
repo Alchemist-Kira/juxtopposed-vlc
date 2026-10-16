@@ -75,6 +75,10 @@ public:
     Q_INVOKABLE void requestTrackMatches(const QList<QUrl>& media, const QList<QUrl>& tracks, QJSValue callback);
     Q_INVOKABLE void cancelTrackMatching();
     Q_INVOKABLE void saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback);
+    Q_INVOKABLE QString trackFolderRuleDefinition(const QVariantList& rows, const QUrl& folder,
+                                                  const QUrl& source, const QString& inherited = QString()) const;
+    Q_INVOKABLE void saveTrackAssignmentsWithRule(const QVariantList& rows, bool subtitles,
+                                                 const QVariantMap& rule, QJSValue callback);
     Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
     Q_INVOKABLE void savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback);
     Q_INVOKABLE void shuffleAndPlay(const MLItemId& id);
@@ -199,6 +203,8 @@ signals:
     void idleChanged();
 
 private:
+    void saveTrackAssignmentsImpl(const QVariantList& rows, bool subtitles,
+                                 const QVariantMap& rule, QJSValue callback);
     enum class MediaStateAction { Read, Ensure, Played, Favorite };
     void requestMediaState(const QUrl& url, MediaStateAction action, bool value, QJSValue callback);
     void requestPlaylistState(const MLItemId& id, bool update, bool favorite, QJSValue callback);

@@ -30,6 +30,7 @@
 #include <QCoreApplication>
 #include <QTest>
 #include <QTemporaryDir>
+#include "../../../misc/medialibrary/track_rules.hpp"
 #include <QFile>
 #include <QQmlEngine>
 #include <QQmlContext>
@@ -661,6 +662,68 @@ private slots:
         QCOMPARE(engine.globalObject().property("staleCalls").toInt(), 0);
     }
 
+    void testTrackFolderRuleDraftKeepsInheritedChoices()
+    {
+        namespace Rules = vlc::medialibrary::trackrules;
+        QTemporaryDir directory;
+        const auto folder = QUrl::fromLocalFile(directory.path());
+        const auto source = QUrl::fromLocalFile(directory.filePath("captions"));
+        const auto media = QUrl::fromLocalFile(directory.filePath("Show_S01E02.mp4"));
+        const auto english = QUrl::fromLocalFile(directory.filePath("captions/Show_S01E02.en.srt")).toString(QUrl::FullyEncoded);
+        const auto french = QUrl::fromLocalFile(directory.filePath("captions/Show_S01E02.fr.srt")).toString(QUrl::FullyEncoded);
+        const auto old = QString::fromStdString(Rules::encode({{"Show_S01E01.mp4",directory.filePath("captions/Show_S01E01.en.srt").toStdString(),source.toLocalFile().toStdString()}}));
+        QVariantMap row{{"url",media.toString(QUrl::FullyEncoded)}, {"tracks",QStringList{}},
+            {"initialTracks",QStringList{}}, {"inheritedRule",true}, {"manual",false}};
+        QCOMPARE(m_medialib->trackFolderRuleDefinition({row},folder,source,old),old);
+        row["manual"] = true;
+        QVERIFY(m_medialib->trackFolderRuleDefinition({row},folder,source,old).isEmpty());
+        row["tracks"] = QStringList{english,french};
+        std::vector<Rules::Pair> pairs;
+        QVERIFY(Rules::decode(m_medialib->trackFolderRuleDefinition({row},folder,source,old).toStdString(),pairs));
+        QCOMPARE(pairs.size(),size_t(2));
+    }
+
+    void testInheritedChoicePinAndFolderRuleRetry()
+    {
+        QQmlEngine engine;
+        QQmlEngine::setObjectOwnership(m_medialib.get(),QQmlEngine::CppOwnership);
+        QQmlEngine::setContextForObject(m_medialib.get(),engine.rootContext());engine.newQObject(m_medialib.get());
+        QTemporaryDir directory;
+        const auto media=QUrl::fromLocalFile(directory.filePath("Show_S01E01.mp4"));
+        const auto captions=QUrl::fromLocalFile(directory.filePath("Show_S01E01.en.srt"));
+        const auto text=captions.toString(QUrl::FullyEncoded);
+        for(const auto& url:{media,captions}) {QFile file(url.toLocalFile());QVERIFY(file.open(QIODevice::WriteOnly));file.write("fixture");}
+        bool pinned=false,rejectRule=true;int trackWrites=0,ruleWrites=0;
+        m_env->mediaGet=[&](int query,va_list args)->void* {
+            if(query!=VLC_ML_GET_MEDIA_BY_MRL)return nullptr;
+            if(QUrl(QString::fromUtf8(va_arg(args,const char*)))!=media)return nullptr;
+            auto* result=static_cast<vlc_ml_media_t*>(calloc(1,sizeof(vlc_ml_media_t)));result->i_id=90;result->b_subtitle_track_selection=pinned;
+            result->p_files=static_cast<vlc_ml_file_list_t*>(calloc(1,sizeof(vlc_ml_file_list_t)+2*sizeof(vlc_ml_file_t)));result->p_files->i_nb_items=2;
+            result->p_files->p_items[0].i_type=VLC_ML_FILE_TYPE_MAIN;result->p_files->p_items[0].psz_mrl=strdup(media.toEncoded().constData());
+            result->p_files->p_items[1].i_type=VLC_ML_FILE_TYPE_SUBTITLE;result->p_files->p_items[1].psz_mrl=strdup(captions.toEncoded().constData());
+            return result;
+        };
+        m_env->mediaControl=[&](int query,va_list args) {
+            if(query==VLC_ML_MEDIA_SET_EXTERNAL_MRLS) {++trackWrites;pinned=true;return VLC_SUCCESS;}
+            if(query==VLC_ML_FOLDER_SET_TRACK_RULE) {++ruleWrites;return rejectRule?VLC_EGENERIC:VLC_SUCCESS;}
+            return VLC_EGENERIC;
+        };
+        const auto definition=m_medialib->trackFolderRuleDefinition({QVariantMap{{"url",media},{"tracks",QStringList{text}}}},QUrl::fromLocalFile(directory.path()),QUrl::fromLocalFile(directory.path()));
+        QVERIFY(!definition.isEmpty());
+        const QVariantMap rule{{"folder",QUrl::fromLocalFile(directory.path())},{"definition",definition}};
+        const QVariantMap row{{"url",media},{"baseline",QStringList{text}},{"initialTracks",QStringList{text}},{"tracks",QStringList{text}},{"inheritedRule",true},{"manual",true}};
+        auto save=[&](const QVariantList& rows) {
+            engine.globalObject().setProperty("answer",QJSValue(QJSValue::NullValue));
+            m_medialib->saveTrackAssignmentsWithRule(rows,true,rule,engine.evaluate("(function(value) { answer=value; })"));
+            if(!QTest::qWaitFor([&]{return !engine.globalObject().property("answer").isNull();}))qFatal("Folder save did not finish");
+            return engine.globalObject().property("answer");
+        };
+        auto result=save({row});QVERIFY(!result.property("success").toBool());QVERIFY(pinned);
+        QCOMPARE(trackWrites,1);QCOMPARE(ruleWrites,1);QCOMPARE(result.property("saved").property("length").toInt(),1);
+        rejectRule=false;result=save({});QVERIFY(result.property("success").toBool());QVERIFY(result.property("folderRuleSaved").toBool());
+        QCOMPARE(trackWrites,1);QCOMPARE(ruleWrites,2);QCOMPARE(result.property("folderRule").toString(),definition);
+    }
+
     void testTrackAssignmentRead()
     {
         QQmlEngine engine;
@@ -674,7 +737,16 @@ private slots:
         }
         m_env->mediaGet = [](int, va_list) -> void* { return nullptr; };
         int writes = 0;
-        m_env->mediaControl = [&](int, va_list) { ++writes; return VLC_EGENERIC; };
+        m_env->mediaControl = [&](int query, va_list args) {
+            if (query == VLC_ML_FOLDER_GET_TRACK_RULE) {
+                va_arg(args, const char*); va_arg(args, int); *va_arg(args, char**) = nullptr; return VLC_SUCCESS;
+            }
+            if (query == VLC_ML_MEDIA_GET_FOLDER_TRACKS) {
+                va_arg(args, const char*); va_arg(args, int); *va_arg(args, bool*) = false;
+                *va_arg(args, vlc_ml_file_list_t**) = nullptr; return VLC_SUCCESS;
+            }
+            ++writes; return VLC_EGENERIC;
+        };
         QVariantMap runtime;
         auto request = [&](bool sources, const QUrl& folder) {
             engine.globalObject().setProperty("answer", QJSValue(QJSValue::NullValue));

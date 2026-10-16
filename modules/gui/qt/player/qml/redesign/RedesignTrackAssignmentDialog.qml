@@ -49,17 +49,30 @@ C.Dialog {
     property int dropRequestId: 0
     property bool saving: false
     property string errorMessage: ""
+    property string folderRuleBaseline: ""
+    property string folderRuleDefinition: ""
+    property bool folderRuleLoaded: false
+    property bool folderRuleTouched: false
+    property bool folderRuleAutomatic: true
+    property bool removeFolderRule: false
+    property var pendingFolderRule: ({})
+    readonly property var folderRuleTarget: scopeIndex === 1
+        ? {folder:targetFolder,source:sourceFolder,urls:rows.map(row => row.url),remove:removeFolderRule} : pendingFolderRule
+    readonly property bool folderRuleNeedsPreparation: !!folderRuleTarget.folder
+        && (folderRuleTarget.urls || []).some(url => tracks(url).some(track => /^(?:opensubtitles|subtitlelink):/.test(String(track))))
+    readonly property bool folderRuleChanged: !!folderRuleTarget.folder
+        && ((folderRuleTarget.remove && folderRuleBaseline.length > 0) || folderRuleNeedsPreparation || folderRuleDefinition !== folderRuleBaseline)
     readonly property bool fileMode: scopeIndex === 0
     readonly property var scopes: [
         {text: qsTr("To This File"), enabled: anchorFile.length > 0},
         {text: qsTr("To Folder"), enabled: targetFolder.length > 0},
         {text: qsTr("To Playlist"), enabled: !!context.key || (context.urls || []).length > 0}
     ]
-    readonly property var changedRows: Object.keys(drafts).map(url => drafts[url]).filter(row => !same(row.initialTracks, row.tracks))
+    readonly property var changedRows: Object.keys(drafts).map(url => drafts[url]).filter(row => !same(row.initialTracks, row.tracks) || (row.inheritedRule && row.manual))
     readonly property var visibleSources: {
         const result = activeSources.slice()
         const seen = result.map(item => item.url)
-        for (const row of rows) for (const url of tracks(row.url))
+        for (const row of rows) for (const url of (drafts[row.url]?.initialTracks || []).concat(tracks(row.url)))
             if (sourceKind(url) === sourceIndex && !seen.includes(url)) { seen.push(url); result.push({url: url, name: fileName(url)}) }
         return result
     }
@@ -104,6 +117,7 @@ C.Dialog {
         context = target; subtitles = subtitleMode
         sourceIndex = 0; onlineSources = []; linkSources = []; linkText = ""; sourceMappings = ({}); sourceKinds = ({}); searchTitle = ""; searchLanguage = "en"; searching = false; cancelableSave = false
         rows = []; sources = []; drafts = ({}); selectedRows = ({}); errorMessage = ""
+        folderRuleBaseline = ""; folderRuleLoaded = false; folderRuleTouched = false; folderRuleAutomatic = true; removeFolderRule = false; pendingFolderRule = ({})
         anchorFile = target.scope === "folder" || target.scope === "playlist" ? "" : String(target.url || "")
         targetFolder = target.scope === "folder" ? String(target.folder || target.url || "") : parentFolder(anchorFile)
         sourceFolder = targetFolder
@@ -128,12 +142,19 @@ C.Dialog {
         loading = false
         if (!result.success) { rows = []; errorMessage = result.error || qsTr("VLC cannot read these files. Try again."); return }
         rows = result.rows || []
+        if (scopeIndex === 1) {
+            folderRuleBaseline = result.folderRule || ""
+            folderRuleAutomatic = result.automaticMatching !== false
+            if (!folderRuleLoaded && !folderRuleTouched && result.sourceFolder) sourceFolder = result.sourceFolder
+            folderRuleLoaded = true
+            if (result.ruleError) errorMessage = result.ruleError
+        }
         const next = Object.assign({}, drafts)
-        for (const row of rows) if (!next[row.url] || same(next[row.url].initialTracks, next[row.url].tracks)) next[row.url] = {
+        for (const row of rows) if (!next[row.url] || (!next[row.url].manual && same(next[row.url].initialTracks, next[row.url].tracks))) next[row.url] = {
             url: row.url, baseline: Array.from(row.baseline || []),
             initialTracks: Array.from(row.initialTracks || row.baseline || []),
             tracks: Array.from(row.initialTracks || row.baseline || []),
-            explicitSelection: !!row.explicitSelection, manual: false
+            explicitSelection: !!row.explicitSelection, inheritedRule: !!row.inheritedRule, manual: false
         }
         drafts = next
         if (!anchorFile && rows.length) anchorFile = rows[0].url
@@ -174,8 +195,12 @@ C.Dialog {
         const next = Object.assign({}, drafts)
         for (const row of rows) {
             const draft = next[row.url]
-            if (draft && !draft.manual && (!draft.explicitSelection || includeSaved)) next[row.url] = Object.assign({}, draft,
-                {tracks: [...new Set(draft.initialTracks.concat(matches[row.url] || []))]})
+            if (draft && !draft.manual && ((!draft.explicitSelection && !draft.inheritedRule) || includeSaved)) {
+                const selection = [...new Set(draft.initialTracks.concat(matches[row.url] || []))]
+                if (includeSaved && !same(draft.tracks, selection)
+                    && ((folderRuleTarget.urls || []).includes(row.url) || parentFolder(row.url) === targetFolder)) folderRuleTouched = true
+                next[row.url] = Object.assign({}, draft, {tracks: selection})
+            }
         }
         drafts = next
     }
@@ -220,6 +245,7 @@ C.Dialog {
     function setTracks(url, selection) {
         const draft = drafts[url]
         if (!draft || saving) return
+        if ((folderRuleTarget.urls || []).includes(url) || parentFolder(url) === targetFolder) folderRuleTouched = true
         drafts = Object.assign({}, drafts, {[url]: Object.assign({}, draft, {tracks: [...new Set(selection)], manual: true})})
         errorMessage = ""
     }
@@ -271,18 +297,19 @@ C.Dialog {
         if (!visible || request !== dropRequestId) return
         loadingDrop = false
         if (result.success) {
-            if (result.folder) sourceFolder = String(result.folder)
+            if (result.folder) { sourceFolder = String(result.folder); folderRuleTouched = true }
             addSources(result.sources || [], target)
         }
         errorMessage = result.error || ""
     }
     function selectScope(index) {
         if (index === scopeIndex || !scopes[index].enabled || saving || loadingDrop) return
+        if (scopeIndex === 1) pendingFolderRule = folderRuleChanged ? folderRuleTarget : ({})
         scopeIndex = index; picker.close(); requestRows()
     }
     function chooseRow(url) { picker.targetUrl = url; picker.open() }
     function submit() {
-        if (saving || loading || loadingSources || loadingDrop || matching || !changedRows.length) return
+        if (saving || loading || loadingSources || loadingDrop || matching || (!changedRows.length && !folderRuleChanged)) return
         searchDebounce.stop(); ++searchRequestId; searching = false; searchCanceled()
         saving = true; picker.close(); errorMessage = ""
         saveRequested(changedRows, subtitles, requestId)
@@ -292,14 +319,15 @@ C.Dialog {
         saving = false
         const completed = result.saved || []
         const next = Object.assign({}, drafts)
-        for (const row of completed) if (next[row.url]) next[row.url] = Object.assign({}, next[row.url], {baseline: Array.from(row.tracks), initialTracks: Array.from(row.tracks), tracks: Array.from(row.tracks), explicitSelection: true})
+        for (const row of completed) if (next[row.url]) next[row.url] = Object.assign({}, next[row.url], {baseline: Array.from(row.tracks), initialTracks: Array.from(row.tracks), tracks: Array.from(row.tracks), explicitSelection: true, inheritedRule: false, manual: false})
         drafts = next
+        if (result.folderRuleSaved) { folderRuleBaseline = result.folderRule || ""; pendingFolderRule = ({}); folderRuleTouched = false; removeFolderRule = false }
         if (completed.length) saved(completed, subtitles)
         if (result.success) accept()
         else errorMessage = (result.error || qsTr("VLC cannot save these tracks. Try again."))
             + (completed.length ? "\n" + qsTr("VLC kept the changes that it saved. Try Save again for the other files.") : "")
     }
-    onClosed: { ++searchRequestId; searching = false; searchDebounce.stop(); searchCanceled(); providerSetup.close(); linkText = ""; linkSources = []; onlineSources = []; sourceMappings = ({}); sourceKinds = ({}); saving = false; cancelableSave = false; ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
+    onClosed: { ++searchRequestId; searching = false; searchDebounce.stop(); searchCanceled(); providerSetup.close(); linkText = ""; linkSources = []; onlineSources = []; sourceMappings = ({}); sourceKinds = ({}); pendingFolderRule = ({}); removeFolderRule = false; folderRuleBaseline = ""; folderRuleLoaded = false; folderRuleTouched = false; saving = false; cancelableSave = false; ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
     Timer { id: searchDebounce; interval: 600; onTriggered: root.requestSearch() }
     Shortcut { sequence: "Ctrl+O"; enabled: root.visible && !root.saving; onActivated: { root.selectSource(0); root.filesRequested("") } }
     Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: root.visible && !root.saving; onActivated: root.submit() }
@@ -548,8 +576,16 @@ C.Dialog {
             id: error
             objectName: "trackAssignmentError"
             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: root.theme.dp(20); anchors.topMargin: root.theme.dp(4)
-            visible: root.errorMessage.length > 0; text: root.errorMessage; wrapMode: Text.WordWrap
-            font.pixelSize: root.theme.dp(14); color: root.theme.danger; Accessible.role: Accessible.AlertMessage
+            visible: text.length > 0
+            text: root.errorMessage || (root.scopeIndex === 1
+                ? root.removeFolderRule ? qsTr("VLC will remove the saved folder matches.")
+                : !root.folderRuleAutomatic ? qsTr("Automatic matching is off in Settings. These choices apply to the current files.")
+                : root.folderRuleDefinition.length || root.folderRuleNeedsPreparation ? qsTr("VLC will use these matches for new files in this folder.")
+                : qsTr("VLC will save these choices for the current files.")
+                : root.folderRuleChanged ? qsTr("VLC will also save the folder matches.") : "")
+            wrapMode: Text.WordWrap
+            font.pixelSize: root.theme.dp(14); color: root.errorMessage.length ? root.theme.danger : root.theme.foreground
+            Accessible.role: root.errorMessage.length ? Accessible.AlertMessage : Accessible.StaticText
         }
         RedesignButton {
             objectName: "trackAssignmentCancel"
@@ -571,8 +607,20 @@ C.Dialog {
             anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: root.theme.dp(20)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             visible: !root.fileMode && Object.values(root.selectedRows).some(value => value)
-            caption: qsTr("Clear selected tracks"); text: caption; enabled: !root.saving
+            iconName: "remove"; caption: root.width >= root.theme.dp(640) ? qsTr("Clear selected tracks") : ""
+            text: qsTr("Clear selected tracks"); enabled: !root.saving
             onClicked: { for (const url of Object.keys(root.selectedRows)) if (root.selectedRows[url]) root.setTracks(url, []) }
+        }
+        RedesignButton {
+            objectName: "trackAssignmentRemoveFolderRule"
+            anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: root.theme.dp(20)
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            visible: root.scopeIndex === 1 && (root.folderRuleBaseline.length > 0 || root.removeFolderRule)
+                && !Object.values(root.selectedRows).some(value => value)
+            iconName: root.removeFolderRule ? "refresh" : "remove"
+            caption: root.width >= root.theme.dp(640) ? text : ""
+            text: root.removeFolderRule ? qsTr("Keep folder matches") : qsTr("Remove folder matches")
+            enabled: !root.saving; onClicked: { root.removeFolderRule = !root.removeFolderRule; root.folderRuleTouched = true }
         }
         RedesignButton {
             objectName: "trackAssignmentSave"
@@ -580,7 +628,7 @@ C.Dialog {
             implicitWidth: root.theme.dp(100); implicitHeight: root.theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.saving ? qsTr("Saving…") : qsTr("Save"); text: caption
-            enabled: !root.saving && !root.loading && !root.loadingSources && !root.loadingDrop && !root.matching && root.changedRows.length > 0
+            enabled: !root.saving && !root.loading && !root.loadingSources && !root.loadingDrop && !root.matching && (root.changedRows.length > 0 || root.folderRuleChanged)
             foreground: root.theme.accent
             background: Rectangle { radius: root.theme.dp(5); color: root.theme.progress; border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : 0.4 }
             onClicked: root.submit()

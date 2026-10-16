@@ -13,8 +13,28 @@ RedesignTrackAssignmentDialog {
     property int pendingSearchRequest: -1
     property double pendingPreparation: -1
     property int pendingSaveRequest: -1
+    property var pendingSaveRule: ({})
     providerConfigured: SubtitleSources.configured
     onlineLanguages: SubtitleSources.languages
+    folderRuleDefinition: draftFolderRule()
+    function ruleRows(target) {
+        return (target.urls || []).map(url => root.drafts[url]).filter(row => row)
+    }
+    function draftFolderRule() {
+        const target = root.folderRuleTarget
+        if (!target.folder || target.remove) return ""
+        const rows = ruleRows(target)
+        if (root.folderRuleBaseline.length && !root.folderRuleTouched && !rows.some(row => row.manual)) return root.folderRuleBaseline
+        return MediaLib.trackFolderRuleDefinition(rows, target.folder, target.source, root.folderRuleBaseline)
+    }
+    function saveNative(rows, subtitles, request) {
+        const target = root.pendingSaveRule
+        const definition = target.remove ? "" : target.folder
+            ? MediaLib.trackFolderRuleDefinition(ruleRows(target), target.folder, target.source, root.folderRuleBaseline) : ""
+        const rule = target.folder && definition !== root.folderRuleBaseline ? {folder:target.folder,definition:definition} : ({})
+        if (rule.folder) MediaLib.saveTrackAssignmentsWithRule(rows, subtitles, rule, result => root.finish(request, result))
+        else MediaLib.saveTrackAssignments(rows, subtitles, result => root.finish(request, result))
+    }
     Connections {
         target: SubtitleSources
         function onSearchFinished(request, result) {
@@ -25,7 +45,7 @@ RedesignTrackAssignmentDialog {
             root.cancelableSave = false
             root.resolveSources(result.resolved)
             const saveRequest = root.pendingSaveRequest
-            if (result.success) MediaLib.saveTrackAssignments(result.rows, root.subtitles, saved => root.finish(saveRequest, saved))
+            if (result.success) root.saveNative(result.rows, root.subtitles, saveRequest)
             else root.finish(root.pendingSaveRequest, {success:false,error:result.error,saved:[]})
         }
     }
@@ -36,8 +56,8 @@ RedesignTrackAssignmentDialog {
         target: MainCtx; property: "useGlobalShortcuts"; value: false
         when: root.visible; restoreMode: Binding.RestoreBindingOrValue
     }
-    onOpened: { restartNeeded = false; SubtitleSources.resetSession() }
-    onClosed: SubtitleSources.resetSession()
+    onOpened: { restartNeeded = false; pendingSaveRule = ({}); SubtitleSources.resetSession() }
+    onClosed: { pendingSaveRule = ({}); SubtitleSources.resetSession() }
     onSearchRequested: (query, language, request) => {
         pendingSearchRequest = request
         pendingSearch = SubtitleSources.search(query, language)
@@ -67,14 +87,15 @@ RedesignTrackAssignmentDialog {
     onFilesRequested: target => root.addFiles(DialogsProvider.selectTrackFiles(root.subtitles, root.sourceFolder), target)
     onFolderRequested: {
         const folder = DialogsProvider.selectTrackFolder(root.sourceFolder)
-        if (folder.toString().length) { root.sourceFolder = String(folder); root.requestSources(true) }
+        if (folder.toString().length) { root.folderRuleTouched = true; root.sourceFolder = String(folder); root.requestSources(true) }
     }
     onSaveRequested: (rows, subtitles, request) => {
+        pendingSaveRule = root.folderRuleChanged ? Object.assign({}, root.folderRuleTarget, {urls:(root.folderRuleTarget.urls || []).slice()}) : ({})
         if (rows.some(row => row.tracks.some(url => /^(?:opensubtitles|subtitlelink):/.test(String(url))))) {
             root.cancelableSave = true
             root.pendingSaveRequest = request
             root.pendingPreparation = SubtitleSources.prepareRows(rows)
-        } else MediaLib.saveTrackAssignments(rows, subtitles, result => root.finish(request, result))
+        } else root.saveNative(rows, subtitles, request)
     }
     onSaved: (rows, subtitles) => restartNeeded = DialogsProvider.applySavedTrackAssignments(rows, subtitles) || restartNeeded
     onAccepted: if (restartNeeded) DialogsProvider.messageDialog(qsTr("Tracks saved. Stop and play this file to use all changes."), qsTr("VLC Media Player"))

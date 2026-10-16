@@ -241,6 +241,14 @@ int main(int argc, char **argv)
     assert(vlc_mkdir_parent(nested, 0700) == 0);
     struct stat nested_stat;
     assert(vlc_stat(nested, &nested_stat) == 0 && S_ISDIR(nested_stat.st_mode));
+#ifdef _WIN32
+    char *extended;
+    assert(asprintf(&extended, "%s%s\\more\\tracks",
+                    !strncmp(nested, "\\\\", 2) ? "\\\\?\\UNC\\" : "\\\\?\\",
+                    nested + (!strncmp(nested, "\\\\", 2) ? 2 : 0)) >= 0);
+    assert(vlc_mkdir_parent(extended, 0700) == 0);
+    free(extended);
+#endif
     free(nested);
     assert(setenv("VLC_USERDATA_PATH", directory, 1) == 0);
     fprintf(stderr, "Using owned media library: %s\n", directory);

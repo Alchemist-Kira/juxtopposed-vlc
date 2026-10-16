@@ -1201,18 +1201,37 @@ bool WindowStateHolder::holdFullscreen(QWindow *window, Source source, bool hold
     if (!ok)
         fullscreenCounter = 0;
 
-    if (hold)
-        fullscreenCounter |= source;
-    else
-        fullscreenCounter &= ~source;
-
     Qt::WindowStates oldflags = window->windowStates();
+
+    if (hold)
+    {
+        if (fullscreenCounter == 0)
+        {
+            bool wasMaximized = (oldflags & Qt::WindowMaximized) ||
+                                window->property("__windowWasMaximized").toBool();
+            window->setProperty("__windowWasMaximized", wasMaximized);
+        }
+        fullscreenCounter |= source;
+    }
+    else
+    {
+        fullscreenCounter &= ~source;
+    }
+
     Qt::WindowStates newflags;
 
     if( fullscreenCounter != 0 )
+    {
         newflags = oldflags | Qt::WindowFullScreen;
+    }
     else
+    {
         newflags = oldflags & ~Qt::WindowFullScreen;
+        if (window->property("__windowWasMaximized").toBool())
+        {
+            newflags |= Qt::WindowMaximized;
+        }
+    }
 
     window->setProperty("__windowFullScreen", QVariant::fromValue(fullscreenCounter));
 

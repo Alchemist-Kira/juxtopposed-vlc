@@ -127,7 +127,13 @@ FocusScope {
         mediaTitle: Player.title || Player.name || qsTr("VLC Media Player")
         locationTitle: view.libraryItem ? view.libraryItem.locationTitle : qsTr("Videos")
         timeText: started ? rootPlayer.clockText(Player.time) : "00:00:00"
-        lengthText: started ? rootPlayer.clockText(Player.length) : "00:00:00"
+        lengthText: {
+            if (!started) return "00:00:00"
+            if (MainCtx.showRemainingTime && Player.remainingTime.valid())
+                return "-" + rootPlayer.clockText(Player.remainingTime)
+            return rootPlayer.clockText(Player.length)
+        }
+        onToggleRemainingTimeRequested: MainCtx.showRemainingTime = !MainCtx.showRemainingTime
         artist: Player.artist
         mediaFolderTitle: rootPlayer.mediaFolderName()
         canBrowseMedia: MainCtx.mediaLibraryAvailable

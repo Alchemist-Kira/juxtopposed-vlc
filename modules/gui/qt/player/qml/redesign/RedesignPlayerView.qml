@@ -100,6 +100,7 @@ FocusScope {
     signal minimizeRequested()
     signal maximizeRequested()
     signal closeRequested()
+    signal toggleRemainingTimeRequested()
     signal audioTracksRequested(Item anchor)
     signal subtitleTracksRequested(Item anchor)
     signal menuRequested(Item anchor)
@@ -553,6 +554,11 @@ FocusScope {
                 horizontalAlignment: Text.AlignHCenter
                 text: root.timeText
                 color: theme.foreground; font.pixelSize: theme.dp(14)
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.toggleRemainingTimeRequested()
+                }
             }
             RedesignPlayerSeekBar {
                 focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
@@ -587,6 +593,11 @@ FocusScope {
                 horizontalAlignment: Text.AlignHCenter
                 text: root.lengthText
                 color: theme.foreground; font.pixelSize: theme.dp(14)
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.toggleRemainingTimeRequested()
+                }
             }
             ChromeButton {
                 objectName: "muteButton"

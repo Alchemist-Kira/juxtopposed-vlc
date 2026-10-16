@@ -211,18 +211,25 @@ bool InterfaceWindowHandler::eventFilter(QObject*, QEvent* event)
          * the window should be maximized again. */
         if( newState & Qt::WindowMaximized &&
             !( oldState & Qt::WindowMaximized ) )
+        {
             m_maximizedView = true;
+            m_window->setProperty("__windowWasMaximized", true);
+        }
 
         if( !( newState & Qt::WindowMaximized ) &&
             oldState & Qt::WindowMaximized &&
             !( newState & Qt::WindowFullScreen ) ) // preserve flag when entering fullscreen
+        {
             m_maximizedView = false;
+            m_window->setProperty("__windowWasMaximized", false);
+        }
 
         if( !( newState & Qt::WindowFullScreen ) &&
             oldState & Qt::WindowFullScreen &&
             m_maximizedView )
         {
-            setInterfaceMaximized();
+            if (!(newState & Qt::WindowMaximized))
+                setInterfaceMaximized();
             return false;
         }
 

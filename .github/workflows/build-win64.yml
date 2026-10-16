@@ -33,6 +33,8 @@ jobs:
         shell: bash
         run: |
           set -e
+          # Use verified prebuilt contrib dependencies from VideoLAN artifacts server
+          export VLC_PREBUILT_CONTRIBS_URL="https://artifacts.videolan.org/vlc/win64/vlc-contrib-x86_64-w64-mingw32-8715c6fd8db923df82b460ae65d06d04e2dce51a.tar.zst"
           # Compile VLC for 64-bit Windows using prebuilt contrib packages (-p),
           # in release mode (-r), generating full installer and portable archives (-i r).
           extras/package/win32/build.sh -a x86_64 -p -r -i r

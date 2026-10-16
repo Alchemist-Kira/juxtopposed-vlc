@@ -263,6 +263,7 @@ T.Slider {
                 Loader {
                     id: thumbnail
                     anchors.fill: parent
+                    clip: true
                     sourceComponent: root.thumbnailContent || defaultThumbnail
                 }
             }

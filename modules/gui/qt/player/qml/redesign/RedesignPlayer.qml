@@ -139,8 +139,13 @@ FocusScope {
             Widgets.ImageExt {
                 objectName: "seekThumbnailImage"
                 source: view.seekPreviewImage; cache: false
-                radius: view.scaleFactor * 4
-                fillMode: Image.PreserveAspectFit
+                // Keep the shader's soft edge under the clip, without a dark outline.
+                anchors.fill: parent; anchors.margins: -0.5
+                radius: view.scaleFactor * 4 + 0.5
+                // Thumbnail export can round the fitted height down by one pixel.
+                fillMode: sourceTextureProviderItem.implicitHeight > 0 && parent && parent.width > 0
+                    && Math.abs(sourceTextureProviderItem.implicitHeight - sourceTextureProviderItem.implicitWidth * parent.height / parent.width) <= 1.01
+                    ? Image.Stretch : Image.PreserveAspectFit
             }
         }
         seekPreviewImagePosition: Player.seekPreviewPosition

@@ -76,9 +76,39 @@ private slots:
         QCOMPARE(sources[1].toMap().value("name").toString(),"other.srt");
         QVERIFY(sources[0].toMap().value("hearingImpaired").toBool());
         QCOMPARE(server.requests.size(),1);QCOMPARE(server.requests[0].url.path(),"/api/subtitles");
-        QCOMPARE(QUrlQuery(server.requests[0].url).queryItemValue("query"),"The Wand S01E04");
+        QCOMPARE(QUrlQuery(server.requests[0].url).queryItemValue("query"),"the wand s01e04");
         QCOMPARE(QUrlQuery(server.requests[0].url).queryItemValue("languages"),"en");
+        QVERIFY(server.requests[0].url.query().startsWith("languages=en&query="));
         QCOMPARE(server.requests[0].headers.value("api-key"),QByteArray("unit-secret"));QVERIFY(!server.requests[0].headers.value("user-agent").isEmpty());
+    }
+    void consumerKeyAndCustomOverride() {
+        QTemporaryDir directory;Server server;server.respond=[](const HttpRequest&,QTcpSocket* socket){Server::send(socket,results());};
+        auto o=options(server);o.consumerApiKey="app-consumer";SubtitleSourceService client(o);client.setStorageDirectory(directory.path());
+        QVERIFY(client.configured());QVERIFY(client.hasConsumerKey());QVERIFY(!client.hasCustomKey());
+        search(client);QCOMPARE(server.requests.last().headers.value("api-key"),QByteArray("app-consumer"));
+        QVERIFY(!QFileInfo::exists(directory.filePath("source-settings.ini")));
+        QVERIFY(client.setApiKey("user-key"));QVERIFY(client.hasCustomKey());
+        search(client);QCOMPARE(server.requests.last().headers.value("api-key"),QByteArray("user-key"));
+        SubtitleSourceService restored(o);restored.setStorageDirectory(directory.path());QVERIFY(restored.hasCustomKey());
+        QVERIFY(client.clearApiKey());QVERIFY(client.configured());QVERIFY(!client.hasCustomKey());
+        search(client);QCOMPARE(server.requests.last().headers.value("api-key"),QByteArray("app-consumer"));
+        SubtitleSourceService reset(o);reset.setStorageDirectory(directory.path());QVERIFY(!reset.hasCustomKey());QVERIFY(reset.configured());
+        SubtitleSourceService noConsumer(options(server));noConsumer.setStorageDirectory(directory.path());
+        QVERIFY(noConsumer.setApiKey("temporary"));QVERIFY(noConsumer.clearApiKey());QVERIFY(!noConsumer.configured());
+    }
+    void apiRedirectsStayOnOrigin() {
+        QTemporaryDir directory;Server server,other;int otherRequests=0;
+        other.respond=[&](const HttpRequest&,QTcpSocket* socket){++otherRequests;Server::send(socket,results());};
+        server.respond=[&](const HttpRequest& request,QTcpSocket* socket){
+            if(request.url.path()=="/api/subtitles")Server::send(socket,{},301,"Location: /api/canonical\r\n");
+            else Server::send(socket,results());
+        };
+        SubtitleSourceService client(options(server));client.setStorageDirectory(directory.path());QVERIFY(client.setApiKey("unit-secret"));
+        QCOMPARE(search(client).size(),2);QCOMPARE(server.requests.size(),2);
+        QCOMPARE(server.requests.last().headers.value("api-key"),QByteArray("unit-secret"));
+        server.respond=[&](const HttpRequest&,QTcpSocket* socket){Server::send(socket,{},302,"Location: "+other.base().toEncoded()+"subtitles\r\n");};
+        QSignalSpy spy(&client,&SubtitleSourceService::searchFinished);client.search("Film","en");
+        QVERIFY(!result(spy).value("success").toBool());QCOMPARE(otherRequests,0);
     }
     void serverErrors_data() {
         QTest::addColumn<int>("status");QTest::addColumn<QByteArray>("body");

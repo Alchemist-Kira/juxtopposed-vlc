@@ -6,6 +6,11 @@ qt6 = import('qt6')
 
 qt_include_dir = include_directories('.')
 
+subtitle_consumer_key = custom_target('subtitle_consumer_key',
+    output: 'subtitle_consumer_key.hpp',
+    command: [find_program('python3'), files('scripts/subtitle-consumer-key.py'), '--output', '@OUTPUT@'],
+    build_always_stale: true)
+
 qt_extra_deps = []
 qt_extra_flags = ['-DQT_STRICT_ITERATORS','-DQT_USE_QSTRINGBUILDER','-DQT_NO_CAST_TO_ASCII','-DQT_NO_CAST_FROM_BYTEARRAY']
 qt_cppargs = []
@@ -772,6 +777,8 @@ qml_modules += {
        'player/qml/redesign/RedesignPlaylistProperties.qml',
        'player/qml/redesign/RedesignPlaylistTrackTarget.qml',
        'player/qml/redesign/RedesignTrackAssignmentDialog.qml',
+       'player/qml/redesign/RedesignSubtitleProviderSetup.qml',
+       'player/qml/redesign/RedesignSubtitleSourcePreferences.qml',
        'player/qml/redesign/RedesignTrackAssignments.qml',
        'player/qml/redesign/RedesignFolderInfo.qml',
        'player/qml/redesign/RedesignAddToPlaylistDialog.qml',
@@ -1394,7 +1401,7 @@ if qt6_dep.found()
 
     vlc_modules += {
         'name' : 'qt',
-        'sources' : [qt6pre_files, qt6pre_qrc, shader_targets, shaders_processed, qt_sources, qt_plugin_sources],
+        'sources' : [qt6pre_files, qt6pre_qrc, shader_targets, shaders_processed, qt_sources, qt_plugin_sources, subtitle_consumer_key],
         'extra_files' : [shader_files],
         'dependencies' : [qt_extra_deps, qt6_dep, corefoundation_dep],
         'include_directories' : qt_include_dir,

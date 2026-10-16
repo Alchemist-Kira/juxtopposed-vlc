@@ -39,6 +39,12 @@ RCC_EXTRA_PARAMS =
 
 all-local: $(VLC_QT_CHECK_DEP) $(QML_MODULE_STAMPS)
 
+BUILT_SOURCES += subtitle_consumer_key.hpp
+CLEANFILES += subtitle_consumer_key.hpp
+.PHONY: subtitle-consumer-key-force
+subtitle_consumer_key.hpp: subtitle-consumer-key-force $(srcdir)/scripts/subtitle-consumer-key.py
+	$(AM_V_GEN)$(PYTHON3) $(srcdir)/scripts/subtitle-consumer-key.py --output $@
+
 if !HAVE_QT_ZSTD
 RCC_EXTRA_PARAMS += --no-zstd
 endif
@@ -1222,6 +1228,8 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignPlaylistProperties.qml \
 	player/qml/redesign/RedesignPlaylistTrackTarget.qml \
 	player/qml/redesign/RedesignTrackAssignmentDialog.qml \
+	player/qml/redesign/RedesignSubtitleProviderSetup.qml \
+	player/qml/redesign/RedesignSubtitleSourcePreferences.qml \
 	player/qml/redesign/RedesignTrackAssignments.qml \
 	player/qml/redesign/RedesignFolderInfo.qml \
 	player/qml/redesign/RedesignAddToPlaylistDialog.qml \

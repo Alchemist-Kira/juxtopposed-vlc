@@ -19,6 +19,8 @@ C.Dialog {
     property string targetFolder: ""
     property string sourceFolder: ""
     property int sourceIndex: 0
+    property bool providerHasCustomKey: false
+    property bool providerHasConsumerKey: false
     property bool providerConfigured: false
     property bool searching: false
     property int searchRequestId: 0
@@ -81,6 +83,7 @@ C.Dialog {
     signal languagesRequested()
     signal setupRequested(string key)
     signal apiKeyHelpRequested()
+    signal removeSetupRequested()
     signal linksRequested(var urls)
     signal rowsRequested(var target, bool subtitles, int request)
     signal sourcesRequested(url folder, bool subtitles, int request)
@@ -239,7 +242,11 @@ C.Dialog {
         drafts = next
     }
     function finishSetup(success, error = "") {
-        if (success) { apiKeyField.text = ""; providerSetup.close(); languagesRequested(); requestSearch() }
+        if (success) {
+            providerSetup.close()
+            if (providerConfigured) { languagesRequested(); requestSearch() }
+            else { searching = false; onlineSources = [] }
+        }
         else providerSetup.errorMessage = error || qsTr("VLC could not save the API key. Check it and try again.")
     }
     function setTracks(url, selection) {
@@ -634,41 +641,15 @@ C.Dialog {
             onClicked: root.submit()
         }
     }
-    C.Popup {
+    RedesignSubtitleProviderSetup {
         id: providerSetup
         objectName: "trackAssignmentProviderSetup"
-        property string errorMessage: ""
-        anchors.centerIn: parent
-        width: Math.min(root.theme.dp(560), root.width - root.theme.dp(32))
-        padding: root.theme.dp(20); modal: true; focus: true
-        onOpened: { errorMessage = ""; apiKeyField.forceActiveFocus() }
-        onClosed: apiKeyField.text = ""
-        background: Rectangle { color: root.theme.panel; radius: root.theme.dp(10); border.color: root.theme.border }
-        contentItem: ColumnLayout {
-            spacing: root.theme.dp(16)
-            Text { Layout.fillWidth: true; text: qsTr("OpenSubtitles setup"); font.pixelSize: root.theme.dp(16); color: root.theme.bright }
-            Text { Layout.fillWidth: true; text: qsTr("Add your OpenSubtitles application API key. VLC stores it in your profile."); wrapMode: Text.WordWrap; font.pixelSize: root.theme.dp(14); color: root.theme.foreground }
-            C.TextField {
-                id: apiKeyField
-                objectName: "trackAssignmentApiKey"
-                Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(36)
-                echoMode: TextInput.Password; placeholderText: qsTr("API key"); Accessible.name: placeholderText
-                color: root.theme.foreground; font.pixelSize: root.theme.dp(14); selectByMouse: true
-                background: Rectangle { color: root.theme.field; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
-                onAccepted: if (text.trim().length) root.setupRequested(text)
-            }
-            RedesignButton {
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                caption: qsTr("Get an API key"); text: caption; iconName: "link"; onClicked: root.apiKeyHelpRequested()
-            }
-            Text { Layout.fillWidth: true; visible: text.length > 0; text: providerSetup.errorMessage; wrapMode: Text.WordWrap; font.pixelSize: root.theme.dp(14); color: root.theme.danger }
-            RowLayout {
-                Layout.fillWidth: true
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: providerSetup.close() }
-                Item { Layout.fillWidth: true }
-                RedesignButton { objectName: "trackAssignmentSaveApiKey"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Save"); text: caption; enabled: apiKeyField.text.trim().length > 0; onClicked: root.setupRequested(apiKeyField.text) }
-            }
-        }
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        hasCustomKey: root.providerHasCustomKey; hasConsumerKey: root.providerHasConsumerKey
+        busy: root.saving
+        onSaveRequested: key => root.setupRequested(key)
+        onRemoveRequested: root.removeSetupRequested()
+        onHelpRequested: root.apiKeyHelpRequested()
     }
     C.Popup {
         id: picker

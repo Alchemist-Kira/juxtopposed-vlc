@@ -6,6 +6,7 @@ import QtQuick.Controls.Basic as C
 import VLC.MainInterface
 import VLC.Style
 import VLC.Dialogs
+import VLC.Player
 
 Window {
     id: root
@@ -312,6 +313,12 @@ Window {
                             }
                         }
                     }
+                }
+                RedesignSubtitleSourcePreferences {
+                    width: parent.width
+                    visible: root.search.length ? [qsTr("Online Subtitles"), "OpenSubtitles", qsTr("API key")].some(text => text.toLowerCase().includes(root.search.toLowerCase())) : root.category === "subtitles"
+                    sourceService: SubtitleSources
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 }
                 RedesignButton {
                     visible: !root.search.length

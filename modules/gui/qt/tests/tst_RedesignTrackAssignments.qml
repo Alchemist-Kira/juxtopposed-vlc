@@ -372,7 +372,7 @@ TestCase {
         }
         mouseClick(findChild(dialog,"trackAssignmentSetup"))
         const setup=findChild(dialog,"trackAssignmentProviderSetup");tryCompare(setup,"opened",true)
-        const field=findChild(dialog,"trackAssignmentApiKey");field.text="unit-secret"
+        const field=findChild(dialog,"subtitleProviderApiKey");field.text="unit-secret"
         verify(field.echoMode!==TextInput.Normal);keyClick(Qt.Key_Escape);tryCompare(setup,"visible",false)
         compare(field.text,"");verify(dialog.visible)
     }

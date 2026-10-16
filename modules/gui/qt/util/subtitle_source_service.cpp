@@ -18,8 +18,19 @@
 #include <QXmlStreamReader>
 #include <memory>
 #include <algorithm>
+#if __has_include("subtitle_consumer_key.hpp")
+#include "subtitle_consumer_key.hpp"
+#else
+static constexpr char subtitleConsumerKey[] = "";
+#endif
 
 namespace {
+SubtitleSourceService::Options defaultOptions()
+{
+    SubtitleSourceService::Options options;
+    options.consumerApiKey = subtitleConsumerKey;
+    return options;
+}
 QString safeName(QString name, const QString& format = QStringLiteral("srt"))
 {
     name.replace('\\', '/'); name = QFileInfo(name).fileName();
@@ -40,10 +51,10 @@ QString sourceUrl(qint64 id, const QString& name)
 }
 
 SubtitleSourceService::SubtitleSourceService(QObject* parent)
-    : SubtitleSourceService(Options{}, parent) {}
+    : SubtitleSourceService(defaultOptions(), parent) {}
 
 SubtitleSourceService::SubtitleSourceService(const Options& options, QObject* parent)
-    : QObject(parent), m_options(options), m_network(this)
+    : QObject(parent), m_options(options), m_network(this), m_apiKey(options.consumerApiKey)
 {
     m_languages = {QVariantMap{{"code", "en"}, {"text", tr("English")}},
         QVariantMap{{"code", "es"}, {"text", tr("Spanish")}}, QVariantMap{{"code", "ja"}, {"text", tr("Japanese")}},
@@ -61,13 +72,16 @@ SubtitleSourceService::~SubtitleSourceService()
 void SubtitleSourceService::setStorageDirectory(const QString& directory)
 {
     cancelSearch(); cancelPreparation();
+    ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr; m_languagesLoaded = false;
     m_storageDirectory = QFileInfo(directory).isAbsolute() ? directory : QString();
-    m_apiKey.clear();
+    m_apiKey = m_options.consumerApiKey; m_customKey = false;
     if (!m_storageDirectory.isEmpty()) {
         QSettings settings(QDir(directory).filePath(QStringLiteral("source-settings.ini")), QSettings::IniFormat);
         const auto key = settings.value(QStringLiteral("OpenSubtitles/api-key")).toByteArray();
-        const bool valid = !key.isEmpty() && std::all_of(key.cbegin(), key.cend(), [](unsigned char ch) { return ch >= 0x21 && ch <= 0x7e; });
-        if (valid) m_apiKey = key;
+        const bool valid = !key.isEmpty() && key.size() <= 512 && std::all_of(key.cbegin(), key.cend(), [](unsigned char ch) { return ch >= 0x21 && ch <= 0x7e; });
+        if (valid) { m_apiKey = key; m_customKey = true; }
     }
     emit configurationChanged();
 }
@@ -93,12 +107,26 @@ bool SubtitleSourceService::setApiKey(const QString& value)
     QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
     cancelSearch(); cancelPreparation(); ++m_languagesGeneration;
     if (m_languagesReply) m_languagesReply->abort();
-    m_languagesReply = nullptr; m_languagesLoaded = false; m_apiKey = key; emit configurationChanged(); return true;
+    m_languagesReply = nullptr; m_languagesLoaded = false; m_apiKey = key; m_customKey = true; emit configurationChanged(); return true;
+}
+
+bool SubtitleSourceService::clearApiKey()
+{
+    if (m_storageDirectory.isEmpty() || m_preparing) return false;
+    QSettings settings(QDir(m_storageDirectory).filePath(QStringLiteral("source-settings.ini")), QSettings::IniFormat);
+    settings.remove(QStringLiteral("OpenSubtitles/api-key")); settings.sync();
+    if (settings.status() != QSettings::NoError) return false;
+    cancelSearch(); ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr; m_languagesLoaded = false; m_apiKey = m_options.consumerApiKey; m_customKey = false;
+    emit configurationChanged(); return true;
 }
 
 QString SubtitleSourceService::networkError(int status, QNetworkReply::NetworkError error, bool api) const
 {
-    if (status == 401 || status == 403) return api ? tr("OpenSubtitles rejected the API key. Open setup and check it.")
+    if (status == 401 || status == 403) return api ? (m_customKey
+        ? tr("OpenSubtitles refused this request. Check your key and its download settings.")
+        : tr("OpenSubtitles refused this request. Try again later, or add your own key in setup."))
         : tr("The subtitle server refused this link. Check the link and try again.");
     if (status == 406 || status == 429) return api ? tr("OpenSubtitles cannot download more files now. Try again later.")
         : tr("The subtitle server cannot download more files now. Try again later.");
@@ -114,7 +142,8 @@ QNetworkReply* SubtitleSourceService::request(const QUrl& url, const QByteArray&
     QNetworkRequest request(url);
     request.setRawHeader("User-Agent", "VLC-Juxtopposed v4.0");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-        api ? QNetworkRequest::ManualRedirectPolicy : QNetworkRequest::NoLessSafeRedirectPolicy);
+        api ? QNetworkRequest::SameOriginRedirectPolicy : QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setMaximumRedirectsAllowed(5);
     if (api) {
         request.setRawHeader("Api-Key", m_apiKey);
         request.setRawHeader("Accept", "application/json");
@@ -216,8 +245,9 @@ quint64 SubtitleSourceService::search(const QString& text, const QString& langua
         }); return generation;
     }
     auto url = m_options.apiBase.resolved(QUrl(QStringLiteral("subtitles")));
-    QUrlQuery parameters; parameters.addQueryItem(QStringLiteral("query"), query);
+    QUrlQuery parameters;
     if (!language.isEmpty()) parameters.addQueryItem(QStringLiteral("languages"), language);
+    parameters.addQueryItem(QStringLiteral("query"), query.toLower());
     url.setQuery(parameters);
     m_searchReply = request(url, {}, true, m_options.maxJsonBytes,
         [this, generation](const QByteArray& bytes, QString error) {

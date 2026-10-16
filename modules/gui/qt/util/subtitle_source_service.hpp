@@ -14,6 +14,8 @@ class SubtitleSourceService : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool configured READ configured NOTIFY configurationChanged FINAL)
+    Q_PROPERTY(bool hasCustomKey READ hasCustomKey NOTIFY configurationChanged FINAL)
+    Q_PROPERTY(bool hasConsumerKey READ hasConsumerKey CONSTANT FINAL)
     Q_PROPERTY(QVariantList languages READ languages NOTIFY languagesChanged FINAL)
     Q_PROPERTY(bool preparing READ preparing NOTIFY preparingChanged FINAL)
 public:
@@ -22,16 +24,20 @@ public:
         int timeoutMs = 20000;
         qint64 maxJsonBytes = 2 * 1024 * 1024;
         qint64 maxFileBytes = 16 * 1024 * 1024;
+        QByteArray consumerApiKey;
     };
     explicit SubtitleSourceService(QObject* parent = nullptr);
     explicit SubtitleSourceService(const Options& options, QObject* parent = nullptr);
     ~SubtitleSourceService() override;
     void setStorageDirectory(const QString& directory);
     bool configured() const { return !m_apiKey.isEmpty(); }
+    bool hasCustomKey() const { return m_customKey; }
+    bool hasConsumerKey() const { return !m_options.consumerApiKey.isEmpty(); }
     QVariantList languages() const { return m_languages; }
     Q_INVOKABLE void fetchLanguages();
     bool preparing() const { return m_preparing; }
     Q_INVOKABLE bool setApiKey(const QString& key);
+    Q_INVOKABLE bool clearApiKey();
     Q_INVOKABLE quint64 search(const QString& query, const QString& language);
     Q_INVOKABLE void cancelSearch();
     Q_INVOKABLE void resetSession();
@@ -65,6 +71,7 @@ private:
     QNetworkAccessManager m_network;
     QString m_storageDirectory;
     QByteArray m_apiKey;
+    bool m_customKey = false;
     QVariantList m_languages;
     bool m_languagesLoaded = false;
     quint64 m_languagesGeneration = 0;

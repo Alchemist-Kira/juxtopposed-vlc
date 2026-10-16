@@ -15,6 +15,8 @@ RedesignTrackAssignmentDialog {
     property int pendingSaveRequest: -1
     property var pendingSaveRule: ({})
     providerConfigured: SubtitleSources.configured
+    providerHasCustomKey: SubtitleSources.hasCustomKey
+    providerHasConsumerKey: SubtitleSources.hasConsumerKey
     onlineLanguages: SubtitleSources.languages
     folderRuleDefinition: draftFolderRule()
     function ruleRows(target) {
@@ -65,6 +67,7 @@ RedesignTrackAssignmentDialog {
     onSearchCanceled: SubtitleSources.cancelSearch()
     onLanguagesRequested: SubtitleSources.fetchLanguages()
     onSetupRequested: key => root.finishSetup(SubtitleSources.setApiKey(key))
+    onRemoveSetupRequested: root.finishSetup(SubtitleSources.clearApiKey())
     onApiKeyHelpRequested: Qt.openUrlExternally("https://www.opensubtitles.com/consumers")
     onLinksRequested: urls => root.loadLinkedSources(SubtitleSources.addLinks(urls))
     onRowsRequested: (target, subtitles, request) => MediaLib.trackAssignmentRows(target, subtitles, result => root.loadRows(request, result))

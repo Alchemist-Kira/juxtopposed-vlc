@@ -2,6 +2,22 @@ Small Hacking file for the Qt Interface
 
 If you ever code for Qt interface, please read this before.
 
+** OpenSubtitles consumer key **
+
+The application consumer key is optional. Set OPENSUBTITLES_API_KEY_FILE to an
+absolute path before running Ninja or Make. The file can contain the key alone,
+or an OPENSUBTITLES_API_KEY entry in dotenv format. Alternatively, set
+OPENSUBTITLES_API_KEY in the build environment. The file takes precedence.
+The build generates subtitle_consumer_key.hpp in its build directory. Keep
+the input file and generated header out of version control. Without either
+variable, the build has no consumer key. Local files and links still work, and
+users can add their own key in Settings > Subtitles > Online Subtitles.
+
+Enable anonymous downloads in the consumer's OpenSubtitles configuration.
+Users can override the app key in Settings. Removing that override restores
+the app key. The profile never stores the built-in key. Downloaded subtitle
+files stay available after a key change.
+
 ** Code Conventions **
 
 Please respect VLC code conventions here:

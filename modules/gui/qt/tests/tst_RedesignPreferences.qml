@@ -63,6 +63,39 @@ TestCase {
         visible: false
     }
     RedesignPreferencesCatalog { id: catalog }
+    QtObject {
+        id: subtitleService
+        property bool configured: true
+        property bool hasConsumerKey: true
+        property bool hasCustomKey: false
+        property bool preparing: false
+        property string submittedKey: ""
+        function setApiKey(key) { if (key === "invalid") return false; submittedKey = key; hasCustomKey = true; configured = true; return true }
+        function clearApiKey() { submittedKey = ""; hasCustomKey = false; configured = hasConsumerKey; return true }
+    }
+    RedesignSubtitleSourcePreferences {
+        id: subtitlePreferences
+        sourceService: subtitleService
+        width: parent.width; y: 20; visible: false
+    }
+    function test_subtitleProviderSetupAndConsumerFallback() {
+        subtitlePreferences.visible = true
+        mouseClick(findChild(subtitlePreferences,"subtitleProviderConfigure"))
+        const setup=findChild(subtitlePreferences,"subtitlePreferencesProviderSetup")
+        tryCompare(setup,"opened",true)
+        const field=findChild(setup,"subtitleProviderApiKey")
+        verify(field.echoMode!==TextInput.Normal)
+        field.text="invalid"
+        mouseClick(findChild(setup,"subtitleProviderSaveKey"))
+        verify(setup.errorMessage.length>0);verify(setup.visible);verify(!subtitleService.hasCustomKey)
+        field.text="test-user-key"
+        mouseClick(findChild(setup,"subtitleProviderSaveKey"))
+        tryCompare(setup,"visible",false);compare(field.text,"");verify(subtitleService.hasCustomKey)
+        mouseClick(findChild(subtitlePreferences,"subtitleProviderConfigure"));tryCompare(setup,"opened",true)
+        mouseClick(findChild(setup,"subtitleProviderRemoveKey"))
+        tryCompare(setup,"visible",false);verify(!subtitleService.hasCustomKey);verify(subtitleService.configured)
+        subtitlePreferences.visible=false
+    }
     RedesignTrackDefaults {
         id: defaults
         width: 352; y: 450; backend: store

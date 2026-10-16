@@ -1,2 +1,3 @@
 resources.cpp
 ui/*.h
+subtitle_consumer_key.hpp

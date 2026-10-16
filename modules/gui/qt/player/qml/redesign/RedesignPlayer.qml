@@ -15,6 +15,7 @@ FocusScope {
     readonly property real positionSliderY: view.positionSliderY
     readonly property ColorContext colorContext: ColorContext { palette: VLCStyle.palette; colorSet: ColorContext.Window }
     property bool resumeAvailable: false
+    property int queueTab: 0
     readonly property string mediaFolderUrl: {
         const url = String(Player.url || "")
         return url.startsWith("file:") ? url.substring(0, url.lastIndexOf("/") + 1) : ""
@@ -26,6 +27,14 @@ FocusScope {
     Connections {
         target: Player
         function onInputChanged() { view.refreshSeekPreview() }
+    }
+    Connections {
+        target: DialogsProvider
+        function onShowRedesignBookmarks() {
+            rootPlayer.queueTab = 1
+            view.settingsPage = ""; view.queueOpen = true
+            Qt.callLater(() => { if (view.queueItem) view.queueItem.tab = 1 })
+        }
     }
     function clockText(tick) {
         if (!tick.valid()) return "00:00:00"
@@ -224,6 +233,8 @@ FocusScope {
         }
         queueContent: Component {
             RedesignQueuePanel {
+                tab: rootPlayer.queueTab
+                onTabChanged: rootPlayer.queueTab = tab
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
                 onCloseRequested: view.queueOpen = false
                 queueContent: Component { RedesignQueue {

@@ -41,6 +41,7 @@
 
 /* The dialogs */
 #include "dialogs/bookmarks/bookmarks.hpp"
+#include "medialibrary/mlbookmarkmodel.hpp"
 #include "dialogs/preferences/preferences.hpp"
 #include "dialogs/mediainfo/mediainfo.hpp"
 #include "dialogs/messages/messages.hpp"
@@ -560,7 +561,31 @@ void DialogsProvider::playlistsDialog( const QVariantList & medias, MLPlaylistLi
 
 void DialogsProvider::bookmarksDialog()
 {
+    if (p_intf->p_mi && p_intf->p_mi->hasMediaLibrary())
+    {
+        emit showRedesignBookmarks();
+        return;
+    }
     toggleDialogVisible(m_bookmarkDialog);
+}
+
+MLBookmarkModel* DialogsProvider::bookmarkModel()
+{
+    if (!p_intf->p_mi || !p_intf->p_mi->hasMediaLibrary())
+        return nullptr;
+    if (!m_bookmarkModel)
+    {
+        m_bookmarkModel = std::make_unique<MLBookmarkModel>();
+        m_bookmarkModel->setPlayer(p_intf->p_player);
+        m_bookmarkModel->setMl(p_intf->p_mi->getMediaLibrary());
+    }
+    return m_bookmarkModel.get();
+}
+
+void DialogsProvider::addBookmark()
+{
+    if (auto *model = bookmarkModel())
+        model->add();
 }
 
 void DialogsProvider::podcastConfigureDialog()

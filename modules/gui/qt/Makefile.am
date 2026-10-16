@@ -1214,6 +1214,7 @@ libqml_module_player_a_CPPFLAGS = $(libqt_plugin_la_CPPFLAGS)
 libqml_module_player_a_QML = \
 	player/qml/ControlBar.qml \
 	player/qml/redesign/RedesignBookmarks.qml \
+	player/qml/redesign/RedesignBookmarksView.qml \
 	player/qml/redesign/RedesignQueuePanel.qml \
 	player/qml/redesign/RedesignLibrary.qml \
 	player/qml/redesign/RedesignPlayer.qml \
@@ -2131,6 +2132,8 @@ EXTRA_DIST += tests/tst_RedesignSubtitleTimeline.qml
 EXTRA_DIST += tests/tst_RedesignTheme.qml
 TESTS += tests/tst_RedesignTheme.qml
 EXTRA_DIST += tests/tst_RedesignQueue.qml
+EXTRA_DIST += tests/tst_RedesignBookmarks.qml
+TESTS += tests/tst_RedesignBookmarks.qml
 EXTRA_DIST += tests/tst_RedesignLibrary.qml
 TESTS += tests/tst_RedesignLibrary.qml
 TESTS += tests/tst_RedesignQueue.qml

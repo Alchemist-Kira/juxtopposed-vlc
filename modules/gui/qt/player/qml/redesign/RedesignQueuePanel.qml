@@ -84,7 +84,11 @@ Item {
             Layout.fillWidth: true; Layout.fillHeight: true
             visible: root.tab === 1; active: visible && MainCtx.mediaLibraryAvailable
             source: active ? "qrc:///qt/qml/VLC/Player/RedesignBookmarks.qml" : ""
-            onLoaded: { item.scaleFactor = Qt.binding(() => root.scaleFactor); item.lightTheme = Qt.binding(() => root.lightTheme) }
+            onLoaded: {
+                item.scaleFactor = Qt.binding(() => root.scaleFactor)
+                item.lightTheme = Qt.binding(() => root.lightTheme)
+                item.accentColor = Qt.binding(() => root.accentColor)
+            }
         }
         ListView {
             id: chapters

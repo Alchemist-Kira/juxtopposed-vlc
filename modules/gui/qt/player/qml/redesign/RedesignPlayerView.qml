@@ -79,6 +79,7 @@ FocusScope {
     readonly property alias videoItem: videoLoader.item
     readonly property alias libraryItem: libraryLoader.item
     readonly property alias settingsItem: settingsLoader.item
+    readonly property alias queueItem: queueLoader.item
     readonly property real positionSliderY: libraryExpanded ? miniPlayer.y + miniPlayer.seekY : bottomEdge.y + toolbar.y + seek.y
     readonly property bool controlsLocked: queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable || !!trackPopup && trackPopup.visible
     readonly property bool topVisible: !minimalView && (!fullscreen || headerHover.hovered || header.activeFocus || revealTimer.running || controlsLocked)

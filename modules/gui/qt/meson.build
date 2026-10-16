@@ -764,6 +764,7 @@ qml_modules += {
    'sources': files(
        'player/qml/ControlBar.qml',
        'player/qml/redesign/RedesignBookmarks.qml',
+       'player/qml/redesign/RedesignBookmarksView.qml',
        'player/qml/redesign/RedesignQueuePanel.qml',
        'player/qml/redesign/RedesignLibrary.qml',
        'player/qml/redesign/RedesignPlayer.qml',
@@ -1054,6 +1055,7 @@ qml_tests = {
     'tst_RedesignTheme': files('tests/tst_RedesignTheme.qml'),
     'tst_RedesignLibrary': files('tests/tst_RedesignLibrary.qml'),
     'tst_RedesignQueue': files('tests/tst_RedesignQueue.qml'),
+    'tst_RedesignBookmarks': files('tests/tst_RedesignBookmarks.qml'),
     'tst_RedesignNetwork': files('tests/tst_RedesignNetwork.qml'),
     'tst_RedesignPlaylist': files('tests/tst_RedesignPlaylist.qml'),
     'tst_RedesignPlaylistProperties': files('tests/tst_RedesignPlaylistProperties.qml'),

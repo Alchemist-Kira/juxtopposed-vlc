@@ -71,6 +71,8 @@ enum {
 
 class QEvent;
 class QSignalMapper;
+class MLBookmarkModel;
+Q_MOC_INCLUDE("medialibrary/mlbookmarkmodel.hpp")
 class VLCMenuBar;
 
 class OpenDialog;
@@ -114,6 +116,7 @@ public:
     Q_PROPERTY(bool aboutDialogVisible READ aboutDialogVisible NOTIFY aboutDialogVisibleChanged FINAL)
     Q_PROPERTY(bool mediaInfoDialogVisible READ mediaInfoDialogVisible NOTIFY mediaInfoDialogVisibleChanged FINAL)
     Q_PROPERTY(bool bookmarkDialogVisible READ bookmarkDialogVisible NOTIFY bookmarkDialogVisibleChanged FINAL)
+    Q_PROPERTY(MLBookmarkModel* bookmarkModel READ bookmarkModel CONSTANT FINAL)
     Q_PROPERTY(bool podcastDialogVisible READ podcastDialogVisible NOTIFY podcastDialogVisibleChanged FINAL)
     Q_PROPERTY(bool pluginDialogVisible READ pluginDialogVisible NOTIFY pluginDialogVisibleChanged FINAL)
     Q_PROPERTY(bool egpDialogVisible READ egpDialogVisible NOTIFY egpDialogVisibleChanged FINAL)
@@ -137,6 +140,7 @@ public:
                                 EXT_FILTER_VIDEO | EXT_FILTER_AUDIO |
                                 EXT_FILTER_PLAYLIST,
                                 const QUrl& path = QUrl() );
+    MLBookmarkModel* bookmarkModel();
     bool isDying() { return b_isDying; }
     static QString getDirectoryDialog( qt_intf_t *p_intf);
 
@@ -181,6 +185,7 @@ private:
     std::unique_ptr<AboutDialog> m_aboutDialog;
     std::unique_ptr<MediaInfoDialog> m_mediaInfoDialog;
     std::unique_ptr<BookmarksDialog> m_bookmarkDialog;
+    std::unique_ptr<MLBookmarkModel> m_bookmarkModel;
     std::unique_ptr<PodcastConfigDialog> m_podcastDialog;
     std::unique_ptr<PluginDialog> m_pluginDialog;
     std::unique_ptr<EpgDialog> m_egpDialog;
@@ -203,6 +208,7 @@ private:
 public slots:
     void playlistsDialog( const QVariantList & listMedia, MLPlaylistListModel::PlaylistType type = MLPlaylistListModel::PLAYLIST_TYPE_ALL);
     void bookmarksDialog();
+    void addBookmark();
     void mediaInfoDialog( void );
     void mediaInfoDialog( const SharedInputItem& inputItem );
     void mediaInfoDialog( const PlaylistItem& pItem );
@@ -319,6 +325,7 @@ signals:
     void egpDialogVisibleChanged();
     void prefsDialogVisibleChanged();
     void showRedesignPreferences();
+    void showRedesignBookmarks();
     void showRedesignPreferencesPage(const QString& page);
     void showRedesignNetworkStreams();
     void showRedesignAddToPlaylist(const QVariantList& media, int type);

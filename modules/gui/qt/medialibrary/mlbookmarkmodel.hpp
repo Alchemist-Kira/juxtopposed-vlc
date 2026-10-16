@@ -56,7 +56,8 @@ public:
         NameRole = Qt::UserRole,
         TimeRole = Qt::UserRole + 1,
         PositionRole = Qt::UserRole + 2,
-        DescriptionRole = Qt::UserRole + 3
+        DescriptionRole = Qt::UserRole + 3,
+        TimeMSRole = Qt::UserRole + 4
     };
     QHash<int, QByteArray> roleNames() const override;
 
@@ -104,6 +105,8 @@ private:
 private:
     using BookmarkListPtr = ml_unique_ptr<vlc_ml_bookmark_list_t>;
     using InputItemPtr = std::unique_ptr<input_item_t, decltype(&input_item_Release)>;
+
+    void replaceBookmarks(uint64_t mediaId, BookmarkListPtr bookmarks);
 
     MediaLib* m_mediaLib = nullptr;
     vlc_player_t* m_player = nullptr;

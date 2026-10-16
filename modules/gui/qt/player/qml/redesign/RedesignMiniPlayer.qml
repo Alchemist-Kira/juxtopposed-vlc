@@ -156,7 +156,7 @@ Rectangle {
             onClicked: root.folderRequested()
             contentItem: RowLayout {
                 spacing: root.theme.dp(6)
-                RedesignIcon { Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: width; name: "folder"; color: root.theme.foreground }
+                RedesignIcon { sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24); name: "folder"; color: root.theme.foreground }
                 Text { Layout.fillWidth: true; text: root.folderTitle; elide: Text.ElideRight; color: root.theme.foreground; font.pixelSize: root.theme.dp(14) }
             }
         }
@@ -169,7 +169,7 @@ Rectangle {
             onClicked: root.artistRequested()
             contentItem: RowLayout {
                 spacing: root.theme.dp(6)
-                RedesignIcon { Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: width; name: "artist"; color: root.theme.foreground }
+                RedesignIcon { sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24); name: "artist"; color: root.theme.foreground }
                 Text { Layout.fillWidth: true; text: root.artist; elide: Text.ElideRight; color: root.theme.foreground; font.pixelSize: root.theme.dp(14) }
             }
         }

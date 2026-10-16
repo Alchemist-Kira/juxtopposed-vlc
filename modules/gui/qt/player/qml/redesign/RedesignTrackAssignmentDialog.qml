@@ -406,7 +406,7 @@ C.Dialog {
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 contentItem: RowLayout {
                     spacing: root.theme.dp(12)
-                    RedesignIcon { sourceSize: Qt.size(root.theme.dp(40), root.theme.dp(40)); Layout.leftMargin: root.theme.dp(10); Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: width; name: "folder"; color: root.theme.foreground }
+                    RedesignIcon { sourceSize: Qt.size(root.theme.dp(40), root.theme.dp(40)); Layout.leftMargin: root.theme.dp(10); Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: "folder"; color: root.theme.foreground }
                     Text { Layout.fillWidth: true; Layout.rightMargin: root.theme.dp(12); text: root.sourceFolder ? decodeURIComponent(root.sourceFolder.replace(/^file:\/\//, "")) : qsTr("Select track folder"); elide: Text.ElideMiddle; font.pixelSize: root.theme.dp(14); color: root.theme.foreground }
                 }
                 onClicked: root.folderRequested()
@@ -541,7 +541,7 @@ C.Dialog {
                             }
                             contentItem: Item {}
                         }
-                        RedesignIcon { sourceSize: Qt.size(root.theme.dp(40), root.theme.dp(40)); visible: root.fileMode; Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: width; name: root.subtitles ? "subtitle-file" : "audio-file"; color: root.theme.foreground }
+                        RedesignIcon { sourceSize: Qt.size(root.theme.dp(40), root.theme.dp(40)); visible: root.fileMode; Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: root.subtitles ? "subtitle-file" : "audio-file"; color: root.theme.foreground }
                         Text {
                             Layout.fillWidth: root.fileMode; Layout.preferredWidth: root.fileMode ? -1 : root.theme.dp(160)
                             text: entry.modelData.name; font.pixelSize: root.theme.dp(14); color: root.theme.foreground; elide: Text.ElideMiddle
@@ -566,7 +566,7 @@ C.Dialog {
                             }
                             onClicked: root.chooseRow(entry.modelData.url)
                         }
-                        RedesignIcon { sourceSize: Qt.size(root.theme.dp(40), root.theme.dp(40)); visible: entry.highlighted; Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: width; name: "check"; color: root.theme.accent }
+                        RedesignIcon { sourceSize: Qt.size(root.theme.dp(40), root.theme.dp(40)); visible: entry.highlighted; Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: "check"; color: root.theme.accent }
                     }
                 }
             }

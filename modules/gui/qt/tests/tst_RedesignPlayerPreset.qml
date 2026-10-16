@@ -39,12 +39,41 @@ TestCase {
     RedesignPlayerPreset { id: selector; x: 200; y: 600; width: 360; backend: store }
     function item(name) { return findChild(selector, name) }
     function init() {
+        failOnWarning(/Binding loop/)
+        selector.scaleFactor = 1; selector.width = 360
         item("playerPresetMenu").close(); item("playerPresetActions").close()
         item("playerPresetNameDialog").close(); item("playerPresetDeleteDialog").close()
         store.playerPresets = [{id: "show", name: "My Show"}, {id: "quiet", name: "Quiet Movies"}]
         store.selectedPlayerPreset = ""; store.pendingPlayerPreset = false
         store.errorMessage = ""; store.lastAction = ""; store.failSave = false; store.revision++
         wait(10)
+    }
+    function test_createdPresetSelectionMarkHasStableLayout_data() {
+        return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}, {tag: "large", scale: 2}]
+    }
+    function test_createdPresetSelectionMarkHasStableLayout(data) {
+        selector.scaleFactor = data.scale
+        store.playerPresets = []; store.selectedPlayerPreset = ""; store.revision++
+        mouseClick(item("playerPresetSelector")); tryCompare(item("playerPresetMenu"), "opened", true)
+        keyClick(Qt.Key_Home); keyClick(Qt.Key_Return)
+        tryCompare(item("playerPresetNameDialog"), "opened", true)
+        store.playerPresets = [{id: "created", name: "Created preset"}]
+        store.selectedPlayerPreset = "created"; store.revision++
+        item("playerPresetNameDialog").close()
+        mouseClick(item("playerPresetSelector")); tryCompare(item("playerPresetMenu"), "opened", true)
+        const list = item("playerPresetMenu").contentItem
+        tryVerify(() => list.currentItem !== null)
+        const mark = findChild(list.currentItem, "presetSelectionMark1")
+        verify(mark)
+        compare(mark.opacity, 1)
+        tryCompare(mark, "status", Image.Ready)
+        const rasterSize = mark.sourceSize
+        for (const width of [280, 340, 360]) {
+            selector.width = width; wait(30)
+            fuzzyCompare(mark.width, 20 * data.scale, 0.01)
+            fuzzyCompare(mark.height, 20 * data.scale, 0.01)
+            compare(mark.sourceSize, rasterSize)
+        }
     }
     function test_presetPopupKeepsKeysAwayFromPlayback() {
         mouseClick(item("playerPresetSelector"));tryCompare(item("playerPresetMenu"),"opened",true)

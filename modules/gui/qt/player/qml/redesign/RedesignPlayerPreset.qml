@@ -64,7 +64,7 @@ Item {
         contentItem: RowLayout {
             anchors.fill: parent; anchors.leftMargin: root.theme.dp(14); anchors.rightMargin: root.theme.dp(14)
             Text { Layout.fillWidth: true; text: root.selectedName; color: root.theme.foreground; font.pixelSize: root.theme.dp(14); elide: Text.ElideRight }
-            RedesignIcon { Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: width; name: "chevron-down"; rotation: dropdown.visible ? 180 : 0; color: root.theme.foreground }
+            RedesignIcon { sourceSize: Qt.size(root.theme.dp(20) * Screen.devicePixelRatio, root.theme.dp(20) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: "chevron-down"; rotation: dropdown.visible ? 180 : 0; color: root.theme.foreground }
         }
         onClicked: dropdown.visible ? dropdown.close() : dropdown.open()
     }
@@ -129,7 +129,7 @@ Item {
                         RedesignIcon { anchors.centerIn: parent; width: root.theme.dp(20); height: width; visible: row.modelData.action === "create"; name: "add"; color: root.theme.foreground }
                     }
                     Text { Layout.fillWidth: true; text: row.modelData.name; font.pixelSize: root.theme.dp(14); color: root.theme.foreground; elide: Text.ElideRight }
-                    RedesignIcon { Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: width; name: "check"; color: root.theme.accent; opacity: row.modelData.action !== "create" && row.modelData.id === root.selectedId ? 1 : 0 }
+                    RedesignIcon { objectName: "presetSelectionMark" + row.index; sourceSize: Qt.size(root.theme.dp(20) * Screen.devicePixelRatio, root.theme.dp(20) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: "check"; color: root.theme.accent; opacity: row.modelData.action !== "create" && row.modelData.id === root.selectedId ? 1 : 0 }
                 }
             }
             C.ScrollIndicator.vertical: C.ScrollIndicator { }

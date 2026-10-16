@@ -18,6 +18,19 @@ C.Dialog {
     property string anchorFile: ""
     property string targetFolder: ""
     property string sourceFolder: ""
+    property int sourceIndex: 0
+    property bool providerConfigured: false
+    property bool searching: false
+    property int searchRequestId: 0
+    property string searchTitle: ""
+    property string searchLanguage: "en"
+    property var sourceMappings: ({})
+    property var onlineSources: []
+    property var onlineLanguages: [{code:"en",text:qsTr("English")},{code:"es",text:qsTr("Spanish")},{code:"ja",text:qsTr("Japanese")},{code:"de",text:qsTr("German")},{code:"nl",text:qsTr("Dutch")},{code:"fr",text:qsTr("French")}]
+    property bool cancelableSave: false
+    readonly property bool onlineMode: subtitles && sourceIndex === 1
+    readonly property var sourceChoices: subtitles ? [qsTr("From Computer"),qsTr("From OpenSubtitles")] : [qsTr("From Computer")]
+    onSourceIndexChanged: Qt.callLater(() => sourceChoice.currentIndex = root.sourceIndex)
     property int scopeIndex: 0
     onScopeIndexChanged: Qt.callLater(() => scopeChoice.currentIndex = root.scopeIndex)
     property int requestId: 0
@@ -39,12 +52,17 @@ C.Dialog {
     ]
     readonly property var changedRows: Object.keys(drafts).map(url => drafts[url]).filter(row => !same(row.initialTracks, row.tracks))
     readonly property var visibleSources: {
-        const result = sources.slice()
+        const result = (onlineMode ? onlineSources : sources).slice()
         const seen = result.map(item => item.url)
         for (const row of rows) for (const url of tracks(row.url))
-            if (!seen.includes(url)) { seen.push(url); result.push({url: url, name: fileName(url)}) }
+            if (isOnlineSource(url) === onlineMode && !seen.includes(url)) { seen.push(url); result.push({url: url, name: fileName(url)}) }
         return result
     }
+    signal searchRequested(string query, string language, int request)
+    signal searchCanceled()
+    signal languagesRequested()
+    signal setupRequested(string key)
+    signal apiKeyHelpRequested()
     signal rowsRequested(var target, bool subtitles, int request)
     signal sourcesRequested(url folder, bool subtitles, int request)
     signal matchRequested(var media, var tracks, bool includeSaved, int request)
@@ -59,7 +77,7 @@ C.Dialog {
     width: Math.min(theme.dp(1048), parent ? parent.width - theme.dp(32) : theme.dp(1048))
     height: Math.min(theme.dp(800), parent ? parent.height - theme.dp(32) : theme.dp(800))
     padding: 0; modal: true; dim: true; focus: true
-    closePolicy: saving ? C.Popup.NoAutoClose : C.Popup.CloseOnEscape
+    closePolicy: saving && !cancelableSave ? C.Popup.NoAutoClose : C.Popup.CloseOnEscape
     background: Rectangle { color: root.theme.floatingPanel; radius: root.theme.dp(14) }
     C.Overlay.modal: Rectangle { color: "#80000000" }
 
@@ -67,12 +85,17 @@ C.Dialog {
         const name = String(url).split("/").pop()
         try { return decodeURIComponent(name) } catch (error) { return name }
     }
+    function isOnlineSource(url) {
+        return String(url).startsWith("opensubtitles:") || Object.values(sourceMappings).includes(url)
+            || onlineSources.some(item => item.url === url)
+    }
     function parentFolder(url) { return String(url).startsWith("file:") ? String(url).substring(0, String(url).lastIndexOf("/") + 1) : "" }
     function same(a, b) { return [...new Set(a || [])].sort().join("\n") === [...new Set(b || [])].sort().join("\n") }
     function tracks(url) { return drafts[url] ? drafts[url].tracks : [] }
     function begin(target, subtitleMode) {
         if (visible || saving) return false
         context = target; subtitles = subtitleMode
+        sourceIndex = 0; onlineSources = []; sourceMappings = ({}); searchTitle = ""; searchLanguage = "en"; searching = false; cancelableSave = false
         rows = []; sources = []; drafts = ({}); selectedRows = ({}); errorMessage = ""
         anchorFile = target.scope === "folder" || target.scope === "playlist" ? "" : String(target.url || "")
         targetFolder = target.scope === "folder" ? String(target.folder || target.url || "") : parentFolder(anchorFile)
@@ -109,7 +132,9 @@ C.Dialog {
         if (!anchorFile && rows.length) anchorFile = rows[0].url
         if (!targetFolder) targetFolder = parentFolder(anchorFile)
         if (!sourceFolder && targetFolder) sourceFolder = targetFolder
-        if (sourceFolder) requestSources()
+        if (!searchTitle && anchorFile) searchTitle = fileName(anchorFile).replace(/\.[^.]+$/, "").replace(/[._]/g, " ")
+        if (onlineMode) requestSearch()
+        else if (sourceFolder) requestSources()
         else performMatching()
     }
     function requestSources(includeSaved = false) {
@@ -129,7 +154,7 @@ C.Dialog {
         cancelMatching()
         if (!fileMode && !loading && !loadingSources) {
             matching = true
-            matchRequested(rows.map(row => row.url), sources.map(source => source.url), includeSaved, matchRequestId)
+            matchRequested(rows.map(row => row.url), (onlineMode ? onlineSources : sources).map(source => source.url), includeSaved, matchRequestId)
         }
     }
     function loadMatches(request, matches, includeSaved = false) {
@@ -145,6 +170,38 @@ C.Dialog {
                 {tracks: [...new Set(draft.initialTracks.concat(matches[row.url] || []))]})
         }
         drafts = next
+    }
+    function selectSource(index) {
+        if (saving || loadingDrop || index === sourceIndex || index < 0 || index >= sourceChoices.length) return
+        searchDebounce.stop(); ++searchRequestId; searching = false; searchCanceled(); cancelMatching()
+        ++sourceRequestId; loadingSources = false; errorMessage = ""; sourceIndex = index
+        if (onlineMode) { languagesRequested(); requestSearch() }
+        else if (sourceFolder) requestSources()
+    }
+    function requestSearch() {
+        searchDebounce.stop()
+        if (!visible || !onlineMode || !providerConfigured || saving || loading || loadingDrop) return
+        cancelMatching(); ++searchRequestId; searching = true; errorMessage = ""
+        searchRequested(searchTitle, searchLanguage, searchRequestId)
+    }
+    function loadSearch(request, result) {
+        if (!visible || request !== searchRequestId || !onlineMode) return
+        searching = false
+        if (!result.success) { onlineSources = []; errorMessage = result.error || qsTr("VLC could not search for subtitles. Try again."); return }
+        onlineSources = (result.sources || []).map(item => Object.assign({}, item, {url: sourceMappings[item.url] || item.url})); performMatching(true)
+    }
+    function resolveSources(mapping) {
+        sourceMappings = Object.assign({}, sourceMappings, mapping || {})
+        onlineSources = onlineSources.map(item => Object.assign({}, item, {url: sourceMappings[item.url] || item.url}))
+        const next = Object.assign({}, drafts)
+        for (const url of Object.keys(next)) next[url] = Object.assign({}, next[url], {
+            tracks: [...new Set(next[url].tracks.map(track => sourceMappings[track] || track))]
+        })
+        drafts = next
+    }
+    function finishSetup(success, error = "") {
+        if (success) { apiKeyField.text = ""; providerSetup.close(); languagesRequested(); requestSearch() }
+        else providerSetup.errorMessage = error || qsTr("VLC could not save the API key. Check it and try again.")
     }
     function setTracks(url, selection) {
         const draft = drafts[url]
@@ -172,6 +229,7 @@ C.Dialog {
 
         if (!visible || saving || loading || loadingDrop) return false
         if (!urls.length) { errorMessage = qsTr("VLC could not read these files. Try again."); return false }
+        if (onlineMode) selectSource(0)
         cancelMatching(); ++sourceRequestId; loadingSources = false
         ++dropRequestId; loadingDrop = true; errorMessage = ""
         droppedSourcesRequested(urls, subtitles, dropRequestId, target)
@@ -194,6 +252,7 @@ C.Dialog {
     function chooseRow(url) { picker.targetUrl = url; picker.open() }
     function submit() {
         if (saving || loading || loadingSources || loadingDrop || matching || !changedRows.length) return
+        searchDebounce.stop(); ++searchRequestId; searching = false; searchCanceled()
         saving = true; picker.close(); errorMessage = ""
         saveRequested(changedRows, subtitles, requestId)
     }
@@ -209,7 +268,9 @@ C.Dialog {
         else errorMessage = (result.error || qsTr("VLC cannot save these tracks. Try again."))
             + (completed.length ? "\n" + qsTr("VLC kept the changes that it saved. Try Save again for the other files.") : "")
     }
-    onClosed: { ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
+    onClosed: { ++searchRequestId; searching = false; searchDebounce.stop(); searchCanceled(); providerSetup.close(); saving = false; cancelableSave = false; ++dropRequestId; loadingDrop = false; cancelMatching(); ++requestId; ++sourceRequestId; picker.close(); rows = []; sources = []; drafts = ({}); selectedRows = ({}) }
+    Timer { id: searchDebounce; interval: 600; onTriggered: root.requestSearch() }
+    Shortcut { sequence: "Ctrl+O"; enabled: root.visible && !root.saving; onActivated: { root.selectSource(0); root.filesRequested("") } }
     Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: root.visible && !root.saving; onActivated: root.submit() }
 
     header: Item {
@@ -226,7 +287,7 @@ C.Dialog {
             objectName: "trackAssignmentClose"
             anchors.right: parent.right; anchors.rightMargin: root.theme.dp(8); y: root.theme.dp(6)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            iconName: "close"; text: qsTr("Close"); enabled: !root.saving; onClicked: root.reject()
+            iconName: "close"; text: qsTr("Close"); enabled: !root.saving || root.cancelableSave; onClicked: root.reject()
         }
         RowLayout {
             anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -243,17 +304,20 @@ C.Dialog {
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 onActivated: index => root.selectScope(index)
             }
-            RedesignButton {
+            RedesignComboBox {
+                id: sourceChoice
                 objectName: "trackAssignmentFiles"
                 Layout.preferredWidth: Math.min(root.theme.dp(200), root.width * 0.23); Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                caption: qsTr("From Computer"); text: qsTr("Select track files"); leftAligned: true
+                model: root.sourceChoices; currentIndex: root.sourceIndex
                 enabled: !root.loading && !root.loadingDrop && !root.saving
                 background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
-                onClicked: root.filesRequested("")
+                onModelChanged: Qt.callLater(() => sourceChoice.currentIndex = root.sourceIndex)
+                onActivated: index => root.selectSource(index)
             }
             RedesignButton {
                 objectName: "trackAssignmentFolder"
+                visible: !root.onlineMode
                 Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "folder"; text: root.sourceFolder || qsTr("Select track folder"); leftAligned: true
@@ -266,6 +330,42 @@ C.Dialog {
                 }
                 onClicked: root.folderRequested()
             }
+            C.TextField {
+                objectName: "trackAssignmentSearch"
+                visible: root.onlineMode
+                Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(34)
+                enabled: root.providerConfigured && !root.saving
+                text: root.searchTitle; placeholderText: qsTr("Search subtitles")
+                leftPadding: root.theme.dp(40); rightPadding: root.theme.dp(10)
+                color: root.theme.foreground; placeholderTextColor: root.theme.foreground
+                font.pixelSize: root.theme.dp(14); selectByMouse: true
+                Accessible.name: qsTr("Search subtitles")
+                background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
+                RedesignButton {
+                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: root.theme.dp(34); implicitHeight: root.theme.dp(34)
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    iconName: "search"; iconSize: root.theme.dp(20); text: qsTr("Search subtitles")
+                    onClicked: root.requestSearch()
+                }
+                onTextEdited: { root.searchTitle = text; searchDebounce.restart() }
+                onAccepted: root.requestSearch()
+            }
+            RedesignComboBox {
+                id: languageChoice
+                objectName: "trackAssignmentLanguage"
+                visible: root.onlineMode
+                Layout.preferredWidth: Math.min(root.theme.dp(200), root.width * 0.20); Layout.preferredHeight: root.theme.dp(34)
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                model: root.onlineLanguages; textRole: "text"
+                enabled: root.providerConfigured && !root.saving
+                function syncLanguage() { currentIndex = Math.max(0, root.onlineLanguages.findIndex(item => item.code === root.searchLanguage)) }
+                onModelChanged: Qt.callLater(syncLanguage)
+                Component.onCompleted: syncLanguage()
+                onActivated: index => { root.searchLanguage = root.onlineLanguages[index].code; root.requestSearch() }
+                background: Rectangle { color: root.theme.panel; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
+            }
+
         }
     }
     contentItem: Item {
@@ -368,10 +468,25 @@ C.Dialog {
         }
         Text {
             anchors.centerIn: parent; width: parent.width - root.theme.dp(40); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
-            visible: root.loading || root.loadingSources || root.loadingDrop || root.matching || (!list.count && !root.errorMessage)
-            text: root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources || root.loadingDrop ? qsTr("Loading files…") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
+            visible: !(root.onlineMode && !root.providerConfigured) && (root.loading || root.loadingSources || root.loadingDrop || root.matching || root.searching || (!list.count && !root.errorMessage))
+            text: root.searching ? qsTr("Searching subtitles…") : root.matching ? qsTr("Matching tracks…") : root.loading || root.loadingSources || root.loadingDrop ? qsTr("Loading files…") : root.onlineMode ? qsTr("No subtitles found. Try another title or language.") : root.fileMode ? qsTr("Select a folder or choose track files from your computer.") : qsTr("There are no media files here.")
             color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
+        }        Column {
+            anchors.centerIn: parent; width: Math.max(0, parent.width - root.theme.dp(60))
+            spacing: root.theme.dp(16); visible: root.onlineMode && !root.providerConfigured
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                text: qsTr("OpenSubtitles is not set up. Add an API key to use this source.")
+                color: root.theme.foreground; font.pixelSize: root.theme.dp(14)
+            }
+            RedesignButton {
+                objectName: "trackAssignmentSetup"
+                anchors.horizontalCenter: parent.horizontalCenter
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                caption: qsTr("Set up OpenSubtitles"); text: caption; onClicked: providerSetup.open()
+            }
         }
+
     }
     footer: Item {
         implicitHeight: root.theme.dp(72) + (error.visible ? error.implicitHeight + root.theme.dp(12) : 0)
@@ -387,8 +502,15 @@ C.Dialog {
             x: root.theme.dp(20); anchors.bottom: parent.bottom; anchors.bottomMargin: root.theme.dp(20)
             implicitWidth: root.theme.dp(100); implicitHeight: root.theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            caption: qsTr("Cancel"); text: caption; enabled: !root.saving; onClicked: root.reject()
+            caption: qsTr("Cancel"); text: caption; enabled: !root.saving || root.cancelableSave; onClicked: root.reject()
             background: Rectangle { radius: root.theme.dp(5); color: parent.hovered ? root.theme.hover : root.theme.background; border.color: parent.visualFocus ? root.theme.accent : "transparent" }
+        }
+        RedesignButton {
+            objectName: "trackAssignmentProviderSettings"
+            x: root.theme.dp(132); anchors.bottom: parent.bottom; anchors.bottomMargin: root.theme.dp(20)
+            visible: root.onlineMode && root.providerConfigured && root.width > root.theme.dp(600)
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            caption: qsTr("OpenSubtitles setup"); text: caption; enabled: !root.saving; onClicked: providerSetup.open()
         }
         RedesignButton {
             objectName: "trackAssignmentClearSelected"
@@ -408,6 +530,42 @@ C.Dialog {
             foreground: root.theme.accent
             background: Rectangle { radius: root.theme.dp(5); color: root.theme.progress; border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : 0.4 }
             onClicked: root.submit()
+        }
+    }
+    C.Popup {
+        id: providerSetup
+        objectName: "trackAssignmentProviderSetup"
+        property string errorMessage: ""
+        anchors.centerIn: parent
+        width: Math.min(root.theme.dp(560), root.width - root.theme.dp(32))
+        padding: root.theme.dp(20); modal: true; focus: true
+        onOpened: { errorMessage = ""; apiKeyField.forceActiveFocus() }
+        onClosed: apiKeyField.text = ""
+        background: Rectangle { color: root.theme.panel; radius: root.theme.dp(10); border.color: root.theme.border }
+        contentItem: ColumnLayout {
+            spacing: root.theme.dp(16)
+            Text { Layout.fillWidth: true; text: qsTr("OpenSubtitles setup"); font.pixelSize: root.theme.dp(16); color: root.theme.bright }
+            Text { Layout.fillWidth: true; text: qsTr("Add your OpenSubtitles application API key. VLC stores it in your profile."); wrapMode: Text.WordWrap; font.pixelSize: root.theme.dp(14); color: root.theme.foreground }
+            C.TextField {
+                id: apiKeyField
+                objectName: "trackAssignmentApiKey"
+                Layout.fillWidth: true; Layout.preferredHeight: root.theme.dp(36)
+                echoMode: TextInput.Password; placeholderText: qsTr("API key"); Accessible.name: placeholderText
+                color: root.theme.foreground; font.pixelSize: root.theme.dp(14); selectByMouse: true
+                background: Rectangle { color: root.theme.field; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
+                onAccepted: if (text.trim().length) root.setupRequested(text)
+            }
+            RedesignButton {
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                caption: qsTr("Get an API key"); text: caption; iconName: "link"; onClicked: root.apiKeyHelpRequested()
+            }
+            Text { Layout.fillWidth: true; visible: text.length > 0; text: providerSetup.errorMessage; wrapMode: Text.WordWrap; font.pixelSize: root.theme.dp(14); color: root.theme.danger }
+            RowLayout {
+                Layout.fillWidth: true
+                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: providerSetup.close() }
+                Item { Layout.fillWidth: true }
+                RedesignButton { objectName: "trackAssignmentSaveApiKey"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Save"); text: caption; enabled: apiKeyField.text.trim().length > 0; onClicked: root.setupRequested(apiKeyField.text) }
+            }
         }
     }
     C.Popup {

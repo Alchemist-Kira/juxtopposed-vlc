@@ -67,6 +67,9 @@
 #include "dialogs/preferences/redesign_preferences.hpp"
 #include "dialogs/firstrun/firstrunwizard.hpp"
 #include "util/redesign_folder_model.hpp"
+#include "util/subtitle_source_service.hpp"
+#include <QDir>
+#include <vlc_configuration.h>
 #include <QQmlContext>
 #include "dialogs/dialogs/dialogmodel.hpp"
 #ifdef UPDATE_CHECK
@@ -326,6 +329,11 @@ void MainUI::registerQMLTypes()
         assert(m_intf->p_mainPlayerController);
         qmlRegisterSingletonInstance<PlayerController>(uri, versionMajor, versionMinor, "Player", m_intf->p_mainPlayerController);
         qmlRegisterTypesAndRevisions<TimedText>(uri, versionMajor);
+        auto* subtitleSources = new SubtitleSourceService(this);
+        char* userDirectory = config_GetUserDir(VLC_USERDATA_DIR);
+        if (userDirectory) subtitleSources->setStorageDirectory(QDir(qfu(userDirectory)).filePath(QStringLiteral("subtitles")));
+        free(userDirectory);
+        qmlRegisterSingletonInstance<SubtitleSourceService>(uri, versionMajor, versionMinor, "SubtitleSources", subtitleSources);
         qmlRegisterType<PlayerHighResolutionTimeUpdater>(uri, versionMajor, versionMinor, "HighResolutionTimeUpdater");
         qmlRegisterUncreatableMetaObject(VLCTickForeign::staticMetaObject, uri, versionMajor, versionMinor, "VLCTick", "Not Instantiable" );
         qmlRegisterTypesAndRevisions<VLCDuration>(uri, versionMajor);

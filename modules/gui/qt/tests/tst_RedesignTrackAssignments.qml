@@ -21,6 +21,7 @@ TestCase {
     SignalSpy { id: saveSpy; target: dialog; signalName: "saveRequested" }
     SignalSpy { id: dropSpy; target: dialog; signalName: "droppedSourcesRequested" }
     SignalSpy { id: rowSpy; target: dialog; signalName: "rowsRequested" }
+    SignalSpy { id: searchSpy; target: dialog; signalName: "searchRequested" }
     function rows() { return [{url:first,name:"Show_S01E01.mkv",baseline:[]},{url:second,name:"Show_S01E02.mkv",baseline:[]}] }
     function load(items) {
         dialog.loadRows(dialog.requestId,{success:true,rows:items})
@@ -30,7 +31,7 @@ TestCase {
         finishMatching=true
         width=1280; height=900; dialog.scaleFactor=1; dialog.lightTheme=false
         dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false)
-        saveSpy.clear(); rowSpy.clear(); dropSpy.clear()
+        saveSpy.clear(); rowSpy.clear(); dropSpy.clear(); searchSpy.clear(); dialog.providerConfigured=false
         verify(dialog.begin({scope:"file",url:first,urls:[first,second]},true))
         tryCompare(dialog,"opened",true); load([rows()[0]])
     }
@@ -193,6 +194,60 @@ TestCase {
         dialog.loadDroppedSources(request,{success:true,sources:[{url:spanish,name:"Spanish.srt"}]})
         compare(dialog.rows.length,0); compare(dialog.sources.length,0); compare(Object.keys(dialog.drafts).length,0)
         compare(saveSpy.count,0)
+    }
+    function test_onlineNeedsSetupAndAudioOnlyHasComputer() {
+        dialog.selectSource(1);verify(dialog.onlineMode);compare(searchSpy.count,0)
+        verify(findChild(dialog,"trackAssignmentSetup").visible)
+        dialog.reject();tryCompare(dialog,"visible",false)
+        verify(dialog.begin({scope:"file",url:first},false));load([rows()[0]])
+        compare(dialog.sourceChoices.length,1);dialog.selectSource(1);verify(!dialog.onlineMode)
+    }
+    function test_onlineSearchKeepsChoicesAndIgnoresOldResults() {
+        dialog.providerConfigured=true;dialog.selectSource(1);compare(searchSpy.count,1)
+        const old=dialog.searchRequestId,remote="opensubtitles:/42/Show_S01E01.en.srt"
+        dialog.requestSearch();dialog.loadSearch(old,{success:true,sources:[{url:remote,name:"Old"}]})
+        verify(dialog.searching);compare(dialog.onlineSources.length,0)
+        dialog.loadSearch(dialog.searchRequestId,{success:true,sources:[{url:remote,name:"English"}]})
+        dialog.toggle(first,remote);dialog.requestSearch()
+        dialog.loadSearch(dialog.searchRequestId,{success:true,sources:[]})
+        compare(dialog.visibleSources[0].url,remote);compare(saveSpy.count,0)
+        dialog.selectSource(0);dialog.loadSources(dialog.sourceRequestId,{success:true,sources:[]})
+        compare(dialog.visibleSources.length,0);verify(dialog.tracks(first).includes(remote))
+        dialog.loadSearch(dialog.searchRequestId,{success:true,sources:[{url:remote,name:"Late"}]})
+        compare(dialog.onlineSources.length,0)
+    }
+    function test_downloadResolutionPreservesDraftsForRetry() {
+        const remote="opensubtitles:/42/Show_S01E01.en.srt",cached="file:///cache/42/Show_S01E01.en.srt"
+        dialog.providerConfigured=true;dialog.selectSource(1)
+        dialog.loadSearch(dialog.searchRequestId,{success:true,sources:[{url:remote,name:"English"}]})
+        dialog.setTracks(first,[remote]);dialog.submit();dialog.resolveSources({[remote]:cached})
+        dialog.finish(dialog.requestId,{success:false,error:"Try again",saved:[]})
+        compare(dialog.changedRows.length,1);compare(dialog.tracks(first)[0],cached)
+        dialog.loadSearch(dialog.searchRequestId,{success:true,sources:[{url:remote,name:"English"}]})
+        compare(dialog.visibleSources.length,1);compare(dialog.visibleSources[0].url,cached)
+        dialog.submit();compare(saveSpy.count,2);compare(saveSpy.signalArguments[1][0][0].tracks[0],cached)
+    }
+    function test_downloadStageCanBeCanceled() {
+        dialog.setTracks(first,["opensubtitles:/42/English.srt"]);dialog.submit();dialog.cancelableSave=true
+        keyClick(Qt.Key_Escape);tryCompare(dialog,"visible",false);verify(!dialog.saving)
+        dialog.finish(dialog.requestId,{success:true,saved:[]});compare(Object.keys(dialog.drafts).length,0)
+    }
+    function test_onlineLayout_data() {
+        return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]
+    }
+    function test_onlineLayout(data) {
+        width=data.w;height=data.h;dialog.scaleFactor=data.scale;dialog.lightTheme=!!data.light
+        dialog.selectSource(1);wait(50)
+        for (const name of ["trackAssignmentSearch","trackAssignmentLanguage","trackAssignmentSetup"]) {
+            const item=findChild(dialog,name),point=item.mapToItem(testCase,0,0)
+            verify(point.x>=0 && point.y>=0,name)
+            verify(point.x+item.width<=width && point.y+item.height<=height,name)
+        }
+        mouseClick(findChild(dialog,"trackAssignmentSetup"))
+        const setup=findChild(dialog,"trackAssignmentProviderSetup");tryCompare(setup,"opened",true)
+        const field=findChild(dialog,"trackAssignmentApiKey");field.text="unit-secret"
+        verify(field.echoMode!==TextInput.Normal);keyClick(Qt.Key_Escape);tryCompare(setup,"visible",false)
+        compare(field.text,"");verify(dialog.visible)
     }
     function test_scaledAndSmallWindow_data() {
         return [{tag:"small",w:500,h:350,scale:1},{tag:"scaled",w:1280,h:900,scale:1.5},{tag:"light",w:1280,h:900,scale:1,light:true}]

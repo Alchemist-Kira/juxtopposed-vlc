@@ -989,6 +989,7 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
     float teta;
     float teta_grad;
 
+    const int baseline_y = p_effect->i_height / 2 + 75;
     int start_x = p_effect->i_width / 2 - 120; /* i_width.min = 532 (visual.c) */
 
     for ( int j = 0; j < 2; j++ )
@@ -1000,7 +1001,7 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
         {
             for ( unsigned i = 140; i <= 150; i++ )
             {
-                y = i * cos(teta) + 20;
+                y = baseline_y - i * cos(teta);
                 x = i * sin(teta) + start_x + 240 * j;
                 /* Compute the last color for the gradation */
                 if (teta >= teta_grad + GRAD_INCR && teta_grad <= GRAD_ANGLE_MAX)
@@ -1009,13 +1010,13 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
                     k = k + 5;
                 }
                 *(p_picture->p[0].p_pixels +
-                        (p_picture->p[0].i_lines - y - 1 ) * p_picture->p[0].i_pitch
+                        y * p_picture->p[0].i_pitch
                         + x ) = 0x45;
                 *(p_picture->p[1].p_pixels +
-                        (p_picture->p[1].i_lines - y / 2 - 1 ) * p_picture->p[1].i_pitch
+                        (y / 2) * p_picture->p[1].i_pitch
                         + x / 2 ) = 0x0;
                 *(p_picture->p[2].p_pixels +
-                        (p_picture->p[2].i_lines - y / 2 - 1 ) * p_picture->p[2].i_pitch
+                        (y / 2) * p_picture->p[2].i_pitch
                         + x / 2 ) = 0x4D + k;
             }
         }
@@ -1024,16 +1025,16 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
         teta = (float)i_value[j] / 200 - M_PI_4;
         for ( int i = 0; i <= 150; i++ )
         {
-            y = i * cos(teta) + 20;
+            y = baseline_y - i * cos(teta);
             x = i * sin(teta) + start_x + 240 * j;
             *(p_picture->p[0].p_pixels +
-                    (p_picture->p[0].i_lines - y - 1 ) * p_picture->p[0].i_pitch
+                    y * p_picture->p[0].i_pitch
                     + x ) = 0xAD;
             *(p_picture->p[1].p_pixels +
-                    (p_picture->p[1].i_lines - y / 2 - 1 ) * p_picture->p[1].i_pitch
+                    (y / 2) * p_picture->p[1].i_pitch
                     + x / 2 ) = 0xFC;
             *(p_picture->p[2].p_pixels +
-                    (p_picture->p[2].i_lines - y / 2 - 1 ) * p_picture->p[2].i_pitch
+                    (y / 2) * p_picture->p[2].i_pitch
                     + x / 2 ) = 0xAC;
         }
 
@@ -1042,16 +1043,16 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
         {
             for ( int i = 0; i < 10; i++ )
             {
-                y = i * cos(teta) + 20;
+                y = baseline_y - i * cos(teta);
                 x = i * sin(teta) + start_x + 240 * j;
                 *(p_picture->p[0].p_pixels +
-                        (p_picture->p[0].i_lines - y - 1 ) * p_picture->p[0].i_pitch
+                        y * p_picture->p[0].i_pitch
                         + x ) = 0xFF;
                 *(p_picture->p[1].p_pixels +
-                        (p_picture->p[1].i_lines - y / 2 - 1 ) * p_picture->p[1].i_pitch
+                        (y / 2) * p_picture->p[1].i_pitch
                         + x / 2 ) = 0x80;
                 *(p_picture->p[2].p_pixels +
-                        (p_picture->p[2].i_lines - y / 2 - 1 ) * p_picture->p[2].i_pitch
+                        (y / 2) * p_picture->p[2].i_pitch
                         + x / 2 ) = 0x80;
             }
         }

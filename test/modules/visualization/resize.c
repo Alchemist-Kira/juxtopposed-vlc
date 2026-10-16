@@ -23,7 +23,7 @@
 static atomic_uint_fast64_t picture_size;
 static atomic_uint picture_count, window_opens, window_closes, failed_formats;
 static atomic_bool fail_format;
-static bool test_scope;
+static bool test_scope, test_meter;
 static vlc_sem_t frame_event;
 
 static uint64_t size_key(unsigned width, unsigned height)
@@ -62,6 +62,25 @@ static int OpenWindow(vlc_window_t *wnd)
 static void Display(vout_display_t *vd, picture_t *picture)
 {
     (void) vd;
+    if (test_meter && atomic_load(&picture_size)
+                      != size_key(picture->format.i_visible_width,
+                                  picture->format.i_visible_height))
+    {
+        const unsigned width = picture->format.i_visible_width;
+        const unsigned height = picture->format.i_visible_height;
+        unsigned top = height, bottom = 0, left = width, right = 0;
+        const plane_t *luma = &picture->p[0];
+        for (unsigned y = 0; y < height; ++y)
+            for (unsigned x = 0; x < width; ++x)
+                if (luma->p_pixels[y * luma->i_pitch + x] != 0)
+                {
+                    top = __MIN(top, y); bottom = __MAX(bottom, y);
+                    left = __MIN(left, x); right = __MAX(right, x);
+                }
+        assert(top < bottom && left < right);
+        assert(abs((int)(top + bottom) - (int)height) <= 2);
+        assert(abs((int)(left + right) - (int)width) <= 2);
+    }
     if (test_scope)
     {
         const unsigned width = picture->format.i_visible_width;
@@ -153,6 +172,7 @@ static void test_resize(const char *effect)
 {
     const bool goom = !strcmp(effect, "goom");
     test_scope = !strcmp(effect, "scope");
+    test_meter = !strcmp(effect, "vuMeter");
     atomic_store(&picture_size, 0);
     atomic_store(&picture_count, 0);
     atomic_store(&window_opens, 0);

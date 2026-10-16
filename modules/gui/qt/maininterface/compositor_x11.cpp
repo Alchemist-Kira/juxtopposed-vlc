@@ -254,6 +254,9 @@ void CompositorX11::destroyMainInterface()
 
 void CompositorX11::unloadGUI()
 {
+    /* Queued resize requests must not access the scene while it is removed. */
+    if (m_videoWindowHandler)
+        m_videoWindowHandler->setWindow(nullptr);
     m_renderWindow->stopRendering();
     m_qmlView.reset();
     commonGUIDestroy();

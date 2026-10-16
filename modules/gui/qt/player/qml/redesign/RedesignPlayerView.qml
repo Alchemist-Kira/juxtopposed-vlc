@@ -66,6 +66,7 @@ FocusScope {
     property bool resumeAvailable: false
     property var timeForPosition: function(position) { return "" }
     property url seekPreviewImage
+    property Component seekThumbnailContent
     property real seekPreviewImagePosition: -1
     signal seekPreviewRequested(real position)
     signal seekPreviewEnded()
@@ -342,6 +343,7 @@ FocusScope {
         canBrowseMedia: root.canBrowseMedia
         minimumY: Math.min(root.height - height - theme.dp(6), theme.dp(46) + (root.floatingQueue ? theme.dp(356) : 0))
         previewEnabled: root.showSeekPreview && !root.presentationOnly
+        thumbnailContent: root.seekThumbnailContent
         previewImage: root.seekPreviewImage; previewImagePosition: root.seekPreviewImagePosition
         timeForPosition: root.timeForPosition
         onTogglePlayback: root.togglePlayback()
@@ -570,6 +572,7 @@ FocusScope {
                 enabled: root.seekable
                 timeForPosition: root.timeForPosition
                 previewEnabled: root.showSeekPreview && root.started && root.hasVideo && !root.presentationOnly
+                thumbnailContent: root.seekThumbnailContent
                 previewImage: root.seekPreviewImage
                 previewImagePosition: root.seekPreviewImagePosition
                 timelineEnabled: root.showSubtitleTimeline

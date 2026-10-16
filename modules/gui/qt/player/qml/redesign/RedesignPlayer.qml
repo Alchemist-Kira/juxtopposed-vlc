@@ -135,6 +135,14 @@ FocusScope {
         resumeAvailable: rootPlayer.resumeAvailable
         timeForPosition: value => rootPlayer.clockText(Player.length.scale(value))
         seekPreviewImage: Player.seekPreview
+        seekThumbnailContent: Component {
+            Widgets.ImageExt {
+                objectName: "seekThumbnailImage"
+                source: view.seekPreviewImage; cache: false
+                radius: view.scaleFactor * 4
+                fillMode: Image.PreserveAspectFit
+            }
+        }
         seekPreviewImagePosition: Player.seekPreviewPosition
         onSeekPreviewRequested: value => Player.requestSeekPreview(value)
         onSeekPreviewEnded: Player.cancelSeekPreview()

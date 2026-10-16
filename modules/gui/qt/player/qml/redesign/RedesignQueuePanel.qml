@@ -90,33 +90,12 @@ Item {
                 item.accentColor = Qt.binding(() => root.accentColor)
             }
         }
-        ListView {
-            id: chapters
+        RedesignChaptersView {
             Layout.fillWidth: true; Layout.fillHeight: true
-            Layout.margins: theme.dp(16)
             visible: root.tab === 2
-            clip: true
-            model: Player.chapters
-            C.ScrollBar.vertical: C.ScrollBar {}
-            delegate: Item {
-                id: chapter
-                required property int index
-                required property string display
-                required property bool checked
-                required property var time
-                width: chapters.width; height: theme.dp(42)
-                RedesignButton {
-                    anchors.fill: parent
-                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                    text: chapter.display; selected: chapter.checked
-                    contentItem: RowLayout {
-                        Text { Layout.fillWidth: true; text: chapter.display; elide: Text.ElideRight; color: chapter.checked ? theme.accent : theme.foreground; font.pixelSize: theme.dp(14) }
-                        Text { text: chapter.time.formatHMS(); color: theme.foreground; font.pixelSize: theme.dp(12) }
-                    }
-                    onClicked: Player.chapters.setData(Player.chapters.index(chapter.index, 0), true, Qt.CheckStateRole)
-                }
-            }
-            Text { anchors.fill: parent; visible: chapters.count === 0; text: qsTr("This media has no chapters."); color: theme.foreground; font.pixelSize: theme.dp(14) }
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            chaptersModel: Player.chapters
+            onChapterRequested: index => Player.chapters.selectChapter(index)
         }
     }
 }

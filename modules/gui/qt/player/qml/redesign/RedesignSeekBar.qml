@@ -11,6 +11,14 @@ T.Slider {
     property var timeForPosition: function(position) { return "" }
     property bool previewEnabled: false
     property url previewImage
+    property Component thumbnailContent
+    Component {
+        id: defaultThumbnail
+        Image {
+            objectName: "seekThumbnailImage"
+            source: root.previewImage; cache: false; fillMode: Image.PreserveAspectFit
+        }
+    }
     property real previewImagePosition: -1
     property bool timelineEnabled: false
     property var timelineCues: []
@@ -80,7 +88,7 @@ T.Slider {
     readonly property real previewPosition: pressed || visualFocus && !hovered ? value
         : from + Math.max(0, Math.min(1, (pointer.point.position.x - leftPadding - handle.width / 2) / Math.max(1, availableWidth - handle.width))) * (to - from)
     readonly property bool previewReady: previewActive && previewImage.toString().length > 0
-        && previewImagePosition >= 0 && thumbnail.status === Image.Ready
+        && previewImagePosition >= 0 && !!thumbnail.item && thumbnail.item.status === Image.Ready
     signal previewRequested(real position)
     signal previewEnded()
     function refreshPreview() {
@@ -244,18 +252,18 @@ T.Slider {
             return Math.max(-left, Math.min(cursor - width / 2, root.Window.window.width - left - width))
         }
         y: -height - root.theme.dp(12)
-        background: Rectangle { radius: root.theme.dp(12); color: root.lightTheme ? root.theme.panel : "#191919" }
+        background: Rectangle {
+            radius: root.theme.dp(14)
+            color: root.lightTheme ? Qt.rgba(root.theme.panel.r, root.theme.panel.g, root.theme.panel.b, 0.95) : Qt.rgba(25 / 255, 25 / 255, 25 / 255, 0.95)
+        }
         contentItem: Item {
             Rectangle {
                 width: parent.width; height: root.theme.dp(142); radius: root.theme.dp(4)
                 color: "#000000"
-                Image {
+                Loader {
                     id: thumbnail
-                    objectName: "seekThumbnailImage"
                     anchors.fill: parent
-                    source: root.previewImage
-                    cache: false
-                    fillMode: Image.PreserveAspectFit
+                    sourceComponent: root.thumbnailContent || defaultThumbnail
                 }
             }
             Text {

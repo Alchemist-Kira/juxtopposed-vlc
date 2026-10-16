@@ -4523,7 +4523,7 @@ static char *LanguageGetCode( const char *psz_lang )
     {
         pl = vlc_find_iso639( psz_lang, true );
         if( pl != NULL )
-            return strdup( pl->psz_iso639_2B );
+            return strdup( *pl->psz_iso639_2B ? pl->psz_iso639_2B : pl->psz_iso639_2T );
     }
     return strdup("???");
 }
@@ -4557,7 +4557,8 @@ static char **LanguageSplit( const char *psz_langs )
         }
         else
         {
-            psz_code = LanguageGetCode( psz_parser );
+            const iso639_lang_t *system = !strcmp(psz_parser, "system") ? vlc_get_system_language() : NULL;
+            psz_code = LanguageGetCode( system ? system->psz_iso639_2T : psz_parser );
             if( strcmp( psz_code, "???" ) )
             {
                 TAB_APPEND( i_psz, ppsz, psz_code );

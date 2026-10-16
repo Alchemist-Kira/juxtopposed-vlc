@@ -1,3 +1,10 @@
+vlc_tests += {
+    'name' : 'test_src_misc_iso_language',
+    'sources' : files('misc/iso_language.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlccore],
+}
+
 if host_system == 'windows'
     vlc_tests += {
         'name' : 'test_src_misc_win32_pipe',

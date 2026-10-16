@@ -686,12 +686,14 @@ static const char *const ppsz_clock_descriptions[] =
 #define INPUT_AUDIOTRACK_LANG_TEXT N_("Audio language")
 #define INPUT_AUDIOTRACK_LANG_LONGTEXT N_( \
     "Language of the audio track you want to use " \
-    "(comma separated, two or three letter ISO-639 country code; you may use 'none' to avoid a fallback to another language).")
+    "Use language names or two or three letter ISO-639 codes, separated by commas. " \
+    "Use 'system' for the system language, or 'none' to prevent a fallback to another language.")
 
 #define INPUT_SUBTRACK_LANG_TEXT N_("Subtitle language")
 #define INPUT_SUBTRACK_LANG_LONGTEXT N_( \
     "Language of the subtitle track you want to use " \
-    "(comma separated, two or three letter ISO-639 country code; you may use 'any' as a fallback).")
+    "Use language names or two or three letter ISO-639 codes, separated by commas. " \
+    "Use 'system' for the system language, or 'any' to allow another language.")
 
 #define INPUT_MENUTRACK_LANG_TEXT N_("Menu language")
 #define INPUT_MENUTRACK_LANG_LONGTEXT N_( \
@@ -1909,10 +1911,10 @@ vlc_module_begin ()
     add_integer( "sub-track", -1,
                  INPUT_SUBTRACK_TEXT, INPUT_SUBTRACK_LONGTEXT )
         change_safe ()
-    add_string( "audio-language", "",
+    add_string( "audio-language", "system",
                  INPUT_AUDIOTRACK_LANG_TEXT, INPUT_AUDIOTRACK_LANG_LONGTEXT )
         change_safe ()
-    add_string( "sub-language", "",
+    add_string( "sub-language", "system",
                  INPUT_SUBTRACK_LANG_TEXT, INPUT_SUBTRACK_LANG_LONGTEXT )
         change_safe ()
     add_string( "menu-language", "",

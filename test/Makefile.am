@@ -33,6 +33,7 @@ player_programs = \
 
 noinst_PROGRAMS =
 check_PROGRAMS = \
+	test_src_misc_iso_language \
 	test_libvlc_core \
 	test_libvlc_downloader \
 	test_libvlc_equalizer \
@@ -256,6 +257,8 @@ test_src_clock_start_LDADD = $(LIBVLCCORE) $(LIBVLC)
 
 test_src_misc_ancillary_SOURCES = src/misc/ancillary.c
 test_src_misc_ancillary_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_iso_language_SOURCES = src/misc/iso_language.c
+test_src_misc_iso_language_LDADD = $(LIBVLCCORE)
 test_src_misc_variables_SOURCES = src/misc/variables.c
 test_src_misc_variables_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_misc_actions_SOURCES = src/misc/actions.c

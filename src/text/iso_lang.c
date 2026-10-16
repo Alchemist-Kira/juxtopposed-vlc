@@ -34,11 +34,76 @@
 #include <vlc_common.h>
 
 #include "vlc_iso_lang.h"
+#ifdef _WIN32
+# include <windows.h>
+#elif defined(__APPLE__)
+# include <CoreFoundation/CoreFoundation.h>
+#endif
 
 /*****************************************************************************
  * Local tables
  *****************************************************************************/
 #include "iso-639_def.h"
+
+const iso639_lang_t *vlc_iso639_languages(size_t *count)
+{
+    *count = ARRAY_SIZE(p_languages) - 1;
+    return p_languages;
+}
+
+#ifndef _WIN32
+static const iso639_lang_t *LanguageFromLocale(const char *locale)
+{
+    size_t length = strcspn(locale, "_-.:@ ");
+    if (length != 2 && length != 3) return NULL;
+    char code[4];
+    memcpy(code, locale, length); code[length] = '\0';
+    return vlc_find_iso639(code, false);
+}
+#endif
+
+const iso639_lang_t *vlc_get_system_language(void)
+{
+#ifdef _WIN32
+    ULONG count = 0, length = 0;
+    const iso639_lang_t *language = NULL;
+    if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, NULL, &length) && length)
+    {
+        wchar_t *names = vlc_alloc(length, sizeof(*names));
+        if (names && GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, names, &length))
+        {
+            wchar_t code[4];
+            if (GetLocaleInfoEx(names, LOCALE_SISO639LANGNAME, code, ARRAY_SIZE(code)))
+            {
+                char ascii[4] = {0};
+                for (size_t i = 0; i < 3 && code[i]; ++i) ascii[i] = (char)code[i];
+                language = vlc_find_iso639(ascii, false);
+            }
+        }
+        free(names);
+    }
+    return language;
+#elif defined(__APPLE__)
+    const iso639_lang_t *language = NULL;
+    CFArrayRef languages = CFLocaleCopyPreferredLanguages();
+    if (languages && CFArrayGetCount(languages))
+    {
+        char locale[128];
+        if (CFStringGetCString(CFArrayGetValueAtIndex(languages, 0), locale, sizeof(locale), kCFStringEncodingUTF8))
+            language = LanguageFromLocale(locale);
+    }
+    if (languages) CFRelease(languages);
+    return language;
+#else
+    const char *variables[] = { "LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG" };
+    for (size_t i = 0; i < ARRAY_SIZE(variables); ++i)
+    {
+        const char *locale = getenv(variables[i]);
+        if (locale && *locale) return LanguageFromLocale(locale);
+    }
+    return NULL;
+#endif
+}
 
 static const iso639_lang_t * GetLang_1( const char * psz_code )
 {

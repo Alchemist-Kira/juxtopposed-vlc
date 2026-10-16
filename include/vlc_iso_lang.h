@@ -53,6 +53,12 @@ extern "C" {
  */
 VLC_API const iso639_lang_t * vlc_find_iso639( const char *code, bool try_name );
 
+/** Return the language table. The records remain valid for the process lifetime. */
+VLC_API const iso639_lang_t * vlc_iso639_languages( size_t *count );
+
+/** Return the operating system's preferred UI language, or NULL if unknown. */
+VLC_API const iso639_lang_t * vlc_get_system_language( void );
+
 #if defined( __cplusplus )
 }
 #endif

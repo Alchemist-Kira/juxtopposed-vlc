@@ -144,6 +144,8 @@ vlc_filter_LoadModule
 vlc_filter_UnloadModule
 FromCharset
 vlc_find_iso639
+vlc_iso639_languages
+vlc_get_system_language
 vlc_http_auth_Init
 vlc_http_auth_Deinit
 vlc_http_auth_ParseWwwAuthenticateHeader

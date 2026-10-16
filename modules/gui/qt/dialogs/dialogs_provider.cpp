@@ -577,6 +577,7 @@ MLBookmarkModel* DialogsProvider::bookmarkModel()
     {
         m_bookmarkModel = std::make_unique<MLBookmarkModel>();
         m_bookmarkModel->setPlayer(p_intf->p_player);
+        m_bookmarkModel->sort(1, Qt::AscendingOrder);
         m_bookmarkModel->setMl(p_intf->p_mi->getMediaLibrary());
     }
     return m_bookmarkModel.get();

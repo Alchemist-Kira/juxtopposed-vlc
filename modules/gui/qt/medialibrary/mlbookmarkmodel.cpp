@@ -107,7 +107,7 @@ bool MLBookmarkModel::setData(const QModelIndex &index, const QVariant &value, i
     };
     m_mediaLib->runOnMLThread<Ctx>(this,
     //ML thread
-    [mediaId = b.i_media_id, bookmarkTime = b.i_time, updateName, str]
+    [mediaId = uint64_t(b.i_media_id), bookmarkTime = b.i_time, updateName, str]
     (vlc_medialibrary_t* ml, Ctx& ctx)
     {
         int ret;
@@ -118,7 +118,7 @@ bool MLBookmarkModel::setData(const QModelIndex &index, const QVariant &value, i
         ctx.updateSucceed = (ret == VLC_SUCCESS);
     },
     //UI thread
-    [this, updateName, mediaId = b.i_media_id, bookmarkTime = b.i_time, str]
+    [this, updateName, mediaId = uint64_t(b.i_media_id), bookmarkTime = b.i_time, str]
     (quint64, Ctx& ctx)
     {
         if (!ctx.updateSucceed)

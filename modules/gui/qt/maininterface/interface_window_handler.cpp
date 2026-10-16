@@ -214,7 +214,8 @@ bool InterfaceWindowHandler::eventFilter(QObject*, QEvent* event)
             m_maximizedView = true;
 
         if( !( newState & Qt::WindowMaximized ) &&
-            oldState & Qt::WindowMaximized ) //FIXME && !b_videoFullScreen )
+            oldState & Qt::WindowMaximized &&
+            !( newState & Qt::WindowFullScreen ) ) // preserve flag when entering fullscreen
             m_maximizedView = false;
 
         if( !( newState & Qt::WindowFullScreen ) &&

@@ -487,29 +487,26 @@ FocusScope {
         }
         Row {
             id: windowControls
-            anchors.right: parent.right; anchors.rightMargin: theme.dp(6)
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right; anchors.rightMargin: 0
+            anchors.top: parent.top; anchors.bottom: parent.bottom
             ChromeButton {
                 visible: root.showWindowButtons
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                height: parent.height
                 iconName: "minimize"; text: qsTr("Minimize")
                 onClicked: root.minimizeRequested()
             }
             ChromeButton {
                 visible: root.showWindowButtons
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                height: parent.height
                 iconName: "maximize"; text: root.maximized ? qsTr("Restore window") : qsTr("Maximize")
                 onClicked: root.maximizeRequested()
             }
             ChromeButton {
-                objectName: "fullscreenButton"
-                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                iconName: "fullscreen"; text: root.fullscreen ? qsTr("Exit fullscreen") : qsTr("Fullscreen")
-                onClicked: root.fullscreenRequested()
-            }
-            ChromeButton {
                 visible: root.showWindowButtons
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                height: parent.height
                 iconName: "close"; text: qsTr("Close")
                 onClicked: root.closeRequested()
             }
@@ -640,6 +637,12 @@ FocusScope {
                 iconName: "settings"; text: qsTr("Playback settings")
                 selected: root.settingsPage.length > 0
                 onClicked: root.toggleSettings("playback")
+            }
+            ChromeButton {
+                objectName: "fullscreenButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "fullscreen"; text: root.fullscreen ? qsTr("Exit fullscreen") : qsTr("Fullscreen")
+                onClicked: root.fullscreenRequested()
             }
             ChromeButton {
                 objectName: "queueButton"

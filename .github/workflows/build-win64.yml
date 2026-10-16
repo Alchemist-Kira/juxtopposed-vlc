@@ -1,0 +1,42 @@
+name: Build VLC Windows x64
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Windows x64 Installer and ZIP
+    runs-on: ubuntu-latest
+    container:
+      image: registry.videolan.org/vlc-debian-win64-posix:20260611225331
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Mark workspace directory as safe in git
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Compile and package VLC Win64
+        shell: bash
+        run: |
+          set -e
+          # Compile VLC for 64-bit Windows using prebuilt contrib packages (-p),
+          # in release mode (-r), generating full installer and portable archives (-i r).
+          extras/package/win32/build.sh -a x86_64 -p -r -i r
+
+      - name: Upload Windows x64 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlc-juxtopposed-windows-x64
+          path: |
+            win64/vlc-*-win64.exe
+            win64/vlc-*-win64.zip
+            win64/vlc-*-win64.7z
+          if-no-files-found: warn

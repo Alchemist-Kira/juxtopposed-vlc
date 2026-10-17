@@ -87,8 +87,7 @@ ColumnLayout {
         model: [
             {name: "freetype-font", label: qsTr("Subtitle Font")},
             {name: "freetype-color", label: qsTr("Text Color")},
-            {name: "freetype-outline-color", label: qsTr("Outline Color")},
-            {name: "sub-margin", label: qsTr("Subtitle Offset"), suffix: " px"}
+            {name: "freetype-outline-color", label: qsTr("Outline Color")}
         ]
         RedesignPreferenceRow {
             required property var modelData
@@ -163,6 +162,17 @@ ColumnLayout {
         scaleLabelsVisible: false; sliderTopMargin: 6; sliderLeftMargin: -4
         currentValue: { root.backend.revision; return Math.round(Number(root.backend.value("freetype-background-opacity")) * 100 / 255) }
         onMoved: value => root.backend.stage("freetype-background-opacity", Math.round(value * 255 / 100))
+    }
+    RedesignSettingSlider {
+        objectName: "subtitlePositionSetting"
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(36)
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        label: qsTr("Subtitle Position"); suffix: " px"
+        from: -100; to: 600; stepSize: 5; resetValue: 0
+        inputFrom: -2000; inputTo: 2000
+        sliderTopMargin: 6; sliderLeftMargin: -4
+        currentValue: { root.backend.revision; return Number(root.backend.value("sub-margin")) }
+        onMoved: value => root.backend.stage("sub-margin", Math.round(value))
     }
     Item { Layout.fillWidth: true; height: theme.dp(10) }
 }
